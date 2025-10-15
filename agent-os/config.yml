@@ -1,0 +1,7 @@
+version: 2.0.3
+last_compiled: 2025-10-13 16:11:50
+profile: rtos
+multi_agent_mode: false
+multi_agent_tool: claude-code
+single_agent_mode: true
+single_agent_tool: codex
