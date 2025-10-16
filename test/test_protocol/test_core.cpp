@@ -1,0 +1,217 @@
+#ifdef ARDUINO
+#include <Arduino.h>
+#endif
+#include <unity.h>
+#include "protocol/Protocol.h"
+
+static Protocol proto;
+
+// Forward declarations for tests implemented in test_help_status.cpp
+void test_help_format();
+void test_status_format_lines();
+
+void setUp() {
+  // reset by creating a new instance (static is reused across tests; reassign)
+  proto = Protocol();
+}
+
+void tearDown() {}
+
+void test_bad_cmd() {
+  auto resp = proto.processLine("FOO", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E01 BAD_CMD", resp.c_str());
+}
+
+void test_bad_id() {
+  auto r1 = proto.processLine("WAKE:9", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E02 BAD_ID", r1.c_str());
+  auto r2 = proto.processLine("WAKE:-1", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E02 BAD_ID", r2.c_str());
+}
+
+void test_bad_param() {
+  auto r1 = proto.processLine("MOVE:0,abc", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM", r1.c_str());
+  auto r2 = proto.processLine("HOME:0,foo", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM", r2.c_str());
+}
+
+void test_move_out_of_range() {
+  auto r1 = proto.processLine("MOVE:0,2000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r1.c_str());
+  auto r2 = proto.processLine("MOVE:0,-1300", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r2.c_str());
+}
+
+void test_all_addressing_and_status_awake() {
+  auto r1 = proto.processLine("WAKE:ALL", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  auto st = proto.processLine("STATUS", 0);
+  // Check first line contains awake=1
+  TEST_ASSERT_TRUE_MESSAGE(st.find("awake=1") != std::string::npos, "Expected awake=1 in STATUS");
+}
+
+void test_busy_rule_and_completion() {
+  // Start a move for motor 0 from pos 0 to 100 with speed 100 steps/s => ~1000ms
+  auto r1 = proto.processLine("MOVE:0,100,100", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  auto r2 = proto.processLine("MOVE:0,200", 10);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  auto r3 = proto.processLine("MOVE:ALL,50", 20);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r3.c_str());
+  // After 1000ms, move completes; tick and then try again
+  proto.tick(1100);
+  auto r4 = proto.processLine("MOVE:0,200", 1101);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r4.c_str());
+}
+
+void test_home_defaults() {
+  // HOME with only id should use defaults and start homing
+  auto r1 = proto.processLine("HOME:0", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  // Should be busy during homing
+  auto r2 = proto.processLine("MOVE:0,10", 10);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  // Default duration ~ ceil(1000*(800+150)/4000) = 238ms, tick beyond that
+  proto.tick(300);
+  auto r3 = proto.processLine("MOVE:0,10", 310);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r3.c_str());
+}
+
+// Helpers
+static std::vector<std::string> split_lines(const std::string &s) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  while (start <= s.size()) {
+    size_t pos = s.find('\n', start);
+    if (pos == std::string::npos) {
+      out.push_back(s.substr(start));
+      break;
+    }
+    out.push_back(s.substr(start, pos - start));
+    start = pos + 1;
+  }
+  return out;
+}
+
+void test_sleep_busy_then_ok() {
+  // Start move
+  auto r1 = proto.processLine("MOVE:0,100,100", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  // SLEEP should be busy while moving
+  auto r2 = proto.processLine("SLEEP:0", 10);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  // After completion, SLEEP should succeed
+  proto.tick(1100);
+  auto r3 = proto.processLine("SLEEP:0", 1200);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r3.c_str());
+}
+
+void test_move_all_out_of_range() {
+  auto r = proto.processLine("MOVE:ALL,1300", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r.c_str());
+}
+
+void test_wake_sleep_single_and_status() {
+  auto r1 = proto.processLine("WAKE:1", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  auto st1 = proto.processLine("STATUS", 1);
+  auto lines1 = split_lines(st1);
+  // Find line for id=1
+  bool found_awake = false;
+  for (const auto &L : lines1) {
+    if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
+      found_awake = (L.find(" awake=1") != std::string::npos || L.find(" awake=1") != std::string::npos);
+      break;
+    }
+  }
+  TEST_ASSERT_TRUE(found_awake);
+  auto r2 = proto.processLine("SLEEP:1", 2);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r2.c_str());
+  auto st2 = proto.processLine("STATUS", 3);
+  auto lines2 = split_lines(st2);
+  bool found_asleep = false;
+  for (const auto &L : lines2) {
+    if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
+      found_asleep = (L.find(" awake=0") != std::string::npos);
+      break;
+    }
+  }
+  TEST_ASSERT_TRUE(found_asleep);
+}
+
+void test_home_with_params_acceptance() {
+  auto r = proto.processLine("HOME:0,900,150,500,1000,2400", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r.c_str());
+}
+
+void test_move_sets_speed_accel_in_status() {
+  auto r1 = proto.processLine("MOVE:0,10,5000,12000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  auto st = proto.processLine("STATUS", 1);
+  auto lines = split_lines(st);
+  bool ok = false;
+  for (const auto &L : lines) {
+    if (L.find("id=0 ") == 0 || L.find("id=0") == 0) {
+      ok = (L.find(" speed=5000") != std::string::npos) && (L.find(" accel=12000") != std::string::npos);
+      break;
+    }
+  }
+  TEST_ASSERT_TRUE(ok);
+}
+
+#ifdef ARDUINO
+void setup() {
+  UNITY_BEGIN();
+  RUN_TEST(test_bad_cmd);
+  RUN_TEST(test_bad_id);
+  RUN_TEST(test_bad_param);
+  RUN_TEST(test_move_out_of_range);
+  RUN_TEST(test_all_addressing_and_status_awake);
+  RUN_TEST(test_busy_rule_and_completion);
+  RUN_TEST(test_home_defaults);
+  RUN_TEST(test_help_format);
+  RUN_TEST(test_status_format_lines);
+  RUN_TEST(test_sleep_busy_then_ok);
+  RUN_TEST(test_move_all_out_of_range);
+  RUN_TEST(test_wake_sleep_single_and_status);
+  RUN_TEST(test_home_with_params_acceptance);
+  RUN_TEST(test_move_sets_speed_accel_in_status);
+  UNITY_END();
+}
+
+void loop() {}
+#else
+int main(int, char**) {
+  UNITY_BEGIN();
+  setUp();
+  RUN_TEST(test_bad_cmd);
+  setUp();
+  RUN_TEST(test_bad_id);
+  setUp();
+  RUN_TEST(test_bad_param);
+  setUp();
+  RUN_TEST(test_move_out_of_range);
+  setUp();
+  RUN_TEST(test_all_addressing_and_status_awake);
+  setUp();
+  RUN_TEST(test_busy_rule_and_completion);
+  setUp();
+  RUN_TEST(test_home_defaults);
+  setUp();
+  RUN_TEST(test_help_format);
+  setUp();
+  RUN_TEST(test_status_format_lines);
+  setUp();
+  RUN_TEST(test_sleep_busy_then_ok);
+  setUp();
+  RUN_TEST(test_move_all_out_of_range);
+  setUp();
+  RUN_TEST(test_wake_sleep_single_and_status);
+  setUp();
+  RUN_TEST(test_home_with_params_acceptance);
+  setUp();
+  RUN_TEST(test_move_sets_speed_accel_in_status);
+  return UNITY_END();
+}
+#endif
