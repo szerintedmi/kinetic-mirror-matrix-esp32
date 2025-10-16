@@ -22,7 +22,9 @@ except Exception:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="E2E demo for Serial Protocol v1")
     ap.add_argument("--port", "-p", help="Serial port (e.g., /dev/ttyUSB0, COM3)")
-    ap.add_argument("--baud", "-b", type=int, default=115200, help="Baud (default 115200)")
+    ap.add_argument(
+        "--baud", "-b", type=int, default=115200, help="Baud (default 115200)"
+    )
     ap.add_argument("--timeout", "-t", type=float, default=2.0, help="Timeout (s)")
     ns = ap.parse_args(argv)
 
@@ -30,9 +32,9 @@ def main(argv=None) -> int:
         ("help", {}),
         ("status", {}),
         ("wake", {"id": "ALL"}),
+        ("sleep", {"id": "ALL"}),
         ("move", {"id": "0", "abs_steps": 10}),
         ("home", {"id": "0"}),
-        ("sleep", {"id": "ALL"}),
     ]
 
     if ns.port:
@@ -75,4 +77,3 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

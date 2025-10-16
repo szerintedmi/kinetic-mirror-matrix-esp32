@@ -1,8 +1,10 @@
-#include "Protocol.h"
+#include "MotorControl/MotorCommandProcessor.h"
+#include "StubMotorController.h"
 #include <sstream>
 #include <algorithm>
 #include <cctype>
 #include <cstdlib>
+#include <vector>
 
 static const long kMinPos = -1200;
 static const long kMaxPos = 1200;
@@ -25,9 +27,9 @@ static std::vector<std::string> split(const std::string& s, char delim) {
   return out;
 }
 
-Protocol::Protocol() : backend_(8) {}
+MotorCommandProcessor::MotorCommandProcessor() : controller_(new StubMotorController(8)) {}
 
-bool Protocol::parseInt(const std::string& s, long& out) {
+bool MotorCommandProcessor::parseInt(const std::string& s, long& out) {
   if (s.empty()) return false;
   char* end = nullptr;
   long v = strtol(s.c_str(), &end, 10);
@@ -36,14 +38,14 @@ bool Protocol::parseInt(const std::string& s, long& out) {
   return true;
 }
 
-bool Protocol::parseInt(const std::string& s, int& out) {
+bool MotorCommandProcessor::parseInt(const std::string& s, int& out) {
   long tmp;
   if (!parseInt(s, tmp)) return false;
   out = (int)tmp;
   return true;
 }
 
-bool Protocol::parseIdMask(const std::string& token, uint32_t& mask) {
+bool MotorCommandProcessor::parseIdMask(const std::string& token, uint32_t& mask) {
   std::string t = token;
   std::transform(t.begin(), t.end(), t.begin(), ::toupper);
   if (t == "ALL") { mask = 0xFF; return true; }
@@ -54,7 +56,7 @@ bool Protocol::parseIdMask(const std::string& token, uint32_t& mask) {
   return true;
 }
 
-std::string Protocol::handleHELP() {
+std::string MotorCommandProcessor::handleHELP() {
   std::ostringstream os;
   os << "HELP\n";
   os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
@@ -65,36 +67,36 @@ std::string Protocol::handleHELP() {
   return os.str();
 }
 
-std::string Protocol::handleSTATUS() {
+std::string MotorCommandProcessor::handleSTATUS() {
   std::ostringstream os;
-  for (size_t i = 0; i < backend_.motorCount(); ++i) {
-    const MotorState& s = backend_.state(i);
+  for (size_t i = 0; i < controller_->motorCount(); ++i) {
+    const MotorState& s = controller_->state(i);
     os << "id=" << (int)s.id
        << " pos=" << s.position
        << " speed=" << s.speed
        << " accel=" << s.accel
        << " moving=" << (s.moving ? 1 : 0)
        << " awake=" << (s.awake ? 1 : 0);
-    if (i + 1 < backend_.motorCount()) os << "\n";
+    if (i + 1 < controller_->motorCount()) os << "\n";
   }
   return os.str();
 }
 
-std::string Protocol::handleWAKE(const std::string& args) {
+std::string MotorCommandProcessor::handleWAKE(const std::string& args) {
   uint32_t mask;
   if (!parseIdMask(args, mask)) return "CTRL:ERR E02 BAD_ID";
-  backend_.wakeMask(mask);
+  controller_->wakeMask(mask);
   return "CTRL:OK";
 }
 
-std::string Protocol::handleSLEEP(const std::string& args) {
+std::string MotorCommandProcessor::handleSLEEP(const std::string& args) {
   uint32_t mask;
   if (!parseIdMask(args, mask)) return "CTRL:ERR E02 BAD_ID";
-  if (!backend_.sleepMask(mask)) return "CTRL:ERR E04 BUSY";
+  if (!controller_->sleepMask(mask)) return "CTRL:ERR E04 BUSY";
   return "CTRL:OK";
 }
 
-std::string Protocol::handleMOVE(const std::string& args, uint32_t now_ms) {
+std::string MotorCommandProcessor::handleMOVE(const std::string& args, uint32_t now_ms) {
   auto parts = split(args, ',');
   if (parts.size() < 2) return "CTRL:ERR E03 BAD_PARAM";
   uint32_t mask;
@@ -110,11 +112,11 @@ std::string Protocol::handleMOVE(const std::string& args, uint32_t now_ms) {
   if (parts.size() >= 4 && !parts[3].empty()) {
     if (!parseInt(parts[3], accel)) return "CTRL:ERR E03 BAD_PARAM";
   }
-  if (!backend_.moveAbsMask(mask, target, speed, accel, now_ms)) return "CTRL:ERR E04 BUSY";
+  if (!controller_->moveAbsMask(mask, target, speed, accel, now_ms)) return "CTRL:ERR E04 BUSY";
   return "CTRL:OK";
 }
 
-std::string Protocol::handleHOME(const std::string& args, uint32_t now_ms) {
+std::string MotorCommandProcessor::handleHOME(const std::string& args, uint32_t now_ms) {
   auto parts = split(args, ',');
   if (parts.size() < 1) return "CTRL:ERR E03 BAD_PARAM";
   uint32_t mask;
@@ -137,11 +139,11 @@ std::string Protocol::handleHOME(const std::string& args, uint32_t now_ms) {
   if (parts.size() >= 6 && !parts[5].empty()) {
     if (!parseInt(parts[5], full_range)) return "CTRL:ERR E03 BAD_PARAM";
   }
-  if (!backend_.homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) return "CTRL:ERR E04 BUSY";
+  if (!controller_->homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) return "CTRL:ERR E04 BUSY";
   return "CTRL:OK";
 }
 
-std::string Protocol::processLine(const std::string& line, uint32_t now_ms) {
+std::string MotorCommandProcessor::processLine(const std::string& line, uint32_t now_ms) {
   std::string s = trim(line);
   if (s.empty()) return "";
   auto p = s.find(':');

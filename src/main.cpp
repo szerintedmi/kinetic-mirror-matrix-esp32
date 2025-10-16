@@ -1,14 +1,14 @@
-#ifndef UNIT_TEST
+// Arduino entrypoints; excluded during PlatformIO unit tests to avoid duplicate setup/loop
+#if defined(ARDUINO) && !defined(UNIT_TEST)
 #include <Arduino.h>
 #include "console/SerialConsole.h"
 
-void setup()
-{
-  serial_console_setup();
-}
+void setup() { serial_console_setup(); }
+void loop() { serial_console_tick(); }
 
-void loop()
+#elif !defined(ARDUINO) && !defined(UNIT_TEST)
+int main(int, char**)
 {
-  serial_console_tick();
+  return 0;
 }
-#endif // UNIT_TEST
+#endif

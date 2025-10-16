@@ -4,9 +4,9 @@
 #include <unity.h>
 #include <string>
 #include <vector>
-#include "protocol/Protocol.h"
+#include "MotorControl/MotorCommandProcessor.h"
 
-static Protocol proto2;
+static MotorCommandProcessor proto2;
 
 static std::vector<std::string> split_lines(const std::string &s) {
   std::vector<std::string> out;
@@ -26,7 +26,7 @@ static std::vector<std::string> split_lines(const std::string &s) {
 // Reset state per test at the beginning of each test function
 
 void test_help_format() {
-  proto2 = Protocol();
+  proto2 = MotorCommandProcessor();
   std::string help = proto2.processLine("HELP", 0);
   // Should contain each command usage line
   TEST_ASSERT_TRUE(help.find("HELP") != std::string::npos);
@@ -41,7 +41,7 @@ void test_help_format() {
 }
 
 void test_status_format_lines() {
-  proto2 = Protocol();
+  proto2 = MotorCommandProcessor();
   std::string st = proto2.processLine("STATUS", 0);
   auto lines = split_lines(st);
   // Expect 8 motors => 8 lines
@@ -57,3 +57,4 @@ void test_status_format_lines() {
 }
 
 // No standalone runner here; tests are executed from test_core.cpp runner.
+

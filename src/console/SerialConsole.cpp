@@ -1,8 +1,9 @@
-#ifndef UNIT_TEST
+// Arduino serial console only
+#if defined(ARDUINO)
 #include <Arduino.h>
-#include "protocol/Protocol.h"
+#include "MotorControl/MotorCommandProcessor.h"
 
-static Protocol protocol;
+static MotorCommandProcessor commandProcessor;
 static char inputBuf[256];
 static size_t inputLen = 0;
 
@@ -33,7 +34,7 @@ void serial_console_tick()
       // Echo newline for user feedback
       Serial.println();
       inputBuf[inputLen] = '\0';
-      std::string resp = protocol.processLine(std::string(inputBuf), millis());
+      std::string resp = commandProcessor.processLine(std::string(inputBuf), millis());
       if (!resp.empty())
       {
         // Print as-is; response may be multi-line
@@ -71,8 +72,8 @@ void serial_console_tick()
     }
   }
 
-  // Allow backend to progress time-based completions
-  protocol.tick(millis());
+  // Allow controller to progress time-based completions
+  commandProcessor.tick(millis());
 }
 
-#endif // UNIT_TEST
+#endif // ARDUINO

@@ -1,10 +1,9 @@
 #pragma once
-#include "MotorBackend.h"
-#include <stdint.h>
+#include "MotorControl/MotorController.h"
 
-class StubBackend : public MotorBackend {
+class StubMotorController : public MotorController {
 public:
-  explicit StubBackend(uint8_t count = 8);
+  explicit StubMotorController(uint8_t count = 8);
   size_t motorCount() const override { return count_; }
   const MotorState& state(size_t idx) const override { return motors_[idx]; }
   bool isAnyMovingForMask(uint32_t mask) const override;

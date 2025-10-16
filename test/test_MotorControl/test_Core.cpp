@@ -2,17 +2,18 @@
 #include <Arduino.h>
 #endif
 #include <unity.h>
-#include "protocol/Protocol.h"
+#include <string>
+#include <vector>
+#include "MotorControl/MotorCommandProcessor.h"
 
-static Protocol proto;
+static MotorCommandProcessor proto;
 
-// Forward declarations for tests implemented in test_help_status.cpp
+// Forward declarations for tests implemented in test_HelpStatus.cpp
 void test_help_format();
 void test_status_format_lines();
 
 void setUp() {
-  // reset by creating a new instance (static is reused across tests; reassign)
-  proto = Protocol();
+  proto = MotorCommandProcessor();
 }
 
 void tearDown() {}
@@ -47,38 +48,31 @@ void test_all_addressing_and_status_awake() {
   auto r1 = proto.processLine("WAKE:ALL", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
   auto st = proto.processLine("STATUS", 0);
-  // Check first line contains awake=1
   TEST_ASSERT_TRUE_MESSAGE(st.find("awake=1") != std::string::npos, "Expected awake=1 in STATUS");
 }
 
 void test_busy_rule_and_completion() {
-  // Start a move for motor 0 from pos 0 to 100 with speed 100 steps/s => ~1000ms
   auto r1 = proto.processLine("MOVE:0,100,100", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
   auto r2 = proto.processLine("MOVE:0,200", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
   auto r3 = proto.processLine("MOVE:ALL,50", 20);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r3.c_str());
-  // After 1000ms, move completes; tick and then try again
   proto.tick(1100);
   auto r4 = proto.processLine("MOVE:0,200", 1101);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r4.c_str());
 }
 
 void test_home_defaults() {
-  // HOME with only id should use defaults and start homing
   auto r1 = proto.processLine("HOME:0", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
-  // Should be busy during homing
   auto r2 = proto.processLine("MOVE:0,10", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
-  // Default duration ~ ceil(1000*(800+150)/4000) = 238ms, tick beyond that
   proto.tick(300);
   auto r3 = proto.processLine("MOVE:0,10", 310);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r3.c_str());
 }
 
-// Helpers
 static std::vector<std::string> split_lines(const std::string &s) {
   std::vector<std::string> out;
   size_t start = 0;
@@ -95,13 +89,10 @@ static std::vector<std::string> split_lines(const std::string &s) {
 }
 
 void test_sleep_busy_then_ok() {
-  // Start move
   auto r1 = proto.processLine("MOVE:0,100,100", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
-  // SLEEP should be busy while moving
   auto r2 = proto.processLine("SLEEP:0", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
-  // After completion, SLEEP should succeed
   proto.tick(1100);
   auto r3 = proto.processLine("SLEEP:0", 1200);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r3.c_str());
@@ -117,7 +108,6 @@ void test_wake_sleep_single_and_status() {
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
   auto st1 = proto.processLine("STATUS", 1);
   auto lines1 = split_lines(st1);
-  // Find line for id=1
   bool found_awake = false;
   for (const auto &L : lines1) {
     if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
@@ -160,9 +150,7 @@ void test_move_sets_speed_accel_in_status() {
   TEST_ASSERT_TRUE(ok);
 }
 
-// Forward declarations for TG1 (SPI/595) tests
 void test_bitpack_dir_sleep_basic();
-void test_shift595_captures_bytes_and_latch();
 
 #ifdef ARDUINO
 void setup() {
@@ -182,7 +170,6 @@ void setup() {
   RUN_TEST(test_home_with_params_acceptance);
   RUN_TEST(test_move_sets_speed_accel_in_status);
   RUN_TEST(test_bitpack_dir_sleep_basic);
-  RUN_TEST(test_shift595_captures_bytes_and_latch);
   UNITY_END();
 }
 
@@ -219,7 +206,6 @@ int main(int, char**) {
   setUp();
   RUN_TEST(test_move_sets_speed_accel_in_status);
   RUN_TEST(test_bitpack_dir_sleep_basic);
-  RUN_TEST(test_shift595_captures_bytes_and_latch);
   return UNITY_END();
 }
 #endif

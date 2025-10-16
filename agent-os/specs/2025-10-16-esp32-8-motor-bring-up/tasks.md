@@ -17,17 +17,17 @@ Assigned implementer: api-engineer
 Dependencies: None
 Standards: `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/testing/unit-testing.md`
 
-- [ ] 1.0 Complete SPI driver & helpers (no FastAccelStepper dependency)
-  - [ ] 1.1 Write 2-8 focused unit tests (native/sim)
+- [x] 1.0 Complete SPI driver & helpers (no FastAccelStepper dependency)
+  - [x] 1.1 Write 2-8 focused unit tests (native/sim)
     - Verify bit packing: DIR in byte0, SLEEP in byte1; SLEEP polarity: 1=awake/high
     - Verify latch sequence: shift → latch; no extra toggles
     - Limit to 2-8 tests (target 4)
-  - [ ] 1.2 Implement low-level VSPI driver
+  - [x] 1.2 Implement low-level VSPI driver
     - Init VSPI (`SCK=GPIO18`, `MOSI=GPIO23`, `MISO=GPIO19` unused), `RCLK=GPIO5`
     - Provide `set_dir_sleep(dir_bits, sleep_bits)` API
-  - [ ] 1.3 Provide mapping helpers
+  - [x] 1.3 Provide mapping helpers
     - `compute_dir_bits(target_targets)` and `compute_sleep_bits(target_targets, awake)`
-  - [ ] 1.4 Ensure tests pass
+  - [x] 1.4 Ensure tests pass
 
 Acceptance Criteria (independent):
 - Given target selections and WAKE/SLEEP overrides, unit tests verify `compute_dir_bits` and `compute_sleep_bits` produce expected bitmasks for motors 0–7

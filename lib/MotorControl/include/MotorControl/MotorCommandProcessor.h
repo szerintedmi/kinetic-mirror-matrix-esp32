@@ -1,19 +1,17 @@
 #pragma once
-#include <string>
-#include <vector>
 #include <stdint.h>
-#include "MotorBackend.h"
-#include "StubBackend.h"
+#include <memory>
+#include <string>
+#include "MotorControl/MotorController.h"
 
-class Protocol {
+class MotorCommandProcessor {
 public:
-  Protocol();
-  // Process a single command line (without trailing newline). Returns response string (may contain newlines).
+  MotorCommandProcessor();
   std::string processLine(const std::string& line, uint32_t now_ms);
-  void tick(uint32_t now_ms) { backend_.tick(now_ms); }
+  void tick(uint32_t now_ms) { controller_->tick(now_ms); }
 
 private:
-  StubBackend backend_;
+  std::unique_ptr<MotorController> controller_;
   std::string handleHELP();
   std::string handleSTATUS();
   std::string handleWAKE(const std::string& args);
