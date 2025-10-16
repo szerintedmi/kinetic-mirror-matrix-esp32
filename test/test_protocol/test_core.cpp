@@ -160,6 +160,10 @@ void test_move_sets_speed_accel_in_status() {
   TEST_ASSERT_TRUE(ok);
 }
 
+// Forward declarations for TG1 (SPI/595) tests
+void test_bitpack_dir_sleep_basic();
+void test_shift595_captures_bytes_and_latch();
+
 #ifdef ARDUINO
 void setup() {
   UNITY_BEGIN();
@@ -177,6 +181,8 @@ void setup() {
   RUN_TEST(test_wake_sleep_single_and_status);
   RUN_TEST(test_home_with_params_acceptance);
   RUN_TEST(test_move_sets_speed_accel_in_status);
+  RUN_TEST(test_bitpack_dir_sleep_basic);
+  RUN_TEST(test_shift595_captures_bytes_and_latch);
   UNITY_END();
 }
 
@@ -212,6 +218,8 @@ int main(int, char**) {
   RUN_TEST(test_home_with_params_acceptance);
   setUp();
   RUN_TEST(test_move_sets_speed_accel_in_status);
+  RUN_TEST(test_bitpack_dir_sleep_basic);
+  RUN_TEST(test_shift595_captures_bytes_and_latch);
   return UNITY_END();
 }
 #endif
