@@ -93,7 +93,8 @@ std::string MotorCommandProcessor::handleHELP()
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
   os << "STATUS\n";
   os << "WAKE:<id|ALL>\n";
-  os << "SLEEP:<id|ALL>";
+  os << "SLEEP:<id|ALL>\n";
+  os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS";
   return os.str();
 }
 
@@ -221,15 +222,15 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
   std::transform(verb.begin(), verb.end(), verb.begin(), ::toupper);
   if (verb == "HELP")
     return handleHELP();
-  if (verb == "STATUS")
+  if (verb == "STATUS" || verb == "ST")
     return handleSTATUS();
   if (verb == "WAKE")
     return handleWAKE(args);
   if (verb == "SLEEP")
     return handleSLEEP(args);
-  if (verb == "MOVE")
+  if (verb == "MOVE" || verb == "M")
     return handleMOVE(args, now_ms);
-  if (verb == "HOME")
+  if (verb == "HOME" || verb == "H")
     return handleHOME(args, now_ms);
   return "CTRL:ERR E01 BAD_CMD";
 }

@@ -13,20 +13,20 @@ def build_command(ns: argparse.Namespace) -> str:
     cmd = ns.command
     if cmd == "help":
         return "HELP\n"
-    if cmd == "status":
+    if cmd == "status" or cmd == "st":
         return "STATUS\n"
     if cmd == "wake":
         return f"WAKE:{ns.id}\n"
     if cmd == "sleep":
         return f"SLEEP:{ns.id}\n"
-    if cmd == "move":
+    if cmd == "move" or cmd == "m":
         parts = [str(ns.id), str(ns.abs_steps)]
         if ns.speed is not None:
             parts.append(str(ns.speed))
         if ns.accel is not None:
             parts.append(str(ns.accel))
         return f"MOVE:{','.join(parts)}\n"
-    if cmd == "home":
+    if cmd == "home" or cmd == "h":
         parts = [str(ns.id)]
         # All optional
         if ns.overshoot is not None:
@@ -80,6 +80,7 @@ def make_parser() -> argparse.ArgumentParser:
 
     _add_common(sp.add_parser("help", help="Print device HELP"))
     _add_common(sp.add_parser("status", help="Print STATUS"))
+    _add_common(sp.add_parser("st", help="Alias for status"))
 
     for name in ("wake", "sleep"):
         s = _add_common(sp.add_parser(name, help=f"{name.upper()} a motor or ALL"))
@@ -90,6 +91,11 @@ def make_parser() -> argparse.ArgumentParser:
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
     s.add_argument("--speed", type=int, help="Optional speed (steps/s)")
     s.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
+    s_alias = _add_common(sp.add_parser("m", help="Alias for move"))
+    s_alias.add_argument("id", help="Motor id 0-7 or ALL")
+    s_alias.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
+    s_alias.add_argument("--speed", type=int, help="Optional speed (steps/s)")
+    s_alias.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
 
     s = _add_common(sp.add_parser("home", help="HOME with optional params"))
     s.add_argument("id", help="Motor id 0-7 or ALL")
@@ -98,6 +104,13 @@ def make_parser() -> argparse.ArgumentParser:
     s.add_argument("--speed", type=int, help="Optional speed (steps/s)")
     s.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
     s.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
+    s_alias = _add_common(sp.add_parser("h", help="Alias for home"))
+    s_alias.add_argument("id", help="Motor id 0-7 or ALL")
+    s_alias.add_argument("--overshoot", type=int, help="Optional overshoot steps")
+    s_alias.add_argument("--backoff", type=int, help="Optional backoff steps")
+    s_alias.add_argument("--speed", type=int, help="Optional speed (steps/s)")
+    s_alias.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
+    s_alias.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
 
     return p
 
@@ -127,4 +140,3 @@ def main(argv=None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
