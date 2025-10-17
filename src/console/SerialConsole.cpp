@@ -5,9 +5,10 @@
 
 // Defer heavy backend initialization until setup() runs, to avoid
 // hardware init during static construction before Arduino core is ready.
-static MotorCommandProcessor* commandProcessor = nullptr;
+static MotorCommandProcessor *commandProcessor = nullptr;
 static char inputBuf[256];
 static size_t inputLen = 0;
+static uint32_t ignore_until_ms = 0; // grace period to ignore deploy-time noise
 
 void serial_console_setup()
 {
@@ -17,15 +18,33 @@ void serial_console_setup()
     ;
   }
 
-  if (!commandProcessor) {
+  if (!commandProcessor)
+  {
     commandProcessor = new MotorCommandProcessor();
   }
 
-  Serial.println("CTRL:READY Serial v1 — send HELP");
+  // After flashing/deploy, host tools may send text into the port.
+  // Ignore all serial input for a short window to avoid parsing it.
+  ignore_until_ms = millis() + 500;
 }
 
 void serial_console_tick()
 {
+  // During initial grace window, drain and ignore any incoming bytes
+  if (ignore_until_ms && millis() < ignore_until_ms)
+  {
+    while (Serial.available() > 0)
+    {
+      (void)Serial.read();
+    }
+    return;
+  }
+  if (ignore_until_ms && millis() >= ignore_until_ms)
+  {
+    ignore_until_ms = 0; // end grace period
+    Serial.println("CTRL:READY Serial v1 — send HELP");
+  }
+
   // Read incoming bytes until newline, then process
   while (Serial.available() > 0)
   {
@@ -40,7 +59,8 @@ void serial_console_tick()
       // Echo newline for user feedback
       Serial.println();
       inputBuf[inputLen] = '\0';
-      if (!commandProcessor) return; // not ready
+      if (!commandProcessor)
+        return; // not ready
       std::string resp = commandProcessor->processLine(std::string(inputBuf), millis());
       if (!resp.empty())
       {
@@ -80,7 +100,8 @@ void serial_console_tick()
   }
 
   // Allow controller to progress time-based completions
-  if (commandProcessor) {
+  if (commandProcessor)
+  {
     commandProcessor->tick(millis());
   }
 }
