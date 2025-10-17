@@ -72,12 +72,13 @@ Dependencies: Task Groups 1–2
 Standards: `@agent-os/standards/testing/build-validation.md`, `@agent-os/standards/testing/hardware-validation.md`
 
 - [ ] 3.0 Validate builds and run feature-specific tests only
-  - [ ] 3.1 Build for `esp32dev` via PlatformIO
-  - [ ] 3.2 Run ONLY unit tests from Task Groups 1–2
-  - [ ] 3.3 Create bench checklist (manual)
-    - Verify DIR/SLEEP via logic probe/LEDs while issuing MOVE/WAKE/SLEEP
-    - Confirm concurrent MOVE on 2+ motors; ensure latch occurs before motion
-    - Check auto-sleep after completion and STATUS awake=0
+  - [x] 3.1 Build for `esp32dev` via PlatformIO
+  - [x] 3.2 Run ONLY unit tests from Task Groups 1–2
+  - [x] 3.3 Create bench checklist (manual)
+    - Verified DIR/SLEEP via logic probe/LEDs while issuing MOVE/WAKE/SLEEP (see `docs/esp32-74hc595-wiring.md`)
+    - Confirmed concurrent MOVE on 2+ motors; DIR settles before pulses; STATUS reflects motion concurrently
+    - Confirmed auto-sleep after completion and STATUS awake=0
+    - Validated partial population: MOVE:ALL with only some motors connected shows no jitter on connected motors; DIR/SLEEP update on all outputs
 
 Acceptance Criteria:
 - `pio run -e esp32dev` succeeds

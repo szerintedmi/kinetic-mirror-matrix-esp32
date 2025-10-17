@@ -14,11 +14,12 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 
 ## Hardware & Motion Control
 - Drivers: DRV8825 (full-step for v1)
-- Expanders: 74HC595 shift registers for DIR and ENABLE lines
+- Expanders: 2× 74HC595 shift registers for per-motor `DIR` and `SLEEP` (ENABLE semantics)
 - Target: 8 steppers per node (initial cluster)
-- Motion Library: FastAccelStepper (planned per roadmap)
-- Wake/Sleep: Auto-ENABLE before motion, DISABLE on completion
-- Reference: `agent-os/product/roadmap.md` (items 2–3), `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/backend/task-structure.md`
+- Motion Library: FastAccelStepper (in use)
+- DIR/SLEEP timing: FastAccelStepper external-pin callback drives 74HC595; controller delegates timing
+- Wake/Sleep: Auto-enable before motion via FAS; disable on completion; OE gated at boot to ensure safe startup
+- Reference: `agent-os/product/roadmap.md` (items 2–3), `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/backend/task-structure.md`, `docs/esp32-74hc595-wiring.md`
 
 ## Command Protocols & Networking
 - USB Serial v1: Human-readable commands — `HELP`, `MOVE`, `HOME`, `STATUS`, `WAKE`, `SLEEP`
@@ -52,4 +53,3 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Pin framework, libraries, and tool versions in `platformio.ini` for reproducible builds
 - Track library adds (e.g., FastAccelStepper) in `platformio.ini` with exact versions
 - Reference: `@agent-os/standards/global/platformio-project-setup.md`
-
