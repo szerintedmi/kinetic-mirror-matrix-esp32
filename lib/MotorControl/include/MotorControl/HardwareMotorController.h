@@ -29,10 +29,13 @@ public:
 
 private:
   void latch_();
+  void startMoveSingle_(uint8_t id, long target, int speed, int accel);
   static uint32_t maskForId(uint8_t id) { return 1u << id; }
 
   uint8_t count_ = 8;
   MotorState motors_[8];
+  struct HomingPlan { bool active; uint8_t phase; long overshoot; long backoff; long full_range; int speed; int accel; };
+  HomingPlan homing_[8];
 
   // Current latched outputs to 74HC595 (used in native tests)
   uint8_t dir_bits_ = 0;   // 1 = forward

@@ -11,6 +11,11 @@ static MotorCommandProcessor proto;
 // Forward declarations for tests implemented in test_HelpStatus.cpp
 void test_help_format();
 void test_status_format_lines();
+// Forward declarations for tests implemented in test_HomeSequencing.cpp
+void test_home_parsing_comma_skips();
+void test_home_busy_rule_reject_when_moving();
+void test_home_all_concurrency_and_post_state();
+void test_help_includes_home_line_again();
 
 void setUp() {
   proto = MotorCommandProcessor();
@@ -172,6 +177,11 @@ void setup() {
   RUN_TEST(test_home_defaults);
   RUN_TEST(test_help_format);
   RUN_TEST(test_status_format_lines);
+  // HOME sequencing and parsing tests
+  RUN_TEST(test_home_parsing_comma_skips);
+  RUN_TEST(test_home_busy_rule_reject_when_moving);
+  RUN_TEST(test_home_all_concurrency_and_post_state);
+  RUN_TEST(test_help_includes_home_line_again);
   RUN_TEST(test_sleep_busy_then_ok);
   RUN_TEST(test_move_all_out_of_range);
   RUN_TEST(test_wake_sleep_single_and_status);
@@ -212,6 +222,14 @@ int main(int, char**) {
   RUN_TEST(test_help_format);
   setUp();
   RUN_TEST(test_status_format_lines);
+  setUp();
+  RUN_TEST(test_home_parsing_comma_skips);
+  setUp();
+  RUN_TEST(test_home_busy_rule_reject_when_moving);
+  setUp();
+  RUN_TEST(test_home_all_concurrency_and_post_state);
+  setUp();
+  RUN_TEST(test_help_includes_home_line_again);
   setUp();
   RUN_TEST(test_sleep_busy_then_ok);
   setUp();

@@ -15,6 +15,7 @@ HardwareMotorController::HardwareMotorController(IShift595& shift, IFasAdapter& 
   fas_ = &fas;
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+    homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   // Initialize hardware/adapters
   shift_->begin();
@@ -25,6 +26,7 @@ HardwareMotorController::HardwareMotorController(IShift595& shift, IFasAdapter& 
   // Default initial state: all sleeping handled by initial latch outside
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i].awake = false;
+    homing_[i].active = false;
   }
 #if !defined(ARDUINO)
   dir_bits_ = 0;
@@ -48,6 +50,7 @@ HardwareMotorController::HardwareMotorController() {
 
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+    homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   shift_->begin();
   fas_->begin();
@@ -59,6 +62,7 @@ HardwareMotorController::HardwareMotorController() {
   // Initial sleeping state handled by Shift595Esp32 begin() + controller setup
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i].awake = false;
+    homing_[i].active = false;
   }
 #if !defined(ARDUINO)
   dir_bits_ = 0;
@@ -80,6 +84,23 @@ bool HardwareMotorController::isAnyMovingForMask(uint32_t mask) const {
 void HardwareMotorController::latch_() {
   // Push current bits to 74HC595
   shift_->setDirSleep(dir_bits_, sleep_bits_);
+}
+
+void HardwareMotorController::startMoveSingle_(uint8_t i, long target, int speed, int accel) {
+  long cur = fas_->currentPosition(i);
+  motors_[i].position = cur;
+  motors_[i].speed = speed;
+  motors_[i].accel = accel;
+  motors_[i].moving = true;
+#if defined(ARDUINO)
+  motors_[i].awake = true; // FAS handles outputs
+#else
+  long delta = target - cur;
+  if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
+  sleep_bits_ |= (1u << i);
+  latch_();
+#endif
+  fas_->startMoveAbs(i, target, speed, accel);
 }
 
 void HardwareMotorController::wakeMask(uint32_t mask) {
@@ -157,11 +178,47 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
   return ok;
 }
 
-bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long /*full_range*/, uint32_t /*now_ms*/) {
-  // Basic homing stub: move to 0 with an overshoot/backoff profile is out-of-scope
-  // here; implement single absolute move to 0 respecting busy rule.
+bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t /*now_ms*/) {
+  // Reject if any targeted motor is currently busy
   if (isAnyMovingForMask(mask)) return false;
-  return moveAbsMask(mask, 0 /*target*/, speed, accel, 0);
+
+  // Derive defaults as needed
+  if (full_range <= 0) full_range = 2400; // kMaxPos - kMinPos by convention
+  long oshot = (overshoot < 0) ? -overshoot : overshoot;
+  long bko = (backoff < 0) ? -backoff : backoff;
+
+  // Prepare DIR/SLEEP bits first for all targets, then latch once before starts (native)
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      // Initialize homing plan for motor i
+      homing_[i] = HomingPlan{ true, 0, oshot, bko, full_range, speed, accel };
+      long cur = fas_->currentPosition(i);
+      motors_[i].position = cur;
+      motors_[i].speed = speed;
+      motors_[i].accel = accel;
+      motors_[i].moving = true;
+#if defined(ARDUINO)
+      motors_[i].awake = true;
+#else
+      long target = cur - (full_range + oshot);
+      long delta = target - cur;
+      if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
+      sleep_bits_ |= (1u << i);
+#endif
+    }
+  }
+#if !defined(ARDUINO)
+  latch_();
+#endif
+  // Issue first leg (negative run) moves
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      long cur = fas_->currentPosition(i);
+      long target = cur - (full_range + oshot);
+      fas_->startMoveAbs(i, target, speed, accel);
+    }
+  }
+  return true;
 }
 
 void HardwareMotorController::tick(uint32_t /*now_ms*/) {
@@ -182,5 +239,31 @@ void HardwareMotorController::tick(uint32_t /*now_ms*/) {
       motors_[i].awake = true;
     }
 #endif
+
+    // Homing sequence state machine
+    if (homing_[i].active && !motors_[i].moving) {
+      HomingPlan &hp = homing_[i];
+      if (hp.phase == 0) {
+        // Leg 2: backoff in positive direction by backoff
+        long cur = fas_->currentPosition(i);
+        long target = cur + hp.backoff;
+        startMoveSingle_(i, target, hp.speed, hp.accel);
+        hp.phase = 1;
+      } else if (hp.phase == 1) {
+        // Leg 3: center to soft midpoint (~ half of full_range forward)
+        long cur = fas_->currentPosition(i);
+        long mid_delta = (hp.full_range > 0) ? (hp.full_range / 2) : 1200;
+        long target = cur + mid_delta;
+        startMoveSingle_(i, target, hp.speed, hp.accel);
+        hp.phase = 2;
+      } else {
+        // Finalize: set runtime zero and complete
+        fas_->setCurrentPosition(i, 0);
+        motors_[i].position = 0;
+        motors_[i].moving = false;
+        hp.active = false;
+        // Awake state will be handled by regular logic above on next tick
+      }
+    }
   }
 }

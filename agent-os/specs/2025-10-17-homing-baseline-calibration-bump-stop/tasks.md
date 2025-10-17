@@ -17,21 +17,21 @@ Assigned implementer: api-engineer
 Dependencies: None
 Standards: `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/testing/unit-testing.md`, `@agent-os/standards/global/conventions.md`
 
-- [ ] 1.0 Complete HOME implementation end‑to‑end
-  - [ ] 1.1 Write 4–6 focused unit tests (native)
+ - [x] 1.0 Complete HOME implementation end‑to‑end
+  - [x] 1.1 Write 4–6 focused unit tests (native)
     - Parsing: `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]` with comma‑skips (e.g., `HOME:2,,50`)
     - Busy rule: reject HOME when any targeted motor is already moving
     - Concurrency: `HOME:ALL` starts all eight with the stub backend (no deadlocks)
     - Post‑state: after simulated completion, `position==0`, `moving==0`, `awake==0` for targeted motors
     - HELP includes HOME grammar line
-  - [ ] 1.2 Implement controller HOME
+  - [x] 1.2 Implement controller HOME
     - In `HardwareMotorController::homeMask`: orchestrate negative run (full_range+overshoot), backoff, center to soft midpoint, then `setCurrentPosition(0)`; ignore soft limits during HOME
     - Use absolute targets computed from current positions if only abs moves are available; otherwise relative moves are fine
     - Mirror MOVE semantics for auto‑WAKE/SLEEP and WAKE override handling
-  - [ ] 1.3 Align defaults and parsing
+  - [x] 1.3 Align defaults and parsing
     - Ensure MOVE defaults apply to HOME: speed=4000, accel=16000
     - Derive `full_range = kMaxPos - kMinPos` (currently 2400)
-  - [ ] 1.4 Ensure unit tests pass
+  - [x] 1.4 Ensure unit tests pass
     - Run ONLY the tests from 1.1
 
 Acceptance Criteria
@@ -61,4 +61,3 @@ Acceptance Criteria
 ## Execution Order
 1. Firmware Implementation (Task Group 1)
 2. Build & Bench Validation (Task Group 2)
-
