@@ -82,3 +82,8 @@ This project drives eight DRV8825 stepper drivers using FastAccelStepper for STE
 ---
 
 Tip: 74HC595 at 5 V requires higher logic thresholds; with a 3.3 V ESP32, prefer 3.3 V VCC on the shift registers or use 74HCT595.
+
+## Driver Compatibility and Current Limit (Vref)
+
+- All drivers' Vref must be tuned to the motor's safe current limit. Set and verify Vref for every driver channel before running moves; follow each driver's datasheet/board guide for the correct formula and sense-resistor value.
+- Compatibility: the wiring works with A4988 drivers (tested) and likely with TMC2209 (not tested). However, for our small motor (<100 mA peak), the A4988's current limiting was not accurate enough to reliably enforce such a low current; we could not tune it to stay within our low limits. Prefer DRV8825 (or a driver with finer current control) for very low-current motors.
