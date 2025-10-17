@@ -4,14 +4,14 @@
 2. [x] ESP32 8‑Motor Bring‑Up (FastAccelStepper + 74HC595) — Drive eight DRV8825 steppers in full‑step mode from one ESP32 using eight STEP pins and two daisy‑chained 74HC595s for per‑motor DIR and SLEEP (ENABLE semantics). Implement auto‑WAKE/SLEEP in firmware via FastAccelStepper external‑pin callback (enable just‑in‑time before motion; disable immediately after completion). Latch DIR at motion start only, validate concurrent motion and stable SR timing. Integrate with Serial v1. Depends on: 1. `M`
 3. [x] Homing & Baseline Calibration (Bump‑Stop) — Implement bump‑stop homing without switches: drive toward an end for `full_range + overshoot` steps, back off `backoff` steps, then move `full_range/2` to midpoint and set zero. Parameters have safe defaults and can be overridden via `HOME` (order: overshoot, backoff, speed, accel, full_range). Enforce slow, conservative speed during HOME (defaults may be overridden). Depends on: 2. `M`
 4. [x] Status & Diagnostics — Extend `STATUS` to report per‑motor position, moving/sleeping, homed flag, recent fault codes, and thermal counters; include a concise summary view in the CLI. Depends on: 2. `S`
-5. [ ] Thermal Limits Enforcement — Enforce per‑motor runtime/cooldown budgets (derived from STATUS metrics) to cap continuous motion and require cooldown before resuming; thresholds configurable and disabled by default for lab use. Depends on: 4. `S`
-6. [ ] Preset Replay (MVP) — Add a minimal host‑side preset format and CLI to script, store, and replay sequences using the serial protocol (absolute positions with optional speed/accel), enabling sharable demos. Depends on: 1, 4. `S`
-7. [ ] ESP‑Now Master/Node Broadcast — Add a master ESP32 that broadcasts protocol‑compatible commands (no acks/retries, no encryption initially). Support node IDs and group addressing. Depends on: 1, 2. `L`
-8. [ ] Master‑Side Scheduler (Thermal/Current Batching) — Implement a master scheduler that batches `MOVE` commands to respect current limits and thermal budgets, using node‑reported telemetry and configurable policies. Provides dry‑run checks and staggered dispatch. Depends on: 4, 7. `M`
-9. [ ] Multi‑Cluster Dispatch — Batch and sequence broadcasts to multiple nodes without a shared timebase, focusing on dependable arrival and master‑side scheduling rather than exact frame sync. Validate latency/jitter under load. Depends on: 7, 8. `M`
-10. [ ] 16+ Motors per ESP32 (R&D) — Evaluate FastAccelStepper vs. custom pulse gen to share STEP frequency across motors with identical speeds while gating per‑motor steps via ENABLE when targets complete; support independent DIR and different step counts. Document trade‑offs and migration path. Depends on: 2, 4. `M`
-11. [ ] Targeting Geometry Core — Provide a shared math library and CLI to convert wall coordinates into mirror angles with reachability checks; feeds presets and live play. Depends on: 6. `M`
-12. [ ] Creative Tooling: Live Play & Sandbox — Expose minimal live‑play hooks (controllers/sensors/OSC) while honoring scheduler limits, and add a desktop/browser sandbox to preview reachability and timing before hardware runs. Depends on: 8, 11. `M`
+5. [ ] Thermal Limits Enforcement — Enforce per‑motor runtime/cooldown budgets (derived from STATUS metrics) to cap continuous motion and require cooldown before resuming; thresholds configurable and can be disabled and/or overriden for lab use. Depends on: 4. `S`
+6. [ ] 16+ Motors per ESP32 (R&D Spike) — Validate shared STEP fan‑out idea with per‑motor STEP gating.  Check need for and compare 74HC125/126 vs 74LVC125/126 (and/or optional double‑inverted 74LVC14 pre‑buffer) for edge integrity, jitter, and fan‑out. Bench stop/resume at 10–50 ksteps/s; characterize max channels per ESP32. Deliver schematic/BOM recommendation and firmware gate‑timing notes. Depends on: 2, 4. `S`
+7. [ ] Preset Replay (MVP) — Add a minimal host‑side preset format and CLI to script, store, and replay sequences using the serial protocol (absolute positions with optional speed/accel), enabling sharable demos. Depends on: 1, 4. `S`
+8. [ ] ESP‑Now Master/Node Broadcast — Add a master ESP32 that broadcasts protocol‑compatible commands (no acks/retries, no encryption initially). Support node IDs and group addressing. Depends on: 1, 2. `L`
+9. [ ] Master‑Side Scheduler (Thermal/Current Batching) — Implement a master scheduler that batches `MOVE` commands to respect current limits and thermal budgets, using node‑reported telemetry and configurable policies. Provides dry‑run checks and staggered dispatch. Depends on: 4, 8. `M`
+10. [ ] Multi‑Cluster Dispatch — Batch and sequence broadcasts to multiple nodes without a shared timebase, focusing on dependable arrival and master‑side scheduling rather than exact frame sync. Validate latency/jitter under load. Depends on: 8, 9. `M`
+11. [ ] Targeting Geometry Core — Provide a shared math library and CLI to convert wall coordinates into mirror angles with reachability checks; feeds presets and live play. Depends on: 7. `M`
+12. [ ] Creative Tooling: Live Play & Sandbox — Expose minimal live‑play hooks (controllers/sensors/OSC) while honoring scheduler limits, and add a desktop/browser sandbox to preview reachability and timing before hardware runs. Depends on: 9, 11. `M`
 
 > Notes
 >
@@ -27,16 +27,16 @@
 > - Budgets: Electrical budget not enforced on the node (master responsibility). Thermal budget must be enforced on both master and node; node uses a higher threshold. Start with lab‑safe defaults and refine later.
 > - ESP‑Now: Start with broadcast, no acks/retries and no encryption; add reliability/security later if needed.
 > - Multi‑cluster: Prefer batched dispatch over shared timebase; master sequencing is sufficient for our non‑animation use case.
-> - Scaling: Motors can share STEP frequency (same speed), but have independent DIR and target step counts; stop per motor via ENABLE gating when its count completes.
+> - Scaling: Motors can share STEP frequency (same speed), but have independent DIR and target step counts; stop per motor by gating its STEP (not SLEEP/ENBL) once its count completes.
 
 > Ordering Rationale
 >
 > - 1 first to define and test the command surface quickly (with stubs) so validation and tooling can proceed in parallel.
 > - 2 integrates hardware bring‑up behind the stable serial interface; includes per‑motor ENABLE and auto‑WAKE/SLEEP to protect motors from overheating.
 > - 3–5 add reliability, observability, and protection so later phases have stable baselines and quick debugging.
-> - 6 enables sharable demos early without waiting for wireless.
-> - 7 introduces wireless control; establishes addressing/grouping for nodes.
-> - 8 adds master‑side scheduling for safe batching once broadcast control exists.
-> - 9 extends to multi‑node dispatch tuned for our non‑animation use case.
-> - 10 isolates scaling risks; shared STEP strategy is investigated to inform PCB and pin planning.
+> - 7 enables sharable demos early without waiting for wireless.
+> - 8 introduces wireless control; establishes addressing/grouping for nodes.
+> - 9 adds master‑side scheduling for safe batching once broadcast control exists.
+> - 10 extends to multi‑node dispatch tuned for our non‑animation use case.
+> - 6 isolates scaling risks early; shared STEP strategy is investigated to inform PCB and pin planning.
 > - 11–12 bring back the original geometry and creative tooling goals, aligned with the new control architecture.
