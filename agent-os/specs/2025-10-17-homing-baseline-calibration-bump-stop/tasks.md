@@ -46,9 +46,9 @@ Assigned implementer: testing-engineer
 Dependencies: Task Group 1
 Standards: `@agent-os/standards/testing/build-validation.md`, `@agent-os/standards/testing/hardware-validation.md`
 
-- [ ] 2.0 Validate build and execute homing bench checklist
-  - [ ] 2.1 Build firmware for `esp32dev` via PlatformIO
-  - [ ] 2.2 Bench checklist (manual)
+- [x] 2.0 Validate build and execute homing bench checklist
+  - [x] 2.1 Build firmware for `esp32dev` via PlatformIO
+  - [x] 2.2 Bench checklist (manual)
     - Issue `HOME:<id>`: observe negative run to hard stop, backoff to negative soft boundary, center move; final logical position reads 0 in STATUS
     - Issue `HOME:ALL`: confirm concurrent motion across 8 motors without brownouts; STEP pulses and DIR/SLEEP latching look stable
     - Verify auto‑WAKE before motion and auto‑SLEEP after completion; respect manual `WAKE` (stay awake) and `SLEEP` (error if moving)
