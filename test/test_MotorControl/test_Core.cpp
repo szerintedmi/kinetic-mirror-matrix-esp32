@@ -151,9 +151,17 @@ void test_move_sets_speed_accel_in_status() {
 }
 
 void test_bitpack_dir_sleep_basic();
+// Hardware backend tests (declared in test_HardwareBackend.cpp)
+void test_backend_latch_before_start();
+void test_backend_dir_bits_per_target();
+void test_backend_wake_sleep_overrides();
+void test_backend_busy_rule_overlapping_move();
+void test_backend_dir_latched_once_per_move();
+void test_backend_speed_accel_passed_to_adapter();
 
 #ifdef ARDUINO
 void setup() {
+  delay(200);
   UNITY_BEGIN();
   RUN_TEST(test_bad_cmd);
   RUN_TEST(test_bad_id);
@@ -170,7 +178,16 @@ void setup() {
   RUN_TEST(test_home_with_params_acceptance);
   RUN_TEST(test_move_sets_speed_accel_in_status);
   RUN_TEST(test_bitpack_dir_sleep_basic);
+  // Hardware backend sequencing tests
+  RUN_TEST(test_backend_latch_before_start);
+  RUN_TEST(test_backend_dir_bits_per_target);
+  RUN_TEST(test_backend_wake_sleep_overrides);
+  RUN_TEST(test_backend_busy_rule_overlapping_move);
+  RUN_TEST(test_backend_dir_latched_once_per_move);
+  RUN_TEST(test_backend_speed_accel_passed_to_adapter);
   UNITY_END();
+  // Keep MCU idle to avoid accidental re-runs/reboots during test teardown
+  while (true) { delay(1000); }
 }
 
 void loop() {}
@@ -206,6 +223,13 @@ int main(int, char**) {
   setUp();
   RUN_TEST(test_move_sets_speed_accel_in_status);
   RUN_TEST(test_bitpack_dir_sleep_basic);
+  // Hardware backend sequencing tests
+  RUN_TEST(test_backend_latch_before_start);
+  RUN_TEST(test_backend_dir_bits_per_target);
+  RUN_TEST(test_backend_wake_sleep_overrides);
+  RUN_TEST(test_backend_busy_rule_overlapping_move);
+  RUN_TEST(test_backend_dir_latched_once_per_move);
+  RUN_TEST(test_backend_speed_accel_passed_to_adapter);
   return UNITY_END();
 }
 #endif

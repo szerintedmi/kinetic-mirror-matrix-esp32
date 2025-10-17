@@ -3,7 +3,9 @@
 #include <Arduino.h>
 #include "MotorControl/MotorCommandProcessor.h"
 
-static MotorCommandProcessor commandProcessor;
+// Defer heavy backend initialization until setup() runs, to avoid
+// hardware init during static construction before Arduino core is ready.
+static MotorCommandProcessor* commandProcessor = nullptr;
 static char inputBuf[256];
 static size_t inputLen = 0;
 
@@ -13,6 +15,10 @@ void serial_console_setup()
   while (!Serial)
   {
     ;
+  }
+
+  if (!commandProcessor) {
+    commandProcessor = new MotorCommandProcessor();
   }
 
   Serial.println("CTRL:READY Serial v1 — send HELP");
@@ -34,7 +40,8 @@ void serial_console_tick()
       // Echo newline for user feedback
       Serial.println();
       inputBuf[inputLen] = '\0';
-      std::string resp = commandProcessor.processLine(std::string(inputBuf), millis());
+      if (!commandProcessor) return; // not ready
+      std::string resp = commandProcessor->processLine(std::string(inputBuf), millis());
       if (!resp.empty())
       {
         // Print as-is; response may be multi-line
@@ -73,7 +80,9 @@ void serial_console_tick()
   }
 
   // Allow controller to progress time-based completions
-  commandProcessor.tick(millis());
+  if (commandProcessor) {
+    commandProcessor->tick(millis());
+  }
 }
 
 #endif // ARDUINO

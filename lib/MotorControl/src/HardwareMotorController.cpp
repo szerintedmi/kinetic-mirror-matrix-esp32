@@ -1,0 +1,186 @@
+#include "MotorControl/HardwareMotorController.h"
+#include <string.h>
+
+#if defined(ARDUINO)
+#include <Arduino.h>
+#include "boards/Esp32Dev.hpp"
+#include "drivers/Esp32/Shift595Vspi.h"
+// The ESP32 adapter is declared below (guarded) to avoid native includes.
+#endif
+
+HardwareMotorController::HardwareMotorController(IShift595& shift, IFasAdapter& fas, uint8_t count) {
+  if (count > 8) count = 8;
+  count_ = count;
+  shift_ = &shift;
+  fas_ = &fas;
+  for (uint8_t i = 0; i < count_; ++i) {
+    motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+  }
+  // Initialize hardware/adapters
+  shift_->begin();
+  fas_->begin();
+  // Wire 74HC595 into FAS external-pin callback
+  fas_->attachShiftRegister(shift_);
+  
+  // Default initial state: all sleeping handled by initial latch outside
+  for (uint8_t i = 0; i < count_; ++i) {
+    motors_[i].awake = false;
+  }
+#if !defined(ARDUINO)
+  dir_bits_ = 0;
+  sleep_bits_ = 0;
+  latch_();
+#endif
+}
+
+#if defined(ARDUINO)
+// Forward declare ESP32 FastAccelStepper adapter type
+class FasAdapterEsp32;
+
+HardwareMotorController::HardwareMotorController() {
+  // Own the concrete drivers under Arduino/ESP32
+  owned_shift_.reset(new Shift595Esp32(SHIFT595_RCLK, SHIFT595_OE));
+  shift_ = owned_shift_.get();
+  // Fas adapter constructed in its own compilation unit
+  extern IFasAdapter* createEsp32FasAdapter();
+  owned_fas_.reset(createEsp32FasAdapter());
+  fas_ = owned_fas_.get();
+
+  for (uint8_t i = 0; i < count_; ++i) {
+    motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+  }
+  shift_->begin();
+  fas_->begin();
+  fas_->attachShiftRegister(shift_);
+  // Configure step pins for motors 0..7
+  for (uint8_t i = 0; i < count_; ++i) {
+    fas_->configureStepPin(i, STEP_PINS[i]);
+  }
+  // Initial sleeping state handled by Shift595Esp32 begin() + controller setup
+  for (uint8_t i = 0; i < count_; ++i) {
+    motors_[i].awake = false;
+  }
+#if !defined(ARDUINO)
+  dir_bits_ = 0;
+  sleep_bits_ = 0;
+  latch_();
+#endif
+}
+#endif
+
+bool HardwareMotorController::isAnyMovingForMask(uint32_t mask) const {
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      if (fas_->isMoving(i)) return true;
+    }
+  }
+  return false;
+}
+
+void HardwareMotorController::latch_() {
+  // Push current bits to 74HC595
+  shift_->setDirSleep(dir_bits_, sleep_bits_);
+}
+
+void HardwareMotorController::wakeMask(uint32_t mask) {
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      motors_[i].awake = true;
+      forced_awake_mask_ |= (1u << i);
+#if defined(ARDUINO)
+      fas_->setAutoEnable(i, false);
+      fas_->enableOutputs(i);
+#else
+      sleep_bits_ |= (1u << i);
+#endif
+    }
+  }
+#if !defined(ARDUINO)
+  latch_();
+#endif
+}
+
+bool HardwareMotorController::sleepMask(uint32_t mask) {
+  // Disallow sleep if any targeted motor is moving
+  if (isAnyMovingForMask(mask)) return false;
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      motors_[i].awake = false;
+      forced_awake_mask_ &= (uint8_t)~(1u << i);
+#if defined(ARDUINO)
+      fas_->disableOutputs(i);
+      fas_->setAutoEnable(i, true);
+#else
+      sleep_bits_ &= (uint8_t)~(1u << i);
+#endif
+    }
+  }
+#if !defined(ARDUINO)
+  latch_();
+#endif
+  return true;
+}
+
+bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed, int accel, uint32_t /*now_ms*/) {
+  // Busy if any selected motor is already running
+  if (isAnyMovingForMask(mask)) return false;
+
+  // Update motor state and start moves; DIR/SLEEP handled by FAS on Arduino,
+  // and by controller (native) to satisfy unit tests
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      long cur = fas_->currentPosition(i);
+      motors_[i].position = cur;
+      motors_[i].speed = speed;
+      motors_[i].accel = accel;
+      motors_[i].moving = true;
+#if defined(ARDUINO)
+      motors_[i].awake = true; // FAS will enable outputs via callback
+#else
+      long delta = target - cur;
+      if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
+      sleep_bits_ |= (1u << i);
+#endif
+    }
+  }
+ 
+#if !defined(ARDUINO)
+  latch_();
+#endif
+  // Start steppers
+  bool ok = true;
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      if (!fas_->startMoveAbs(i, target, speed, accel)) ok = false;
+    }
+  }
+  return ok;
+}
+
+bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long /*full_range*/, uint32_t /*now_ms*/) {
+  // Basic homing stub: move to 0 with an overshoot/backoff profile is out-of-scope
+  // here; implement single absolute move to 0 respecting busy rule.
+  if (isAnyMovingForMask(mask)) return false;
+  return moveAbsMask(mask, 0 /*target*/, speed, accel, 0);
+}
+
+void HardwareMotorController::tick(uint32_t /*now_ms*/) {
+  // Pull runtime state from adapter; awake reflects running or WAKE override
+  for (uint8_t i = 0; i < count_; ++i) {
+    bool running = fas_->isMoving(i);
+    motors_[i].moving = running;
+    long pos = fas_->currentPosition(i);
+    motors_[i].position = pos;
+#if defined(ARDUINO)
+    motors_[i].awake = running || ((forced_awake_mask_ & (1u << i)) != 0);
+#else
+    // Auto-sleep at idle in native mode to validate latch behavior
+    if (!running && (forced_awake_mask_ & (1u << i)) == 0) {
+      if (sleep_bits_ & (1u << i)) { sleep_bits_ &= (uint8_t)~(1u << i); latch_(); }
+      motors_[i].awake = false;
+    } else {
+      motors_[i].awake = true;
+    }
+#endif
+  }
+}

@@ -10,7 +10,8 @@ constexpr int VSPI_SS   = -1; // not used; latch (RCLK) handled separately
 
 // 74HC595 latch (RCLK) pin
 constexpr int SHIFT595_RCLK = 5;
+// 74HC595 OE (active low) pin — controlled by MCU to keep outputs tri-stated at boot
+constexpr int SHIFT595_OE = 22;
 
 // STEP pins for motors 0..7
 constexpr int STEP_PINS[8] = {4, 16, 17, 25, 26, 27, 32, 33};
-

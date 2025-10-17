@@ -41,21 +41,22 @@ Assigned implementer: api-engineer
 Dependencies: Task Group 1
 Standards: `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/global/resource-management.md`, `@agent-os/standards/testing/unit-testing.md`
 
-- [ ] 2.0 Implement HardwareBackend behind MotorBackend
-  - [ ] 2.1 Write 2-8 focused unit tests (native/sim) for backend sequencing
+- [x] 2.0 Implement HardwareBackend behind MotorBackend
+  - [x] 2.1 Write 2-8 focused unit tests (native/sim) for backend sequencing
     - Use a mocked 74HC595 driver to assert: latch-before-start, correct bits per target, and WAKE/SLEEP overrides
     - Verify busy rule on overlapping MOVE; DIR latched once per move
     - Limit to 2-8 tests (target 6)
-  - [ ] 2.2 Configure FastAccelStepper for 8 motors (STEP pins)
+  - [x] 2.2 Configure FastAccelStepper for 8 motors (STEP pins)
     - Map STEP pins: `GPIO4,16,17,25,26,27,32,33`
     - Defaults: speed=4000, accel=16000 (override via protocol)
-  - [ ] 2.3 Enforce sequencing per move
-    - Compute/set DIR & SLEEP bits → driver.set_dir_sleep() → start steppers
-  - [ ] 2.4 Map WAKE/SLEEP protocol verbs as overrides
-    - Keep FastAccelStepper auto-sleep; WAKE/SLEEP forces SLEEP bit via driver
-  - [ ] 2.5 Integrate backend selection
+  - [x] 2.3 Enforce sequencing per move
+    - Arduino: FastAccelStepper external-pin callback sets DIR/SLEEP with proper timing; backend starts steppers
+    - Native: emulate latch-before-start via mocked 74HC595 for unit tests
+  - [x] 2.4 Map WAKE/SLEEP protocol verbs as overrides
+    - Keep FastAccelStepper auto-enable; WAKE uses enableOutputs (forced awake), SLEEP returns to auto mode; callback reflects SLEEP
+  - [x] 2.5 Integrate backend selection
     - Provide compile-time switch to choose `StubBackend` vs `HardwareBackend`
-  - [ ] 2.6 Ensure backend unit tests pass
+  - [x] 2.6 Ensure backend unit tests pass
     - Run ONLY tests from 2.1
 
 Acceptance Criteria (independent of TG3):

@@ -1,5 +1,8 @@
 #include "MotorControl/MotorCommandProcessor.h"
 #include "StubMotorController.h"
+#if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
+#include "MotorControl/HardwareMotorController.h"
+#endif
 #include <sstream>
 #include <algorithm>
 #include <cctype>
@@ -27,7 +30,13 @@ static std::vector<std::string> split(const std::string& s, char delim) {
   return out;
 }
 
-MotorCommandProcessor::MotorCommandProcessor() : controller_(new StubMotorController(8)) {}
+MotorCommandProcessor::MotorCommandProcessor()
+#if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
+  : controller_(new HardwareMotorController())
+#else
+  : controller_(new StubMotorController(8))
+#endif
+{}
 
 bool MotorCommandProcessor::parseInt(const std::string& s, long& out) {
   if (s.empty()) return false;
