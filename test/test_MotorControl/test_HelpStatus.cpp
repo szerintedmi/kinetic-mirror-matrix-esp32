@@ -54,7 +54,11 @@ void test_status_format_lines() {
   TEST_ASSERT_TRUE(L0.find(" accel=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" moving=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" awake=") != std::string::npos);
+  // Newly added diagnostics keys should be present in the first line
+  TEST_ASSERT_TRUE(L0.find(" homed=") != std::string::npos);
+  TEST_ASSERT_TRUE(L0.find(" steps_since_home=") != std::string::npos);
+  TEST_ASSERT_TRUE(L0.find(" budget_s=") != std::string::npos);
+  TEST_ASSERT_TRUE(L0.find(" ttfc_s=") != std::string::npos);
 }
 
 // No standalone runner here; tests are executed from test_core.cpp runner.
-

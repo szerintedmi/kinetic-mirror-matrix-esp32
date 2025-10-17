@@ -9,6 +9,11 @@ struct MotorState {
   int accel;           // steps/s^2 (last applied or default)
   bool moving;
   bool awake;
+  // Extended diagnostics/state
+  bool homed;              // 1 after successful HOME; cleared on reboot
+  int32_t steps_since_home; // absolute steps accumulated since last HOME
+  int32_t budget_tenths;    // remaining runtime budget in tenths of seconds (can go < 0)
+  uint32_t last_update_ms;  // last time budget bookkeeping ran
 };
 
 class MotorController {
@@ -24,4 +29,3 @@ public:
   virtual bool homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) = 0;
   virtual void tick(uint32_t now_ms) = 0;
 };
-

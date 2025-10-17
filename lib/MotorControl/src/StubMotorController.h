@@ -15,9 +15,8 @@ public:
   void tick(uint32_t now_ms) override;
 
 private:
-  struct MovePlan { bool active; long target; uint32_t end_ms; };
+  struct MovePlan { bool active; bool is_home; long target; uint32_t end_ms; long start_pos; };
   uint8_t count_;
   MotorState motors_[8];
   MovePlan plans_[8];
 };
-

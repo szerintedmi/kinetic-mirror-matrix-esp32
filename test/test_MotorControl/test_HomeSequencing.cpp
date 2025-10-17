@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "MotorControl/MotorCommandProcessor.h"
+#include "MotorControl/MotorControlConstants.h"
 
 static MotorCommandProcessor proto_home;
 
@@ -34,8 +35,9 @@ static bool line_for_id_has(const std::vector<std::string>& lines, int id, const
 
 void test_home_parsing_comma_skips() {
   proto_home = MotorCommandProcessor();
-  // Comma-skip overshoot, set backoff=50
-  auto r = proto_home.processLine("HOME:2,,50", 0);
+  // Comma-skip overshoot, set backoff to DEFAULT_BACKOFF
+  std::string cmd = std::string("HOME:2,,") + std::to_string(MotorControlConstants::DEFAULT_BACKOFF);
+  auto r = proto_home.processLine(cmd, 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r.c_str());
   // Should be moving immediately
   auto st0 = proto_home.processLine("STATUS", 1);
@@ -92,4 +94,3 @@ void test_help_includes_home_line_again() {
 }
 
 // No main() here; runner is in test_Core.cpp
-

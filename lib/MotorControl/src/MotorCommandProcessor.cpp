@@ -1,4 +1,5 @@
 #include "MotorControl/MotorCommandProcessor.h"
+#include "MotorControl/MotorControlConstants.h"
 #include "StubMotorController.h"
 #if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
 #include "MotorControl/HardwareMotorController.h"
@@ -9,12 +10,12 @@
 #include <cstdlib>
 #include <vector>
 
-static const long kMinPos = -1200;
-static const long kMaxPos = 1200;
-static const int kDefaultSpeed = 4000;
-static const int kDefaultAccel = 16000;
-static const long kDefaultOvershoot = 800;
-static const long kDefaultBackoff = 50;
+constexpr long kMinPos = MotorControlConstants::MIN_POS_STEPS;
+constexpr long kMaxPos = MotorControlConstants::MAX_POS_STEPS;
+constexpr int kDefaultSpeed = MotorControlConstants::DEFAULT_SPEED_SPS;
+constexpr int kDefaultAccel = MotorControlConstants::DEFAULT_ACCEL_SPS2;
+constexpr long kDefaultOvershoot = MotorControlConstants::DEFAULT_OVERSHOOT;
+constexpr long kDefaultBackoff = MotorControlConstants::DEFAULT_BACKOFF;
 
 static std::string trim(const std::string &s)
 {
@@ -104,12 +105,30 @@ std::string MotorCommandProcessor::handleSTATUS()
   for (size_t i = 0; i < controller_->motorCount(); ++i)
   {
     const MotorState &s = controller_->state(i);
+    // Clamp budget_s to [0..MAX_RUNNING_TIME_S] for display (1 decimal)
+    int32_t budget_t = s.budget_tenths;
+    if (budget_t < 0) budget_t = 0;
+    if (budget_t > MotorControlConstants::BUDGET_TENTHS_MAX) budget_t = MotorControlConstants::BUDGET_TENTHS_MAX;
+    // Compute actual cooldown time in tenths (ceil), accounting for negative budget
+    // missing_t can exceed BUDGET_TENTHS_MAX if budget_tenths is negative
+    int32_t missing_t = MotorControlConstants::BUDGET_TENTHS_MAX - s.budget_tenths;
+    if (missing_t < 0) missing_t = 0;
+    int32_t ttfc_tenths = (missing_t <= 0) ? 0
+                         : (int32_t)(( (int64_t)missing_t * 10 + MotorControlConstants::REFILL_TENTHS_PER_SEC - 1 ) / MotorControlConstants::REFILL_TENTHS_PER_SEC);
+    // Clamp displayed cooldown to MAX_COOL_DOWN_TIME_S
+    const int32_t kTtfcMaxTenths = MotorControlConstants::MAX_COOL_DOWN_TIME_S * 10;
+    if (ttfc_tenths > kTtfcMaxTenths) ttfc_tenths = kTtfcMaxTenths;
+
     os << "id=" << (int)s.id
        << " pos=" << s.position
-       << " speed=" << s.speed
-       << " accel=" << s.accel
        << " moving=" << (s.moving ? 1 : 0)
-       << " awake=" << (s.awake ? 1 : 0);
+       << " awake=" << (s.awake ? 1 : 0)
+       << " homed=" << (s.homed ? 1 : 0)
+       << " steps_since_home=" << s.steps_since_home
+       << " budget_s=" << (budget_t / 10) << "." << (budget_t % 10)
+       << " ttfc_s=" << (ttfc_tenths / 10) << "." << (ttfc_tenths % 10)
+       << " speed=" << s.speed
+       << " accel=" << s.accel;
     if (i + 1 < controller_->motorCount())
       os << "\n";
   }
@@ -223,11 +242,21 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
   if (verb == "HELP")
     return handleHELP();
   if (verb == "STATUS" || verb == "ST")
+  {
+    // Advance controller state to 'now' to render up-to-date diagnostics
+    controller_->tick(now_ms);
     return handleSTATUS();
+  }
   if (verb == "WAKE")
+  {
+    controller_->tick(now_ms);
     return handleWAKE(args);
+  }
   if (verb == "SLEEP")
+  {
+    controller_->tick(now_ms);
     return handleSLEEP(args);
+  }
   if (verb == "MOVE" || verb == "M")
     return handleMOVE(args, now_ms);
   if (verb == "HOME" || verb == "H")

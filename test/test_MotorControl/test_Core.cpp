@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include "MotorControl/MotorCommandProcessor.h"
+#include "MotorControl/MotorControlConstants.h"
 
 static MotorCommandProcessor proto;
 
@@ -16,6 +17,14 @@ void test_home_parsing_comma_skips();
 void test_home_busy_rule_reject_when_moving();
 void test_home_all_concurrency_and_post_state();
 void test_help_includes_home_line_again();
+// Forward declarations for new diagnostics/status tests
+void test_status_includes_new_keys();
+void test_budget_spend_and_refill_clamp();
+void test_home_and_steps_since_home();
+void test_budget_clamps_and_ttfc_non_negative();
+void test_ttfc_clamp_and_recovery();
+void test_homed_resets_on_reboot();
+void test_steps_since_home_resets_after_second_home();
 
 void setUp() {
   proto = MotorCommandProcessor();
@@ -43,9 +52,11 @@ void test_bad_param() {
 }
 
 void test_move_out_of_range() {
-  auto r1 = proto.processLine("MOVE:0,2000", 0);
+  std::string cmd_hi = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 1);
+  auto r1 = proto.processLine(cmd_hi, 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r1.c_str());
-  auto r2 = proto.processLine("MOVE:0,-1300", 0);
+  std::string cmd_lo = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MIN_POS_STEPS - 1);
+  auto r2 = proto.processLine(cmd_lo, 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r2.c_str());
 }
 
@@ -104,7 +115,8 @@ void test_sleep_busy_then_ok() {
 }
 
 void test_move_all_out_of_range() {
-  auto r = proto.processLine("MOVE:ALL,1300", 0);
+  std::string cmd = std::string("MOVE:ALL,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 100);
+  auto r = proto.processLine(cmd, 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r.c_str());
 }
 
@@ -187,6 +199,15 @@ void setup() {
   RUN_TEST(test_wake_sleep_single_and_status);
   RUN_TEST(test_home_with_params_acceptance);
   RUN_TEST(test_move_sets_speed_accel_in_status);
+  // New diagnostics/status tests
+  RUN_TEST(test_status_includes_new_keys);
+  RUN_TEST(test_budget_spend_and_refill_clamp);
+  RUN_TEST(test_home_and_steps_since_home);
+  RUN_TEST(test_budget_clamps_and_ttfc_non_negative);
+  RUN_TEST(test_homed_resets_on_reboot);
+  RUN_TEST(test_steps_since_home_resets_after_second_home);
+  setUp();
+  RUN_TEST(test_ttfc_clamp_and_recovery);
   RUN_TEST(test_bitpack_dir_sleep_basic);
   // Hardware backend sequencing tests
   RUN_TEST(test_backend_latch_before_start);
@@ -240,6 +261,18 @@ int main(int, char**) {
   RUN_TEST(test_home_with_params_acceptance);
   setUp();
   RUN_TEST(test_move_sets_speed_accel_in_status);
+  setUp();
+  RUN_TEST(test_status_includes_new_keys);
+  setUp();
+  RUN_TEST(test_budget_spend_and_refill_clamp);
+  setUp();
+  RUN_TEST(test_home_and_steps_since_home);
+  setUp();
+  RUN_TEST(test_budget_clamps_and_ttfc_non_negative);
+  setUp();
+  RUN_TEST(test_homed_resets_on_reboot);
+  setUp();
+  RUN_TEST(test_steps_since_home_resets_after_second_home);
   RUN_TEST(test_bitpack_dir_sleep_basic);
   // Hardware backend sequencing tests
   RUN_TEST(test_backend_latch_before_start);

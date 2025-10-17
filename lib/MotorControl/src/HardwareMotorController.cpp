@@ -1,4 +1,5 @@
 #include "MotorControl/HardwareMotorController.h"
+#include "MotorControl/MotorControlConstants.h"
 #include <string.h>
 
 #if defined(ARDUINO)
@@ -14,7 +15,7 @@ HardwareMotorController::HardwareMotorController(IShift595& shift, IFasAdapter& 
   shift_ = &shift;
   fas_ = &fas;
   for (uint8_t i = 0; i < count_; ++i) {
-    motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0 };
     homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   // Initialize hardware/adapters
@@ -49,7 +50,7 @@ HardwareMotorController::HardwareMotorController() {
   fas_ = owned_fas_.get();
 
   for (uint8_t i = 0; i < count_; ++i) {
-    motors_[i] = MotorState{ i, 0, 4000, 16000, false, false };
+    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0 };
     homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   shift_->begin();
@@ -221,12 +222,34 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
   return true;
 }
 
-void HardwareMotorController::tick(uint32_t /*now_ms*/) {
+void HardwareMotorController::tick(uint32_t now_ms) {
   // Pull runtime state from adapter; awake reflects running or WAKE override
   for (uint8_t i = 0; i < count_; ++i) {
+    if (now_ms >= motors_[i].last_update_ms) {
+      uint32_t dt_ms = now_ms - motors_[i].last_update_ms;
+      uint32_t whole_sec = dt_ms / 1000;
+      if (whole_sec > 0) {
+        const int32_t kBudgetFloor = (int32_t)(MotorControlConstants::BUDGET_TENTHS_MAX -
+          MotorControlConstants::REFILL_TENTHS_PER_SEC * (int32_t)MotorControlConstants::MAX_COOL_DOWN_TIME_S);
+        if (motors_[i].awake) {
+          motors_[i].budget_tenths -= (int32_t)(MotorControlConstants::SPEND_TENTHS_PER_SEC * (int32_t)whole_sec);
+          if (motors_[i].budget_tenths < kBudgetFloor) motors_[i].budget_tenths = kBudgetFloor;
+        } else {
+          motors_[i].budget_tenths += (int32_t)(MotorControlConstants::REFILL_TENTHS_PER_SEC * (int32_t)whole_sec);
+          if (motors_[i].budget_tenths > MotorControlConstants::BUDGET_TENTHS_MAX) motors_[i].budget_tenths = MotorControlConstants::BUDGET_TENTHS_MAX;
+        }
+        motors_[i].last_update_ms += whole_sec * 1000;
+      }
+    }
     bool running = fas_->isMoving(i);
     motors_[i].moving = running;
     long pos = fas_->currentPosition(i);
+    long old_pos = motors_[i].position;
+    if (motors_[i].homed && pos != old_pos) {
+      long delta = pos - old_pos;
+      if (delta < 0) delta = -delta;
+      motors_[i].steps_since_home += (int32_t)delta;
+    }
     motors_[i].position = pos;
 #if defined(ARDUINO)
     motors_[i].awake = running || ((forced_awake_mask_ & (1u << i)) != 0);
@@ -261,6 +284,8 @@ void HardwareMotorController::tick(uint32_t /*now_ms*/) {
         fas_->setCurrentPosition(i, 0);
         motors_[i].position = 0;
         motors_[i].moving = false;
+        motors_[i].homed = true;
+        motors_[i].steps_since_home = 0;
         hp.active = false;
         // Awake state will be handled by regular logic above on next tick
       }

@@ -3,6 +3,8 @@
 #include <string>
 
 #include "MotorControl/HardwareMotorController.h"
+#include "MotorControl/MotorControlConstants.h"
+
 
 // Test doubles and event log
 struct Event {
@@ -71,7 +73,8 @@ void test_backend_latch_before_start() {
 
   // Move motors 0 and 1 to +100
   uint32_t mask = (1u << 0) | (1u << 1);
-  bool ok = ctrl.moveAbsMask(mask, 100, 4000, 16000, 0);
+  using namespace MotorControlConstants;
+  bool ok = ctrl.moveAbsMask(mask, 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_GREATER_OR_EQUAL(1u, (unsigned)shift.latch_count());
   TEST_ASSERT_TRUE(g_events.size() >= 3);
@@ -89,14 +92,14 @@ void test_backend_dir_bits_per_target() {
   clear_events();
 
   // Motor 0 -> +100 (DIR=1), Motor 1 -> -100 (DIR=0)
-  ctrl.moveAbsMask((1u << 0) | (1u << 1), 100, 4000, 16000, 0);
+  ctrl.moveAbsMask((1u << 0) | (1u << 1), 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   // Mark motor 1 move complete at target to clear BUSY, then advance position
   fas.setCurrentPosition(1, 100);
   ctrl.tick(0);
   // Update motor 1 position to +200 then command -100 absolute -> negative delta
   fas.setCurrentPosition(1, 200);
   ctrl.tick(0);
-  ctrl.moveAbsMask((1u << 1), -100, 4000, 16000, 0);
+  ctrl.moveAbsMask((1u << 1), -100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
 
   uint8_t dir = shift.last_dir();
   TEST_ASSERT_TRUE((dir & (1u << 0)) != 0); // motor 0 forward
@@ -134,7 +137,7 @@ void test_backend_busy_rule_overlapping_move() {
   clear_events();
 
   fas.setMoving(0, true);
-  bool ok = ctrl.moveAbsMask(1u << 0, 500, 4000, 16000, 0);
+  bool ok = ctrl.moveAbsMask(1u << 0, 500, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_FALSE(ok);
   TEST_ASSERT_EQUAL_UINT(0, shift.latch_count());
 }
@@ -146,7 +149,7 @@ void test_backend_dir_latched_once_per_move() {
   shift.resetCounters();
   clear_events();
 
-  bool ok = ctrl.moveAbsMask(1u << 4, 250, 4000, 16000, 0);
+  bool ok = ctrl.moveAbsMask(1u << 4, 250, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_TRUE(ok);
   unsigned lc = shift.latch_count();
   // Tick should not cause additional latch
