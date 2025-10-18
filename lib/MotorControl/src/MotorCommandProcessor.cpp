@@ -46,6 +46,7 @@ MotorCommandProcessor::MotorCommandProcessor()
     : controller_(new StubMotorController(8))
 #endif
 {
+  controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
 }
 
 bool MotorCommandProcessor::parseInt(const std::string &s, long &out)
@@ -176,9 +177,11 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
   if (key != "THERMAL_RUNTIME_LIMITING") return "CTRL:ERR E03 BAD_PARAM";
   if (val == "ON") {
     thermal_limits_enabled_ = true;
+    controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
     return "CTRL:OK";
   } else if (val == "OFF") {
     thermal_limits_enabled_ = false;
+    controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
     return "CTRL:OK";
   }
   return "CTRL:ERR E03 BAD_PARAM";
@@ -225,6 +228,21 @@ std::string MotorCommandProcessor::handleWAKE(const std::string &args)
   uint32_t mask;
   if (!parseIdMask(args, mask))
     return "CTRL:ERR E02 BAD_ID";
+  // Thermal WAKE guard: reject when no budget if enabled; warn when disabled
+  // Determine first violating id deterministically
+  for (uint8_t id = 0; id < controller_->motorCount(); ++id) {
+    if ((mask & (1u << id)) == 0) continue;
+    const MotorState &s = controller_->state(id);
+    int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
+    if (avail_s <= 0) {
+      if (thermal_limits_enabled_) {
+        return std::string("CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE");
+      } else {
+        controller_->wakeMask(mask);
+        return std::string("CTRL:WARN THERMAL_NO_BUDGET_WAKE\nCTRL:OK");
+      }
+    }
+  }
   controller_->wakeMask(mask);
   return "CTRL:OK";
 }

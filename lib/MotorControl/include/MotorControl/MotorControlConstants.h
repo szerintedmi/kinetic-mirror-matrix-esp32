@@ -28,4 +28,7 @@ namespace MotorControlConstants
     constexpr int32_t REFILL_TENTHS_PER_SEC =                      // 1.5 s/s when OFF
         (MAX_RUNNING_TIME_S * 10) / FULL_COOL_DOWN_TIME_S;
 
+    // Grace period beyond zero budget before forced auto-sleep (seconds)
+    constexpr int32_t AUTO_SLEEP_IF_OVER_BUDGET_S = 5;
+
 } // namespace MotorControlConstants

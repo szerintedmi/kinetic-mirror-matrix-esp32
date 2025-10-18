@@ -26,6 +26,7 @@ public:
   bool moveAbsMask(uint32_t mask, long target, int speed, int accel, uint32_t now_ms) override;
   bool homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) override;
   void tick(uint32_t now_ms) override;
+  void setThermalLimitsEnabled(bool enabled) override { thermal_limits_enabled_ = enabled; }
 
 private:
   void latch_();
@@ -48,4 +49,6 @@ private:
   IFasAdapter* fas_ = nullptr;
   std::unique_ptr<IShift595> owned_shift_;
   std::unique_ptr<IFasAdapter> owned_fas_;
+
+  bool thermal_limits_enabled_ = true;
 };

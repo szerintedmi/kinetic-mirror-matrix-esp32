@@ -34,4 +34,7 @@ public:
   virtual bool moveAbsMask(uint32_t mask, long target, int speed, int accel, uint32_t now_ms) = 0;
   virtual bool homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) = 0;
   virtual void tick(uint32_t now_ms) = 0;
+
+  // Global thermal runtime limiting flag control
+  virtual void setThermalLimitsEnabled(bool enabled) = 0;
 };

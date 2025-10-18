@@ -62,11 +62,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 4.0 Add `AUTO_SLEEP_IF_OVER_BUDGET_S` constant to `MotorControlConstants`
-- [ ] 4.1 In controllers’ `tick()`, when enabled and `budget_tenths < -AUTO_SLEEP_IF_OVER_BUDGET_S*10`, force SLEEP and cancel any active move (stub and hardware)
-- [ ] 4.2 Reject `WAKE` with `CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE` when no budget (or WARN when disabled)
-- [ ] 4.3 Ensure move cancellation is safe and idempotent
-- [ ] 4.4 Unit tests: auto-sleep after overrun cancels active plan (awake=0, moving=0); WAKE rejection/warn paths
+- [x] 4.0 Add `AUTO_SLEEP_IF_OVER_BUDGET_S` constant to `MotorControlConstants`
+- [x] 4.1 In controllers’ `tick()`, when enabled and `budget_tenths < -AUTO_SLEEP_IF_OVER_BUDGET_S*10`, force SLEEP and cancel any active move (stub and hardware)
+- [x] 4.2 Reject `WAKE` with `CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE` when no budget (or WARN when disabled)
+- [x] 4.3 Ensure move cancellation is safe and idempotent
+- [x] 4.4 Unit tests: auto-sleep after overrun cancels active plan (awake=0, moving=0); WAKE rejection/warn paths
 
 **Acceptance Criteria:**
 - Motors are force-slept after grace overrun; active moves stop

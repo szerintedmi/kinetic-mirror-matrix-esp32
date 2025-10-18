@@ -114,6 +114,25 @@ void StubMotorController::tick(uint32_t now_ms) {
       }
     }
 
+    // Auto-sleep overrun handling (runtime enforcement)
+    if (thermal_limits_enabled_) {
+      const int32_t overrun_tenths = -MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S * 10;
+      if (motors_[i].budget_tenths < overrun_tenths) {
+        // Force sleep and cancel any active plan
+        motors_[i].awake = false;
+        if (plans_[i].active || motors_[i].moving) {
+          motors_[i].moving = false;
+          plans_[i].active = false;
+          if (motors_[i].last_op_ongoing) {
+            motors_[i].last_op_ongoing = false;
+            if (motors_[i].last_op_started_ms != 0 && now_ms >= motors_[i].last_op_started_ms) {
+              motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
+            }
+          }
+        }
+      }
+    }
+
     // Complete moves scheduled in the stub plan
     if (plans_[i].active && now_ms >= plans_[i].end_ms) {
       long old_pos = motors_[i].position;

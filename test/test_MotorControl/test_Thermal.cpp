@@ -102,3 +102,55 @@ void test_last_op_timing_home() {
   TEST_ASSERT_TRUE(t1.find("LAST_OP_TIMING") != std::string::npos);
   TEST_ASSERT_TRUE(t1.find(" actual_ms=") != std::string::npos);
 }
+
+void test_wake_reject_enabled_no_budget() {
+  MotorCommandProcessor p;
+  // Drain budget by being awake
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:0", 0).c_str());
+  (void)p.processLine("STATUS", 100000); // 100s later -> no budget
+  // Go to sleep to allow WAKE command
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SLEEP:0", 100000).c_str());
+  std::string r = p.processLine("WAKE:0", 100001);
+  TEST_ASSERT_TRUE(r.find("CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE") == 0);
+}
+
+void test_wake_warn_disabled_no_budget_then_ok() {
+  MotorCommandProcessor p;
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:0", 0).c_str());
+  (void)p.processLine("STATUS", 100000);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SLEEP:0", 100000).c_str());
+  std::string r = p.processLine("WAKE:0", 100001);
+  TEST_ASSERT_TRUE(r.find("CTRL:WARN THERMAL_NO_BUDGET_WAKE") == 0);
+  TEST_ASSERT_TRUE(r.find("\nCTRL:OK") != std::string::npos);
+}
+
+void test_auto_sleep_overrun_cancels_move_and_awake() {
+  MotorCommandProcessor p;
+  // Disable to allow starting a very long move
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0).c_str());
+  // Long move: target at limit with very low speed to exceed budget
+  std::string r = p.processLine("MOVE:0,1200,1,1000", 0);
+  TEST_ASSERT_TRUE(r.find("CTRL:OK est_ms=") != std::string::npos);
+  // Re-enable enforcement
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=ON", 0).c_str());
+  // Advance time past zero budget + grace period
+  const uint32_t t_ms = (MotorControlConstants::MAX_RUNNING_TIME_S + MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S + 1) * 1000;
+  (void)p.processLine("STATUS", t_ms);
+  // Verify auto-slept and move canceled
+  std::string st = p.processLine("STATUS", t_ms + 1);
+  // Extract line for id=0
+  size_t start = 0;
+  bool found_line = false;
+  std::string line0;
+  while (start <= st.size()) {
+    size_t pos = st.find('\n', start);
+    std::string line = (pos == std::string::npos) ? st.substr(start) : st.substr(start, pos - start);
+    if (line.rfind("id=0", 0) == 0 || line.find("id=0 ") == 0) { line0 = line; found_line = true; break; }
+    if (pos == std::string::npos) break;
+    start = pos + 1;
+  }
+  TEST_ASSERT_TRUE(found_line);
+  TEST_ASSERT_TRUE(line0.find(" moving=0") != std::string::npos);
+  TEST_ASSERT_TRUE(line0.find(" awake=0") != std::string::npos);
+}

@@ -289,6 +289,33 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     }
 #endif
 
+    // Auto-sleep when budget overrun exceeds grace period
+    if (thermal_limits_enabled_) {
+      const int32_t overrun_tenths = -MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S * 10;
+      if (motors_[i].budget_tenths < overrun_tenths) {
+        // Clear WAKE override and force outputs off
+        forced_awake_mask_ &= (uint8_t)~(1u << i);
+#if defined(ARDUINO)
+        fas_->disableOutputs(i);
+        fas_->setAutoEnable(i, true);
+#else
+        if (sleep_bits_ & (1u << i)) { sleep_bits_ &= (uint8_t)~(1u << i); latch_(); }
+#endif
+        motors_[i].awake = false;
+        // Stop homing plan if active; mark operation complete
+        if (homing_[i].active || motors_[i].moving) {
+          homing_[i].active = false;
+          motors_[i].moving = false;
+          if (motors_[i].last_op_ongoing) {
+            motors_[i].last_op_ongoing = false;
+            if (motors_[i].last_op_started_ms != 0 && now_ms >= motors_[i].last_op_started_ms) {
+              motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
+            }
+          }
+        }
+      }
+    }
+
     // Homing sequence state machine
     if (homing_[i].active && !motors_[i].moving) {
       HomingPlan &hp = homing_[i];

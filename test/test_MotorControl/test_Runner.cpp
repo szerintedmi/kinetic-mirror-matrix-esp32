@@ -35,6 +35,9 @@ void test_help_includes_thermal_get_set();
 void test_get_thermal_runtime_limiting_default_on_and_max_budget();
 void test_last_op_timing_move();
 void test_last_op_timing_home();
+void test_wake_reject_enabled_no_budget();
+void test_wake_warn_disabled_no_budget_then_ok();
+void test_auto_sleep_overrun_cancels_move_and_awake();
 
 // KinematicsAndStub
 void test_estimator_trapezoidal_matches_simple_formula();
@@ -90,6 +93,9 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_get_thermal_runtime_limiting_default_on_and_max_budget);
   setUp(); RUN_TEST(test_last_op_timing_move);
   setUp(); RUN_TEST(test_last_op_timing_home);
+  setUp(); RUN_TEST(test_wake_reject_enabled_no_budget);
+  setUp(); RUN_TEST(test_wake_warn_disabled_no_budget_then_ok);
+  setUp(); RUN_TEST(test_auto_sleep_overrun_cancels_move_and_awake);
 
   // Kinematics/stub integration
   setUp(); RUN_TEST(test_estimator_trapezoidal_matches_simple_formula);
