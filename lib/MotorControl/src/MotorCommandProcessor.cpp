@@ -105,10 +105,10 @@ std::string MotorCommandProcessor::handleSTATUS()
   for (size_t i = 0; i < controller_->motorCount(); ++i)
   {
     const MotorState &s = controller_->state(i);
-    // Clamp budget_s to [0..MAX_RUNNING_TIME_S] for display (1 decimal)
+    // budget_s: show the true budget balance (can be negative), formatted to 1 decimal
     int32_t budget_t = s.budget_tenths;
-    if (budget_t < 0) budget_t = 0;
-    if (budget_t > MotorControlConstants::BUDGET_TENTHS_MAX) budget_t = MotorControlConstants::BUDGET_TENTHS_MAX;
+    bool budget_neg = (budget_t < 0);
+    int32_t budget_abs = budget_neg ? -budget_t : budget_t;
     // Compute actual cooldown time in tenths (ceil), accounting for negative budget
     // missing_t can exceed BUDGET_TENTHS_MAX if budget_tenths is negative
     int32_t missing_t = MotorControlConstants::BUDGET_TENTHS_MAX - s.budget_tenths;
@@ -125,7 +125,7 @@ std::string MotorCommandProcessor::handleSTATUS()
        << " awake=" << (s.awake ? 1 : 0)
        << " homed=" << (s.homed ? 1 : 0)
        << " steps_since_home=" << s.steps_since_home
-       << " budget_s=" << (budget_t / 10) << "." << (budget_t % 10)
+       << " budget_s=" << (budget_neg ? "-" : "") << (budget_abs / 10) << "." << (budget_abs % 10)
        << " ttfc_s=" << (ttfc_tenths / 10) << "." << (ttfc_tenths % 10)
        << " speed=" << s.speed
        << " accel=" << s.accel;

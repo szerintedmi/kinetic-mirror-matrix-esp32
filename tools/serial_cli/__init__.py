@@ -152,7 +152,7 @@ def render_table(rows: List[Dict[str, str]]) -> str:
         ("awake", 6, "awake"),
         ("homed", 6, "homed"),
         ("steps_since_home", 18, "steps_since_homed"),
-        ("budget_s", 15, "move_budget_s"),
+        ("budget_s", 15, "budget_s"),
         ("ttfc_s", 7, "ttfc_s"),
     ]
     header = " ".join([label[:width].rjust(width) for key, width, label in cols])
@@ -375,4 +375,3 @@ def run_interactive(ns: argparse.Namespace) -> int:
         worker.stop()
         worker.join(timeout=1.0)
     return rc
-

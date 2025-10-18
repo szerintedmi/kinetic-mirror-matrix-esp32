@@ -14,7 +14,7 @@ Standards: `@agent-os/standards/testing/unit-testing.md`, `@agent-os/standards/t
     - Unity tests from 1.1 and formatting tests from 3.1
     - Python CLI tests from 2.1
   - [ ] 4.2 Analyze coverage gaps specific to STATUS extensions and TUI
-    - Focus on boundary conditions: budget clamp at 0, ttfc_s calc, homed + steps_since_home reset behavior
+    - Focus on boundary conditions: negative budget_s visibility (no clamp at 0), ttfc_s calc, homed + steps_since_home reset behavior
   - [ ] 4.3 Write up to 8 additional strategic tests max
     - Prioritize end‑to‑end flows through parser/handlers and CLI parsing/rendering helpers
   - [ ] 4.4 Run feature‑specific tests only
@@ -55,4 +55,3 @@ IMPORTANT: Ensure that your implementation work is ALIGNED and DOES NOT CONFLICT
 @agent-os/standards/testing/hardware-validation.md
 @agent-os/standards/global/coding-style.md
 @agent-os/standards/global/conventions.md
-

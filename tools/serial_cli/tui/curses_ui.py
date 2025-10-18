@@ -85,7 +85,7 @@ class CursesUI(BaseUI):
                         "  pos = position (steps)",
                         "  moving, awake, homed = state flags",
                         "  steps_since_homed = steps since last successful HOME",
-                        "  move_budget_s = remaining move time in s before reaching thermal limits",
+                        "  budget_s = remaining runtime budget in seconds (can be negative when over budget)",
                         "  ttfc_s = time-to-full-cooldown",
                     ]
                     right_header = ["Device commands", ""]
@@ -295,4 +295,3 @@ class CursesUI(BaseUI):
             return 0
         except KeyboardInterrupt:
             return 130
-

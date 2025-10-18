@@ -17,7 +17,7 @@ Reviewed and augmented tests for Status & Diagnostics across firmware and CLI to
     - Added alias coverage: `st` → `STATUS`, `m` for MOVE, `h` for HOME.
 
 ## Rationale
-- Boundary focus per spec: budget clamps, ttfc_s calc, homed/steps_since_home behavior.
+- Boundary focus per spec: negative `budget_s` visibility (no clamp at 0), `ttfc_s` calculation, homed/steps_since_home behavior.
 - Ensure CLI mapping and render helpers align with new STATUS columns and common aliases.
 
 ## Results

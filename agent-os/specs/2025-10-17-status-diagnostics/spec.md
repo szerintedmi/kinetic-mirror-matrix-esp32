@@ -15,8 +15,8 @@ Extend STATUS to include homing state and thermal runtime budget metrics per mot
   - `homed=<0|1>`: 1 after successful HOME; resets to 0 on reboot.
   - `steps_since_home=<steps>`: absolute steps accumulated since last successful HOME; resets on HOME and reboot.
   - Thermal budget metrics (session-only):
-    - `budget_s=<int>`: remaining runtime budget (seconds), clamped to 0..`MAX_RUNNING_TIME_S`.
-    - `ttfc_s=<int>`: time-to-full-cooldown seconds if turned OFF now.
+    - `budget_s=<sec.dec>`: remaining runtime budget (seconds), can be negative when over budget; displayed with 1 decimal.
+    - `ttfc_s=<sec.dec>`: time-to-full-cooldown seconds if turned OFF now.
 - Definitions for ON/OFF:
   - ON = motor driver awake/enabled; OFF = driver asleep/disabled. Auto‑WAKE/SLEEP transitions count.
 - Host diagnostics CLI (serial_cli.py) provides an interactive mode that continuously refreshes a compact fixed‑width table at ~2 Hz by polling `STATUS`, while also accepting commands (`HELP`, `MOVE`, `HOME`, `WAKE`, `SLEEP`) concurrently. Command responses are shown without disrupting the table (e.g., in a small log/output pane). A non‑interactive one‑shot print remains available via existing `serial_cli.py status`.
@@ -51,13 +51,13 @@ No mockups provided. CLI table should be readable in a standard terminal (80–1
   - `FULL_COOL_DOWN_TIME_S = 60`
   - `REFILL_RATE = MAX_RUNNING_TIME_S / FULL_COOL_DOWN_TIME_S = 1.5`
 - Budget accounting per motor (event‑driven + just‑in‑time):
-  - Track `budget_balance_s` (continuous value; can go negative) and `last_update_ms`.
+  - Track a single internal budget in tenths (`budget_tenths`, can be negative) and `last_update_ms`.
   - On MOVE/HOME/WAKE/SLEEP and before responding to STATUS, compute elapsed seconds and update:
-    - If ON: `budget_balance_s -= elapsed_s`.
-    - If OFF: `budget_balance_s += REFILL_RATE * elapsed_s` and cap at `MAX_RUNNING_TIME_S`.
-  - Display `budget_s` with one decimal place: `budget_s = max(0, round_to_0_1(budget_balance_s))`.
+    - If ON: decrement by `10 * elapsed_s`.
+    - If OFF: increment by `REFILL_TENTHS_PER_SEC * elapsed_s` and cap at `BUDGET_TENTHS_MAX`.
+  - Display `budget_s` with one decimal place directly from `budget_tenths / 10` (no clamping at 0; negative values indicate over‑budget).
   - Compute `ttfc_s`:
-    - If `budget_balance_s >= MAX_RUNNING_TIME_S`: `0` else `round_up_to_0_1((MAX_RUNNING_TIME_S - budget_balance_s) / REFILL_RATE)`.
+    - If `budget_tenths >= BUDGET_TENTHS_MAX`: `0` else `ceil((BUDGET_TENTHS_MAX - budget_tenths) / REFILL_TENTHS_PER_SEC)` with a display cap at `MAX_COOL_DOWN_TIME_S`.
 - Steps since home:
   - Reset to 0 when HOME completes successfully; increment by absolute step deltas from position updates.
 - Homed flag:
@@ -80,7 +80,7 @@ No mockups provided. CLI table should be readable in a standard terminal (80–1
 - STATUS includes `homed`, `steps_since_home`, `budget_s`, and `ttfc_s` per motor with correct semantics.
 - Minimal CPU and memory overhead; no regression in motion accuracy or timing.
 - CLI displays a readable table at ~2 Hz and supports one‑shot output.
-- Unit tests updated to validate presence of new keys and basic invariants (e.g., `budget_s` within 0..90, `ttfc_s` >= 0).
+- Unit tests updated to validate presence of new keys and basic invariants (e.g., `budget_s` may be negative when over budget; `ttfc_s` >= 0).
 
 ## Output Format Update (Proposal)
 To simplify host-side parsing while keeping output human-readable, adopt a CSV variant for `STATUS` responses:

@@ -24,8 +24,8 @@ Location: `lib/MotorControl/src/HardwareMotorController.cpp`
 ### STATUS formatting
 Location: `lib/MotorControl/src/MotorCommandProcessor.cpp`
 - STATUS renders: `id pos moving awake homed steps_since_home budget_s ttfc_s speed accel`.
-- `budget_s`: clamped to `[0..MAX_RUNNING_TIME_S]`, displayed with 1 decimal.
-- `ttfc_s`: computed from true deficit with a hard runtime cap — while ON, the internal budget floor ensures the maximum cooldown will not exceed `MAX_COOL_DOWN_TIME_S`. Display shows one decimal and also caps to `MAX_COOL_DOWN_TIME_S`. Tick is invoked before formatting to ensure up-to-date values.
+- `budget_s`: shows the true budget balance with 1 decimal; negative values indicate over‑budget (no clamp at 0).
+- `ttfc_s`: computed from true deficit with a hard runtime cap — while ON, the internal budget floor ensures the maximum cooldown will not exceed `MAX_COOL_DOWN_TIME_S`. Display shows one decimal and caps to `MAX_COOL_DOWN_TIME_S`. Tick is invoked before formatting to ensure up-to-date values.
 
 ### Centralized constants and style
 Locations:
@@ -39,7 +39,7 @@ New files:
 
 Tests validate:
 - New STATUS keys are present.
-- Budget spending while awake (~1.0 s/s) and refilling while asleep (1.5 s/s), clamped to 90s.
+- Budget spending while awake (~1.0 s/s) and refilling while asleep (1.5 s/s), capped to 90s on refill; budget may go negative when over‑used.
 - `ttfc_s` non-negative and zeros out when at max.
 - `homed` flag and `steps_since_home` reset on HOME; increments with MOVE.
 - Tests reference shared constants (`MAX_RUNNING_TIME_S`, position limits, default speed/accel) to avoid magic numbers.

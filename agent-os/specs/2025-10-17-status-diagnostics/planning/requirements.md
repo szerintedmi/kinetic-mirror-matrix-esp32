@@ -51,8 +51,8 @@ No visual assets provided.
   - `homed=<0|1>`: 1 after successful HOME; session-only (resets to 0 on reboot).
   - `steps_since_home=<steps>`: cumulative absolute steps since last successful HOME; resets to 0 on HOME and on reboot.
   - Thermal budget metrics (session-only, not persisted):
-    - `budget_s=<sec.dec>`: remaining runtime budget, displayed with 1 decimal. Starts at `MAX_RUNNING_TIME_S=90`. While ON, spend 1.0 s/s; while OFF, refill at 1.5 s/s. Display clamps to `[0..MAX_RUNNING_TIME_S]` (internal balance may go negative).
-    - `ttfc_s=<sec.dec>`: time-to-full-cooldown if turned OFF now, displayed with 1 decimal. Computed from the true deficit (includes overrun beyond zero) and clamped for display to `MAX_COOL_DOWN_TIME_S=300`.
+    - `budget_s=<sec.dec>`: remaining runtime budget, displayed with 1 decimal. Starts at `MAX_RUNNING_TIME_S=90`. While ON, spend 1.0 s/s; while OFF, refill at 1.5 s/s. No clamp at 0; negative values indicate over‑budget.
+    - `ttfc_s=<sec.dec>`: time-to-full-cooldown if turned OFF now, displayed with 1 decimal. Computed from the true deficit (includes overrun beyond zero) and capped for display at `MAX_COOL_DOWN_TIME_S=300`.
 - Definitions for ON/OFF state:
   - ON = motor is awake (driver enabled). OFF = motor is asleep (driver disabled). Auto‑WAKE during motion counts as ON for spend; auto‑SLEEP after completion counts as OFF for refill.
 - Keep all existing fields unchanged: `id`, `pos`, `speed`, `accel`, `moving`, `awake`.
@@ -91,7 +91,7 @@ No visual assets provided.
   - Apply spend/refill in whole-second increments based on elapsed time (carry partial seconds); update on controller `tick()` and again just before STATUS.
     - If ON: `budget_tenths -= 10 * elapsed_seconds`.
     - If OFF: `budget_tenths += 15 * elapsed_seconds`, capped at `BUDGET_TENTHS_MAX = MAX_RUNNING_TIME_S*10`.
-  - Report `budget_s = clamp01(budget_tenths) / 10` with one decimal.
+  - Report `budget_s = budget_tenths / 10` with one decimal (can be negative).
   - Compute `ttfc_s` from the true deficit, but cap maximum cooldown at runtime:
     - Enforce `budget_tenths >= BUDGET_TENTHS_MAX - REFILL_TENTHS_PER_SEC * MAX_COOL_DOWN_TIME_S` while ON.
     - `ttfc_s = ceil((BUDGET_TENTHS_MAX - budget_tenths)/REFILL_TENTHS_PER_SEC)`, then min with `MAX_COOL_DOWN_TIME_S` for display.

@@ -87,10 +87,9 @@ Issues (minor):
 ## Recommendations
 1. Amend requirements.md to reflect 1-decimal time formatting and key reordering allowance.
 2. Add a line noting “serial_cli.py interactive mode provides the 2 Hz table and accepts commands concurrently.”
-3. In tests, include a basic invariant for `ttfc_s` ≥ 0 and `budget_s` ∈ [0,90].
+3. In tests, include a basic invariant for `ttfc_s` ≥ 0 and allow `budget_s` to be negative when over budget; confirm refill caps at 90.
 
 ## Conclusion
 Ready for implementation. Spec, requirements, and tasks are aligned with user inputs; minor documentation syncs recommended before or alongside implementation.
 
 *** End of Report ***
-

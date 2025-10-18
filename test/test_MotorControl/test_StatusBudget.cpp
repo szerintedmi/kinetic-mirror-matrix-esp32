@@ -90,12 +90,13 @@ void test_budget_clamps_and_ttfc_non_negative() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("WAKE:0", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
-  // After 100s awake, budget should clamp to 0.x
+  // After 100s awake, budget should be negative (no clamp)
   auto st = p.processLine("STATUS", 100000);
   auto lines = split_lines_sb(st);
   std::string L0;
   TEST_ASSERT_TRUE(find_line_for_id(lines, 0, L0));
-  TEST_ASSERT_TRUE(L0.find("budget_s=0") != std::string::npos);
+  // Expect a negative budget_s (leading '-')
+  TEST_ASSERT_TRUE(L0.find("budget_s=-") != std::string::npos);
   // ttfc should not be negative
   TEST_ASSERT_TRUE(L0.find("ttfc_s=-") == std::string::npos);
 }
@@ -110,8 +111,8 @@ void test_ttfc_clamp_and_recovery() {
   auto lines0 = split_lines_sb(st0);
   std::string L0;
   TEST_ASSERT_TRUE(find_line_for_id(lines0, 0, L0));
-  // Expect ttfc is clamped to MAX_COOL_DOWN_TIME_S while budget is 0
-  TEST_ASSERT_TRUE(L0.find("budget_s=0") != std::string::npos);
+  // Expect ttfc is clamped to MAX_COOL_DOWN_TIME_S while budget is negative
+  TEST_ASSERT_TRUE(L0.find("budget_s=-") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(std::string("ttfc_s=") + std::to_string((int)MotorControlConstants::MAX_COOL_DOWN_TIME_S)) != std::string::npos);
 
   // Go to sleep now and wait exactly MAX_COOL_DOWN_TIME_S seconds

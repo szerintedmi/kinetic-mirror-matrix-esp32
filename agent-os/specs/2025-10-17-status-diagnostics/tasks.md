@@ -20,7 +20,7 @@ Standards: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standa
 - [x] 1.0 Complete firmware telemetry additions and STATUS output
   - [x] 1.1 Write 2–8 focused unit tests (Unity)
     - Validate STATUS includes new keys: `homed`, `steps_since_home`, `budget_s`, `ttfc_s`
-    - Validate basic invariants under stubbed time: budget starts at 90, decrements while ON, clamps at 0, and ttfc_s ≥ 0
+    - Validate basic invariants under stubbed time: budget starts at 90, decrements while ON, may go negative when over‑budget, and ttfc_s ≥ 0
     - Target 6 tests; run ONLY these tests for this group
   - [x] 1.2 Extend MotorState and controllers
     - Add: `homed` (bool/bit), `steps_since_home` (int32), `budget_balance_s` (fixed‑point or int), `last_update_ms` (uint32)
@@ -113,7 +113,7 @@ Standards: `@agent-os/standards/testing/unit-testing.md`, `@agent-os/standards/t
     - Unity tests from 1.1 and formatting tests from 3.1
     - Python CLI tests from 2.1
   - [x] 4.2 Analyze coverage gaps specific to STATUS extensions and TUI
-    - Focus on boundary conditions: budget clamp at 0, ttfc_s calc, homed + steps_since_home reset behavior
+    - Focus on boundary conditions: negative budget_s visibility (no clamp at 0), ttfc_s calc, homed + steps_since_home reset behavior
   - [x] 4.3 Write up to 8 additional strategic tests max
     - Prioritize end‑to‑end flows through parser/handlers and CLI parsing/rendering helpers
   - [x] 4.4 Run feature‑specific tests only

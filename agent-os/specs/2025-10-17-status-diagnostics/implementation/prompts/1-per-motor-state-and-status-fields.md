@@ -12,7 +12,7 @@ Standards: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standa
 - [ ] 1.0 Complete firmware telemetry additions and STATUS output
   - [ ] 1.1 Write 2–8 focused unit tests (Unity)
     - Validate STATUS includes new keys: `homed`, `steps_since_home`, `budget_s`, `ttfc_s`
-    - Validate basic invariants under stubbed time: budget starts at 90, decrements while ON, clamps at 0, and ttfc_s ≥ 0
+    - Validate basic invariants under stubbed time: budget starts at 90, decrements while ON, can go negative when over budget, and ttfc_s ≥ 0
     - Target 6 tests; run ONLY these tests for this group
   - [ ] 1.2 Extend MotorState and controllers
     - Add: `homed` (bool/bit), `steps_since_home` (int32), `budget_balance_s` (fixed‑point or int), `last_update_ms` (uint32)
@@ -108,4 +108,3 @@ IMPORTANT: Ensure that your implementation work is ALIGNED and DOES NOT CONFLICT
 @agent-os/standards/backend/hardware-abstraction.md
 @agent-os/standards/backend/task-structure.md
 @agent-os/standards/testing/unit-testing.md
-
