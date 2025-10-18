@@ -93,10 +93,58 @@ std::string MotorCommandProcessor::handleHELP()
   os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
   os << "STATUS\n";
+  // Thermal runtime limiting controls
+  os << "GET THERMAL_RUNTIME_LIMITING\n";
+  os << "SET THERMAL_RUNTIME_LIMITING=OFF|ON\n";
   os << "WAKE:<id|ALL>\n";
   os << "SLEEP:<id|ALL>\n";
   os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS";
   return os.str();
+}
+
+static std::string to_upper_copy(const std::string &s) {
+  std::string out = s;
+  std::transform(out.begin(), out.end(), out.begin(), ::toupper);
+  return out;
+}
+
+static std::string trim_copy(const std::string &s) {
+  return trim(s);
+}
+
+std::string MotorCommandProcessor::handleGET(const std::string &args)
+{
+  // Support both colon and space-separated payloads; args already contains payload
+  std::string key = to_upper_copy(trim_copy(args));
+  if (key == "THERMAL_RUNTIME_LIMITING") {
+    std::ostringstream os;
+    os << "CTRL:OK THERMAL_RUNTIME_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
+       << " max_budget_s=" << (int)MotorControlConstants::MAX_RUNNING_TIME_S;
+    return os.str();
+  }
+  return "CTRL:ERR E03 BAD_PARAM";
+}
+
+std::string MotorCommandProcessor::handleSET(const std::string &args)
+{
+  // Expect: THERMAL_RUNTIME_LIMITING=OFF|ON (allow optional spaces around '=')
+  std::string payload = trim_copy(args);
+  // Normalize for comparison without destroying original spacing
+  std::string up = to_upper_copy(payload);
+  // Find '=' in original (position is same in upper)
+  size_t eq = up.find('=');
+  if (eq == std::string::npos) return "CTRL:ERR E03 BAD_PARAM";
+  std::string key = trim_copy(up.substr(0, eq));
+  std::string val = trim_copy(up.substr(eq + 1));
+  if (key != "THERMAL_RUNTIME_LIMITING") return "CTRL:ERR E03 BAD_PARAM";
+  if (val == "ON") {
+    thermal_limits_enabled_ = true;
+    return "CTRL:OK";
+  } else if (val == "OFF") {
+    thermal_limits_enabled_ = false;
+    return "CTRL:OK";
+  }
+  return "CTRL:ERR E03 BAD_PARAM";
 }
 
 std::string MotorCommandProcessor::handleSTATUS()
@@ -230,13 +278,20 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
   std::string s = trim(line);
   if (s.empty())
     return "";
+  // Primary split on ':' for legacy commands
   auto p = s.find(':');
   std::string verb = s;
   std::string args;
-  if (p != std::string::npos)
-  {
+  if (p != std::string::npos) {
     verb = s.substr(0, p);
     args = s.substr(p + 1);
+  } else {
+    // Also support space-delimited commands for GET/SET style
+    size_t sp = s.find(' ');
+    if (sp != std::string::npos) {
+      verb = s.substr(0, sp);
+      args = s.substr(sp + 1);
+    }
   }
   std::transform(verb.begin(), verb.end(), verb.begin(), ::toupper);
   if (verb == "HELP")
@@ -246,6 +301,16 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
     // Advance controller state to 'now' to render up-to-date diagnostics
     controller_->tick(now_ms);
     return handleSTATUS();
+  }
+  if (verb == "GET")
+  {
+    controller_->tick(now_ms);
+    return handleGET(args);
+  }
+  if (verb == "SET")
+  {
+    controller_->tick(now_ms);
+    return handleSET(args);
   }
   if (verb == "WAKE")
   {

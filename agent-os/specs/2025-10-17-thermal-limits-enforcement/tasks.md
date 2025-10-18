@@ -12,12 +12,12 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** None
 
-- [ ] 1.0 Add global `thermal_limits_enabled` (default ON)
-- [ ] 1.1 Parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` in `MotorCommandProcessor`
-- [ ] 1.2 Update `HELP` to include both `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
-- [ ] 1.3 Implement `GET THERMAL_RUNTIME_LIMITING` → `CTRL:OK THERMAL_RUNTIME_LIMITING=ON|OFF max_budget_s=<N>`
-- [ ] 1.4 Keep existing per-motor STATUS output unchanged (no meta lines)
-- [ ] 1.5 Unit tests: HELP lists GET/SET; GET returns expected payload
+- [x] 1.0 Add global `thermal_limits_enabled` (default ON)
+- [x] 1.1 Parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` in `MotorCommandProcessor`
+- [x] 1.2 Update `HELP` to include both `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
+- [x] 1.3 Implement `GET THERMAL_RUNTIME_LIMITING` → `CTRL:OK THERMAL_RUNTIME_LIMITING=ON|OFF max_budget_s=<N>`
+- [x] 1.4 Keep existing per-motor STATUS output unchanged (no meta lines)
+- [x] 1.5 Unit tests: HELP lists GET/SET; GET returns expected payload
 
 **Acceptance Criteria:**
 - `HELP` lists `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`

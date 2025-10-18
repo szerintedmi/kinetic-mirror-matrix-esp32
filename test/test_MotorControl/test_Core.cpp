@@ -25,6 +25,9 @@ void test_budget_clamps_and_ttfc_non_negative();
 void test_ttfc_clamp_and_recovery();
 void test_homed_resets_on_reboot();
 void test_steps_since_home_resets_after_second_home();
+// Forward declarations for thermal flag GET/SET tests
+void test_help_includes_thermal_get_set();
+void test_get_thermal_runtime_limiting_default_on_and_max_budget();
 
 void setUp() {
   proto = MotorCommandProcessor();
@@ -208,6 +211,11 @@ void setup() {
   RUN_TEST(test_steps_since_home_resets_after_second_home);
   setUp();
   RUN_TEST(test_ttfc_clamp_and_recovery);
+  // Thermal flag GET/SET
+  setUp();
+  RUN_TEST(test_help_includes_thermal_get_set);
+  setUp();
+  RUN_TEST(test_get_thermal_runtime_limiting_default_on_and_max_budget);
   RUN_TEST(test_bitpack_dir_sleep_basic);
   // Hardware backend sequencing tests
   RUN_TEST(test_backend_latch_before_start);
@@ -273,6 +281,8 @@ int main(int, char**) {
   RUN_TEST(test_homed_resets_on_reboot);
   setUp();
   RUN_TEST(test_steps_since_home_resets_after_second_home);
+  RUN_TEST(test_help_includes_thermal_get_set);
+  RUN_TEST(test_get_thermal_runtime_limiting_default_on_and_max_budget);
   RUN_TEST(test_bitpack_dir_sleep_basic);
   // Hardware backend sequencing tests
   RUN_TEST(test_backend_latch_before_start);
