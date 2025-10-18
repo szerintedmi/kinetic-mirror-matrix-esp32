@@ -15,18 +15,13 @@ void test_help_includes_thermal_get_set() {
 
 void test_get_thermal_runtime_limiting_default_on_and_max_budget() {
   MotorCommandProcessor p;
-  // Default should be ON
   std::string r1 = p.processLine("GET THERMAL_RUNTIME_LIMITING", 0);
   TEST_ASSERT_TRUE(r1.find("CTRL:OK THERMAL_RUNTIME_LIMITING=ON") != std::string::npos);
   std::string exp = std::string("max_budget_s=") + std::to_string((int)MotorControlConstants::MAX_RUNNING_TIME_S);
   TEST_ASSERT_TRUE(r1.find(exp) != std::string::npos);
-
-  // Toggle OFF then confirm
   std::string s = p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", s.c_str());
   std::string r2 = p.processLine("GET THERMAL_RUNTIME_LIMITING", 0);
   TEST_ASSERT_TRUE(r2.find("THERMAL_RUNTIME_LIMITING=OFF") != std::string::npos);
 }
-
-// No main here; tests are executed from test_Core.cpp runner.
 

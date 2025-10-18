@@ -1,5 +1,6 @@
 #include "StubMotorController.h"
 #include "MotorControl/MotorControlConstants.h"
+#include "MotorControl/MotionKinematics.h"
 #include <math.h>
 
 static uint32_t maskForId(uint8_t id) { return 1u << id; }
@@ -52,7 +53,7 @@ bool StubMotorController::moveAbsMask(uint32_t mask, long target, int speed, int
       motors_[i].accel = accel;
       motors_[i].moving = true;
       long delta = labs(target - motors_[i].position);
-      uint32_t dur_ms = (uint32_t)ceil((1000.0 * (double)delta) / (double)((speed <= 0) ? 1 : speed));
+      uint32_t dur_ms = MotionKinematics::estimateMoveTimeMs(delta, speed, accel);
       plans_[i].active = true;
       plans_[i].is_home = false;
       plans_[i].target = target;
@@ -65,8 +66,7 @@ bool StubMotorController::moveAbsMask(uint32_t mask, long target, int speed, int
 
 bool StubMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long /*full_range*/, uint32_t now_ms) {
   if (isAnyMovingForMask(mask)) return false;
-  long steps = labs(overshoot) + labs(backoff);
-  uint32_t dur_ms = (uint32_t)ceil((1000.0 * (double)steps) / (double)((speed <= 0) ? 1 : speed));
+  uint32_t dur_ms = MotionKinematics::estimateHomeTimeMs(overshoot, backoff, speed, accel);
   for (uint8_t i = 0; i < count_; ++i) {
     if (mask & maskForId(i)) {
       motors_[i].awake = true;

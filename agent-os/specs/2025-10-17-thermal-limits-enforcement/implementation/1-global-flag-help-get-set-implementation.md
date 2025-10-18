@@ -1,7 +1,7 @@
 ## Implementation Summary
 
 ### Components Changed
-**Location:** lib/MotorControl/include/MotorControl/MotorCommandProcessor.h, lib/MotorControl/src/MotorCommandProcessor.cpp, test/test_MotorControl/test_ThermalCommands.cpp, test/test_MotorControl/test_Core.cpp
+**Location:** lib/MotorControl/include/MotorControl/MotorCommandProcessor.h, lib/MotorControl/src/MotorCommandProcessor.cpp, test/test_MotorControl/test_Thermal.cpp, test/test_MotorControl/test_Runner.cpp
 
 - Added global `thermal_limits_enabled_` flag (default ON) to `MotorCommandProcessor`.
 - Implemented `GET THERMAL_RUNTIME_LIMITING` and `SET THERMAL_RUNTIME_LIMITING=OFF|ON` handlers.
@@ -10,10 +10,10 @@
 - No changes were made to the per‑motor `STATUS` output.
 
 ## Testing
-- Added `test/test_MotorControl/test_ThermalCommands.cpp`:
+- Added `test/test_MotorControl/test_Thermal.cpp`:
   - Verifies `HELP` lists `GET THERMAL_RUNTIME_LIMITING` and `SET THERMAL_RUNTIME_LIMITING=OFF|ON`.
   - Verifies `GET THERMAL_RUNTIME_LIMITING` returns `CTRL:OK THERMAL_RUNTIME_LIMITING=ON max_budget_s=<MAX_RUNNING_TIME_S>` by default and toggles to OFF after a `SET`.
-- Integrated new tests into the existing Unity runner in `test/test_MotorControl/test_Core.cpp`.
+- Integrated into suite runner `test/test_MotorControl/test_Runner.cpp` (centralizes RUN_TEST order).
 
 ## Standards Compliance
 - Followed serial interface convention of `<verb>[:payload]` while also supporting space for GET/SET to match the spec wording.

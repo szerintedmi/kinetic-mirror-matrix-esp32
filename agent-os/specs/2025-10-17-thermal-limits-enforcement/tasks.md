@@ -30,11 +30,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 2.0 Add `lib/MotorControl/include/MotorControl/MotionKinematics.h` and `.cpp`
-- [ ] 2.1 Implement `estimateMoveTimeMs(distance_steps, speed_sps, accel_sps2)` with triangular/trapezoidal profile; integer math with ceil
-- [ ] 2.2 Replace stub duration calc with estimator in `StubMotorController`
-- [ ] 2.3 Provide HOME leg-by-leg estimate utility for pre-checks
-- [ ] 2.4 Unit tests: estimator conservative vs simple bounds; stub schedule uses estimator (durations match within ceil rounding)
+- [x] 2.0 Add `lib/MotorControl/include/MotorControl/MotionKinematics.h` and `.cpp`
+- [x] 2.1 Implement `estimateMoveTimeMs(distance_steps, speed_sps, accel_sps2)` with triangular/trapezoidal profile; integer math with ceil
+- [x] 2.2 Replace stub duration calc with estimator in `StubMotorController`
+- [x] 2.3 Provide HOME leg-by-leg estimate utility for pre-checks
+- [x] 2.4 Unit tests: estimator conservative vs simple bounds; stub schedule uses estimator (durations match within ceil rounding)
 
 **Acceptance Criteria:**
 - Estimator compiles and returns conservative time for both short (triangular) and long (trapezoidal) moves

@@ -2,16 +2,19 @@
 #include <vector>
 #include <string>
 
+#include "MotorControl/Bitpack.h"
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotorControlConstants.h"
 
+// Bitpack tests
+void test_bitpack_dir_sleep_basic() {
+  TEST_ASSERT_EQUAL_HEX8(0xA5, compute_dir_bits(0xA5));
+  TEST_ASSERT_EQUAL_HEX8(0x0F, compute_sleep_bits(0x00, 0x0F, true));
+  TEST_ASSERT_EQUAL_HEX8(0xF3, compute_sleep_bits(0xFF, 0x0C, false));
+}
 
-// Test doubles and event log
-struct Event {
-  std::string type; // "LATCH" or "START"
-  int id;           // motor id for START, -1 for LATCH
-};
-
+// Hardware backend tests
+struct Event { std::string type; int id; };
 static std::vector<Event> g_events;
 
 class LoggingShift595 : public IShift595 {
@@ -37,13 +40,12 @@ class FasAdapterStub : public IFasAdapter {
 public:
   struct StartCall { uint8_t id; long target; int speed; int accel; };
   void begin() override {}
-  void configureStepPin(uint8_t /*id*/, int /*gpio*/) override {}
+  void configureStepPin(uint8_t, int) override {}
   bool startMoveAbs(uint8_t id, long target, int speed, int accel) override {
     if (id >= 8) return false;
     moving_[id] = true;
     starts_.push_back({id, target, speed, accel});
     g_events.push_back({"START", (int)id});
-    // Do not update position automatically; tests control it via setCurrentPosition
     targets_[id] = target;
     return true;
   }
@@ -67,19 +69,14 @@ void test_backend_latch_before_start() {
   LoggingShift595 shift;
   FasAdapterStub fas;
   HardwareMotorController ctrl(shift, fas, 8);
-  // Controller constructor latches once; ignore by clearing
   shift.resetCounters();
   clear_events();
-
-  // Move motors 0 and 1 to +100
   uint32_t mask = (1u << 0) | (1u << 1);
-  using namespace MotorControlConstants;
   bool ok = ctrl.moveAbsMask(mask, 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_GREATER_OR_EQUAL(1u, (unsigned)shift.latch_count());
   TEST_ASSERT_TRUE(g_events.size() >= 3);
   TEST_ASSERT_EQUAL_STRING("LATCH", g_events[0].type.c_str());
-  // The two START events must come after the first LATCH
   bool found_start_after = (g_events[1].type == "START" || g_events[2].type == "START");
   TEST_ASSERT_TRUE(found_start_after);
 }
@@ -90,20 +87,15 @@ void test_backend_dir_bits_per_target() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-
-  // Motor 0 -> +100 (DIR=1), Motor 1 -> -100 (DIR=0)
   ctrl.moveAbsMask((1u << 0) | (1u << 1), 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
-  // Mark motor 1 move complete at target to clear BUSY, then advance position
   fas.setCurrentPosition(1, 100);
   ctrl.tick(0);
-  // Update motor 1 position to +200 then command -100 absolute -> negative delta
   fas.setCurrentPosition(1, 200);
   ctrl.tick(0);
   ctrl.moveAbsMask((1u << 1), -100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
-
   uint8_t dir = shift.last_dir();
-  TEST_ASSERT_TRUE((dir & (1u << 0)) != 0); // motor 0 forward
-  TEST_ASSERT_TRUE((dir & (1u << 1)) == 0); // motor 1 reverse
+  TEST_ASSERT_TRUE((dir & (1u << 0)) != 0);
+  TEST_ASSERT_TRUE((dir & (1u << 1)) == 0);
 }
 
 void test_backend_wake_sleep_overrides() {
@@ -112,8 +104,6 @@ void test_backend_wake_sleep_overrides() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-
-  // Force all asleep then WAKE motors 2,3
   ctrl.sleepMask(0xFF);
   unsigned latch_before = shift.latch_count();
   ctrl.wakeMask((1u << 2) | (1u << 3));
@@ -121,8 +111,6 @@ void test_backend_wake_sleep_overrides() {
   uint8_t sleep = shift.last_sleep();
   TEST_ASSERT_TRUE((sleep & (1u << 2)) != 0);
   TEST_ASSERT_TRUE((sleep & (1u << 3)) != 0);
-
-  // SLEEP while moving should fail and not change latch count
   fas.setMoving(2, true);
   bool ok = ctrl.sleepMask(1u << 2);
   TEST_ASSERT_FALSE(ok);
@@ -135,7 +123,6 @@ void test_backend_busy_rule_overlapping_move() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-
   fas.setMoving(0, true);
   bool ok = ctrl.moveAbsMask(1u << 0, 500, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_FALSE(ok);
@@ -148,11 +135,9 @@ void test_backend_dir_latched_once_per_move() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-
   bool ok = ctrl.moveAbsMask(1u << 4, 250, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
   TEST_ASSERT_TRUE(ok);
   unsigned lc = shift.latch_count();
-  // Tick should not cause additional latch
   ctrl.tick(1);
   TEST_ASSERT_EQUAL_UINT(lc, shift.latch_count());
 }
@@ -163,7 +148,6 @@ void test_backend_speed_accel_passed_to_adapter() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-
   bool ok = ctrl.moveAbsMask(1u << 6, 900, 5000, 12000, 0);
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_FALSE(fas.starts().empty());
@@ -173,5 +157,3 @@ void test_backend_speed_accel_passed_to_adapter() {
   TEST_ASSERT_EQUAL(12000, s.accel);
 }
 
-// Note: No test runner/main here. The suite-level runner in
-// test_MotorControl/test_Core.cpp will declare and invoke these tests.

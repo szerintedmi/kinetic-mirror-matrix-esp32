@@ -6,6 +6,7 @@
 #include <vector>
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
+#include "MotorControl/MotionKinematics.h"
 
 static std::vector<std::string> split_lines_sb(const std::string &s) {
   std::vector<std::string> out;
@@ -69,18 +70,23 @@ void test_home_and_steps_since_home() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("HOME:0", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
-  p.tick(300);
-  auto st0 = p.processLine("STATUS", 300);
+  uint32_t th = MotionKinematics::estimateHomeTimeMs(
+      MotorControlConstants::DEFAULT_OVERSHOOT,
+      MotorControlConstants::DEFAULT_BACKOFF,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2);
+  p.tick(th);
+  auto st0 = p.processLine("STATUS", th);
   auto lines0 = split_lines_sb(st0);
   std::string L0;
   TEST_ASSERT_TRUE(find_line_for_id(lines0, 0, L0));
   TEST_ASSERT_TRUE(L0.find("homed=1") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
-  auto r2 = p.processLine("MOVE:0,10,100", 300);
+  auto r2 = p.processLine("MOVE:0,10,100", th);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r2.c_str());
-  p.tick(500);
-  auto st1 = p.processLine("STATUS", 500);
+  p.tick(th + 200);
+  auto st1 = p.processLine("STATUS", th + 200);
   auto lines1 = split_lines_sb(st1);
   TEST_ASSERT_TRUE(find_line_for_id(lines1, 0, L0));
   TEST_ASSERT_TRUE(L0.find("steps_since_home=10") != std::string::npos);
@@ -129,8 +135,13 @@ void test_homed_resets_on_reboot() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("HOME:0", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
-  p.tick(300);
-  auto st0 = p.processLine("STATUS", 300);
+  uint32_t th = MotionKinematics::estimateHomeTimeMs(
+      MotorControlConstants::DEFAULT_OVERSHOOT,
+      MotorControlConstants::DEFAULT_BACKOFF,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2);
+  p.tick(th);
+  auto st0 = p.processLine("STATUS", th);
   auto lines0 = split_lines_sb(st0);
   std::string L0;
   TEST_ASSERT_TRUE(find_line_for_id(lines0, 0, L0));
@@ -148,8 +159,13 @@ void test_steps_since_home_resets_after_second_home() {
   // First HOME completes -> steps_since_home should be 0
   auto r_home1 = p.processLine("HOME:0", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_home1.c_str());
-  p.tick(500); // allow ample time for default HOME to complete
-  auto st0 = p.processLine("STATUS", 500);
+  uint32_t th2 = MotionKinematics::estimateHomeTimeMs(
+      MotorControlConstants::DEFAULT_OVERSHOOT,
+      MotorControlConstants::DEFAULT_BACKOFF,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2);
+  p.tick(th2);
+  auto st0 = p.processLine("STATUS", th2);
   auto lines0 = split_lines_sb(st0);
   std::string L0;
   TEST_ASSERT_TRUE(find_line_for_id(lines0, 0, L0));
@@ -157,19 +173,25 @@ void test_steps_since_home_resets_after_second_home() {
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
   // Move to accumulate steps_since_home
-  auto r_move = p.processLine("MOVE:0,100,100", 500);
+  auto r_move = p.processLine("MOVE:0,100,100", th2);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_move.c_str());
-  p.tick(1600); // 100 steps at 100 sps => ~1000ms; wait longer
-  auto st1 = p.processLine("STATUS", 1600);
+  p.tick(th2 + 1100);
+  auto st1 = p.processLine("STATUS", th2 + 1100);
   auto lines1 = split_lines_sb(st1);
   TEST_ASSERT_TRUE(find_line_for_id(lines1, 0, L0));
   TEST_ASSERT_TRUE(L0.find("steps_since_home=100") != std::string::npos);
 
   // Second HOME resets steps_since_home to 0 after completion
-  auto r_home2 = p.processLine("HOME:0", 1600);
+  auto r_home2 = p.processLine("HOME:0", th2 + 1100);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_home2.c_str());
-  p.tick(2000);
-  auto st2 = p.processLine("STATUS", 2000);
+  // Wait for another HOME completion
+  uint32_t th3 = MotionKinematics::estimateHomeTimeMs(
+      MotorControlConstants::DEFAULT_OVERSHOOT,
+      MotorControlConstants::DEFAULT_BACKOFF,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2);
+  p.tick(th2 + 1100 + th3);
+  auto st2 = p.processLine("STATUS", th2 + 1100 + th3);
   auto lines2 = split_lines_sb(st2);
   TEST_ASSERT_TRUE(find_line_for_id(lines2, 0, L0));
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
