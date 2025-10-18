@@ -54,6 +54,7 @@ There’s no direct rival that mixes modular mirror decks, fine‑grained motion
 - **One-button homing:** Kick off homing and know every mirror starts from a solid baseline.
 - **Simple serial control:** Drive MOVE, HOME, STATUS, and WAKE/SLEEP from any laptop or script—no custom tooling required.
 - **Quiet, cool operation:** Per‑mirror sleep and smart motion keep noise and heat down so shows run longer.
+- **Thermal‑aware safety (toggleable):** Enforces per‑motor runtime/cooldown budgets to prevent overheating; can be disabled for lab work.
 
 ### Collaboration Features
 - **Preset sharing packs:** Swap scenes with friends so they can remix your favorite light sweeps in their own setups.

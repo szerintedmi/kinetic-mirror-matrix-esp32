@@ -22,10 +22,17 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Reference: `agent-os/product/roadmap.md` (items 2–3), `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/backend/task-structure.md`, `docs/esp32-74hc595-wiring.md`
 
 ## Command Protocols & Networking
-- USB Serial v1: Human-readable commands — `HELP`, `MOVE`, `HOME`, `STATUS`, `WAKE`, `SLEEP`
-- Wireless (planned): ESP-Now broadcast for master→nodes (no acks/retries initially)
+- USB Serial v1: Human-readable commands using `<VERB>[:payload]` grammar
+  - Core: `HELP`, `STATUS`, `WAKE:<id|ALL>`, `SLEEP:<id|ALL>`,
+    `MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]`,
+    `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]`
+  - Diagnostics: `GET LAST_OP_TIMING[:<id|ALL>]`
+  - Thermal toggles: `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
+  - Shortcuts supported: `ST` (STATUS), `M` (MOVE), `H` (HOME)
+  - Responses prefixed with `CTRL:`; success carries `CTRL:OK` (MOVE/HOME include `est_ms=<ms>`), errors use `CTRL:ERR <code> ...`; warnings may precede `CTRL:OK` when enforcement is OFF
+- Wireless (planned): ESP‑Now broadcast for master→nodes (no acks/retries initially)
 - Node addressing and grouping introduced with wireless phase
-- Reference: `agent-os/product/roadmap.md` (items 1, 7–8)
+- Reference: `agent-os/product/roadmap.md` (items 1, 4–5, 7–8)
 
 ## Storage & Presets
 - On-device preset storage in LittleFS (JSON or compact text)
@@ -33,10 +40,11 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Reference: `@agent-os/standards/backend/data-persistence.md`, `@agent-os/standards/frontend/embedded-web-ui.md`
 
 ## Host Tooling
-- Language: Python 3 (CLI for serial tests, presets, and diagnostics)
-- Libraries: `pyserial` (core), optional CLI framework (e.g., argparse)
-- Deliverables: Simple cross-platform CLI for end-to-end tests and demos
-- Reference: `agent-os/product/roadmap.md` (items 1, 5), `@agent-os/standards/testing/build-validation.md`
+- Language: Python 3 (CLI for serial tests, diagnostics, and later presets)
+- Packaging: `python -m serial_cli` (module in `tools/serial_cli/`)
+- Libraries: `pyserial`, `argparse`
+- Deliverables: cross‑platform CLI with one‑shot commands and an interactive TUI (`interactive`) that polls STATUS and surfaces warnings alongside `CTRL:OK`
+- Reference: `agent-os/product/roadmap.md` (items 1, 4–5), `@agent-os/standards/testing/build-validation.md`
 
 ## Testing & Validation
 - Unit tests via PlatformIO Unity where applicable
