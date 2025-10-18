@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #endif
 #include <unity.h>
+#include <cstdio>
 #include <string>
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
@@ -49,15 +50,24 @@ void test_preflight_warn_when_disabled_then_ok() {
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   // This would exceed max -> expect WARN then OK
   std::string r1 = p.processLine("MOVE:0,1200,1,1000", 0);
-  TEST_ASSERT_TRUE(r1.find("CTRL:WARN THERMAL_REQ_GT_MAX") == 0);
-  TEST_ASSERT_TRUE(r1.find("\nCTRL:OK est_ms=") != std::string::npos);
+  bool r1_warn = (r1.find("CTRL:WARN THERMAL_REQ_GT_MAX") == 0);
+  if (!r1_warn) { std::printf("[DEBUG] r1 unexpected response:\n%s\n", r1.c_str()); std::fflush(stdout); }
+  TEST_ASSERT_TRUE_MESSAGE(r1_warn, "Expected r1 to start with CTRL:WARN THERMAL_REQ_GT_MAX");
+  bool r1_ok = (r1.find("\nCTRL:OK est_ms=") != std::string::npos);
+  if (!r1_ok) { std::printf("[DEBUG] r1 missing final OK est_ms:\n%s\n", r1.c_str()); std::fflush(stdout); }
+  TEST_ASSERT_TRUE_MESSAGE(r1_ok, "Expected r1 to include final CTRL:OK est_ms");
 
   // Drain budget and try a small move -> expect WARN then OK
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:0", 0).c_str());
+  // Use a different motor id (1) to avoid BUSY from the long-running move on id=0
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:1", 0).c_str());
   (void)p.processLine("STATUS", 100000);
-  std::string r2 = p.processLine("MOVE:0,10,4000,16000", 100000);
-  TEST_ASSERT_TRUE(r2.find("CTRL:WARN THERMAL_NO_BUDGET") == 0);
-  TEST_ASSERT_TRUE(r2.find("\nCTRL:OK est_ms=") != std::string::npos);
+  std::string r2 = p.processLine("MOVE:1,10,4000,16000", 100000);
+  bool r2_warn = (r2.find("CTRL:WARN THERMAL_NO_BUDGET") == 0);
+  if (!r2_warn) { std::printf("[DEBUG] r2 unexpected response:\n%s\n", r2.c_str()); std::fflush(stdout); }
+  TEST_ASSERT_TRUE_MESSAGE(r2_warn, "Expected r2 to start with CTRL:WARN THERMAL_NO_BUDGET");
+  bool r2_ok = (r2.find("\nCTRL:OK est_ms=") != std::string::npos);
+  if (!r2_ok) { std::printf("[DEBUG] r2 missing final OK est_ms:\n%s\n", r2.c_str()); std::fflush(stdout); }
+  TEST_ASSERT_TRUE_MESSAGE(r2_ok, "Expected r2 to include final CTRL:OK est_ms");
 }
 
 void test_preflight_e10_home_enabled_err() {

@@ -94,10 +94,10 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 1–5
 
-- [ ] 6.0 Review unit tests from Task Groups 1–5
-- [ ] 6.1 Identify any critical gaps (e.g., corner kinematics, WARN/ERR ordering)
-- [ ] 6.2 Add up to 10 integration/feature tests to cover end-to-end flows (STATUS → SET OFF → MOVE beyond budget → WARN + OK; SET ON → same → ERR)
-- [ ] 6.3 Run only feature-specific tests
+- [x] 6.0 Review unit tests from Task Groups 1–5
+- [x] 6.1 Identify any critical gaps (e.g., corner kinematics, WARN/ERR ordering)
+- [x] 6.2 Add up to 10 integration/feature tests to cover end-to-end flows (STATUS → SET OFF → MOVE beyond budget → WARN + OK; SET ON → same → ERR)
+- [x] 6.3 Run only feature-specific tests
 
 **Acceptance Criteria:**
 - All feature-specific tests pass

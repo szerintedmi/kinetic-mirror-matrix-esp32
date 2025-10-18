@@ -38,6 +38,15 @@ void test_last_op_timing_home();
 void test_wake_reject_enabled_no_budget();
 void test_wake_warn_disabled_no_budget_then_ok();
 void test_auto_sleep_overrun_cancels_move_and_awake();
+void test_preflight_e10_move_enabled_err();
+void test_preflight_e11_move_enabled_err();
+void test_preflight_warn_when_disabled_then_ok();
+void test_preflight_e10_home_enabled_err();
+void test_move_ok_returns_estimate();
+void test_home_ok_returns_estimate();
+// Feature flows
+void test_flow_set_off_move_exceeds_max_warn_ok();
+void test_flow_set_on_move_exceeds_max_err();
 
 // KinematicsAndStub
 void test_estimator_trapezoidal_matches_simple_formula();
@@ -85,10 +94,11 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_budget_spend_and_refill_clamp);
   setUp(); RUN_TEST(test_home_and_steps_since_home);
   setUp(); RUN_TEST(test_budget_clamps_and_ttfc_non_negative);
+  setUp(); RUN_TEST(test_ttfc_clamp_and_recovery);
   setUp(); RUN_TEST(test_homed_resets_on_reboot);
   setUp(); RUN_TEST(test_steps_since_home_resets_after_second_home);
 
-  // Thermal flag GET/SET (and later: preflight/enforcement)
+  // Thermal flag GET/SET (preflight/enforcement)
   setUp(); RUN_TEST(test_help_includes_thermal_get_set);
   setUp(); RUN_TEST(test_get_thermal_runtime_limiting_default_on_and_max_budget);
   setUp(); RUN_TEST(test_last_op_timing_move);
@@ -96,6 +106,14 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_wake_reject_enabled_no_budget);
   setUp(); RUN_TEST(test_wake_warn_disabled_no_budget_then_ok);
   setUp(); RUN_TEST(test_auto_sleep_overrun_cancels_move_and_awake);
+  setUp(); RUN_TEST(test_preflight_e10_move_enabled_err);
+  setUp(); RUN_TEST(test_preflight_e11_move_enabled_err);
+  setUp(); RUN_TEST(test_preflight_warn_when_disabled_then_ok);
+  setUp(); RUN_TEST(test_preflight_e10_home_enabled_err);
+  setUp(); RUN_TEST(test_move_ok_returns_estimate);
+  setUp(); RUN_TEST(test_home_ok_returns_estimate);
+  setUp(); RUN_TEST(test_flow_set_off_move_exceeds_max_warn_ok);
+  setUp(); RUN_TEST(test_flow_set_on_move_exceeds_max_err);
 
   // Kinematics/stub integration
   setUp(); RUN_TEST(test_estimator_trapezoidal_matches_simple_formula);
@@ -114,3 +132,4 @@ int main(int, char**) {
 
   return UNITY_END();
 }
+
