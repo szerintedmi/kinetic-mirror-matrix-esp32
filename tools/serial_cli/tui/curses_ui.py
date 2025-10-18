@@ -58,6 +58,7 @@ class CursesUI(BaseUI):
             help_pad_h = 0
 
             while True:
+                # Clear the virtual screen; we'll batch all drawing and flush once
                 stdscr.erase()
                 sh, sw = stdscr.getmaxyx()
                 rows, log, err, last_ts, help_text = self.worker.get_state()
@@ -202,22 +203,37 @@ class CursesUI(BaseUI):
                     except Exception:
                         pass
 
-                # flush stdscr
+                # Batch refreshes to avoid tearing/blinking: noutrefresh + doupdate
+                # Draw scrollbars onto stdscr before scheduling updates
                 try:
-                    stdscr.refresh()
+                    if show_help and pending_help:
+                        s, t, b, r, total = pending_help
+                        draw_scrollbar(t, b, total, s)
+                    if (not show_help) and pending_log:
+                        s, t, b, r, total = pending_log
+                        draw_scrollbar(t, b, total, s)
                 except Exception:
                     pass
 
-                # draw pads last + scrollbar
+                # Important: schedule stdscr first, then pads, so pads appear on top.
+                try:
+                    stdscr.noutrefresh()
+                except Exception:
+                    pass
+
                 try:
                     if show_help and pending_help and help_pad is not None:
                         s, t, b, r, total = pending_help
-                        help_pad.refresh(s, 0, t, 0, b, r)
-                        draw_scrollbar(t, b, total, s)
+                        help_pad.noutrefresh(s, 0, t, 0, b, r)
                     if (not show_help) and pending_log and log_pad is not None:
                         s, t, b, r, total = pending_log
-                        log_pad.refresh(s, 0, t, 0, b, r)
-                        draw_scrollbar(t, b, total, s)
+                        log_pad.noutrefresh(s, 0, t, 0, b, r)
+                except Exception:
+                    pass
+
+                # Single flush for the frame; helps prevent visible blink
+                try:
+                    curses.doupdate()
                 except Exception:
                     pass
 
