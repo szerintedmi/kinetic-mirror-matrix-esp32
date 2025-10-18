@@ -32,7 +32,7 @@ void test_stub_move_uses_estimator_duration() {
   uint32_t t = MotionKinematics::estimateMoveTimeMs(d, v, a);
   std::string cmd = std::string("MOVE:0,") + std::to_string(d) + "," + std::to_string(v) + "," + std::to_string(a);
   auto r1 = p.processLine(cmd, 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto st_pre = status_for(p, (t > 0) ? (t - 1) : 0);
   TEST_ASSERT_TRUE(st_pre.find("id=0") != std::string::npos);
   TEST_ASSERT_TRUE(st_pre.find(" moving=1") != std::string::npos);
@@ -48,11 +48,10 @@ void test_stub_home_uses_estimator_duration() {
       MotorControlConstants::DEFAULT_SPEED_SPS,
       MotorControlConstants::DEFAULT_ACCEL_SPS2);
   auto r1 = p.processLine("HOME:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto st_pre = status_for(p, (t > 0) ? (t - 1) : 0);
   TEST_ASSERT_TRUE(st_pre.find(" moving=1") != std::string::npos);
   auto st_post = status_for(p, t + 1);
   TEST_ASSERT_TRUE(st_post.find(" moving=0") != std::string::npos);
   TEST_ASSERT_TRUE(st_post.find(" awake=0") != std::string::npos);
 }
-

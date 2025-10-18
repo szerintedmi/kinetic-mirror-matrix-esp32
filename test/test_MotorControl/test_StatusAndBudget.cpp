@@ -69,7 +69,7 @@ void test_budget_spend_and_refill_clamp() {
 void test_home_and_steps_since_home() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("HOME:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   uint32_t th = MotionKinematics::estimateHomeTimeMs(
       MotorControlConstants::DEFAULT_OVERSHOOT,
       MotorControlConstants::DEFAULT_BACKOFF,
@@ -84,7 +84,7 @@ void test_home_and_steps_since_home() {
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
   auto r2 = p.processLine("MOVE:0,10,100", th);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:OK", 0) == 0);
   p.tick(th + 200);
   auto st1 = p.processLine("STATUS", th + 200);
   auto lines1 = split_lines_sb(st1);
@@ -134,7 +134,7 @@ void test_ttfc_clamp_and_recovery() {
 void test_homed_resets_on_reboot() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("HOME:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   uint32_t th = MotionKinematics::estimateHomeTimeMs(
       MotorControlConstants::DEFAULT_OVERSHOOT,
       MotorControlConstants::DEFAULT_BACKOFF,
@@ -158,7 +158,7 @@ void test_steps_since_home_resets_after_second_home() {
   MotorCommandProcessor p;
   // First HOME completes -> steps_since_home should be 0
   auto r_home1 = p.processLine("HOME:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_home1.c_str());
+  TEST_ASSERT_TRUE(r_home1.rfind("CTRL:OK", 0) == 0);
   uint32_t th2 = MotionKinematics::estimateHomeTimeMs(
       MotorControlConstants::DEFAULT_OVERSHOOT,
       MotorControlConstants::DEFAULT_BACKOFF,
@@ -174,7 +174,7 @@ void test_steps_since_home_resets_after_second_home() {
 
   // Move to accumulate steps_since_home
   auto r_move = p.processLine("MOVE:0,100,100", th2);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_move.c_str());
+  TEST_ASSERT_TRUE(r_move.rfind("CTRL:OK", 0) == 0);
   p.tick(th2 + 1100);
   auto st1 = p.processLine("STATUS", th2 + 1100);
   auto lines1 = split_lines_sb(st1);
@@ -183,7 +183,7 @@ void test_steps_since_home_resets_after_second_home() {
 
   // Second HOME resets steps_since_home to 0 after completion
   auto r_home2 = p.processLine("HOME:0", th2 + 1100);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r_home2.c_str());
+  TEST_ASSERT_TRUE(r_home2.rfind("CTRL:OK", 0) == 0);
   // Wait for another HOME completion
   uint32_t th3 = MotionKinematics::estimateHomeTimeMs(
       MotorControlConstants::DEFAULT_OVERSHOOT,

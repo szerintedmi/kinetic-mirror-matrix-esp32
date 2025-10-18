@@ -13,5 +13,13 @@ uint32_t estimateMoveTimeMs(int64_t distance_steps, int64_t speed_sps, int64_t a
 uint32_t estimateHomeTimeMs(int64_t overshoot_steps, int64_t backoff_steps,
                             int64_t speed_sps, int64_t accel_sps2);
 
-} // namespace MotionKinematics
+// Estimate HOME time including hardware sequence legs:
+//  - Leg1: negative run of (full_range + overshoot)
+//  - Leg2: positive backoff of backoff
+//  - Leg3: positive center to midpoint of (full_range/2)
+// Returns total milliseconds.
+uint32_t estimateHomeTimeMsWithFullRange(int64_t overshoot_steps, int64_t backoff_steps,
+                                         int64_t full_range_steps,
+                                         int64_t speed_sps, int64_t accel_sps2);
 
+} // namespace MotionKinematics

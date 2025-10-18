@@ -10,12 +10,39 @@ except Exception:
     serial = None
 
 
+def _join_home_with_placeholders(id_token: str, overshoot, backoff, speed, accel, full_range) -> str:
+    fields = [None, None, None, None, None]
+    if overshoot is not None:
+        fields[0] = str(overshoot)
+    if backoff is not None:
+        fields[1] = str(backoff)
+    if speed is not None:
+        fields[2] = str(speed)
+    if accel is not None:
+        fields[3] = str(accel)
+    if full_range is not None:
+        fields[4] = str(full_range)
+    hi = -1
+    for i in range(len(fields) - 1, -1, -1):
+        if fields[i] is not None:
+            hi = i
+            break
+    parts = [id_token]
+    if hi >= 0:
+        parts.extend([fields[i] if fields[i] is not None else "" for i in range(0, hi + 1)])
+    return f"HOME:{','.join(parts)}\n"
+
+
 def build_command(ns: argparse.Namespace) -> str:
     cmd = ns.command
     if cmd == "help":
         return "HELP\n"
     if cmd == "status" or cmd == "st":
         return "STATUS\n"
+    if cmd == "last-op":
+        if getattr(ns, "id", None) is None:
+            return "GET LAST_OP_TIMING\n"
+        return f"GET LAST_OP_TIMING:{ns.id}\n"
     if cmd == "wake":
         return f"WAKE:{ns.id}\n"
     if cmd == "sleep":
@@ -28,18 +55,7 @@ def build_command(ns: argparse.Namespace) -> str:
             parts.append(str(ns.accel))
         return f"MOVE:{','.join(parts)}\n"
     if cmd == "home" or cmd == "h":
-        parts = [str(ns.id)]
-        if ns.overshoot is not None:
-            parts.append(str(ns.overshoot))
-        if ns.backoff is not None:
-            parts.append(str(ns.backoff))
-        if ns.speed is not None:
-            parts.append(str(ns.speed))
-        if ns.accel is not None:
-            parts.append(str(ns.accel))
-        if ns.full_range is not None:
-            parts.append(str(ns.full_range))
-        return f"HOME:{','.join(parts)}\n"
+        return _join_home_with_placeholders(str(ns.id), ns.overshoot, ns.backoff, ns.speed, ns.accel, ns.full_range)
     raise SystemExit(f"Unknown command: {cmd}")
 
 
@@ -82,6 +98,8 @@ def make_parser() -> argparse.ArgumentParser:
     _add_common(sp.add_parser("help", help="Print device HELP"))
     _add_common(sp.add_parser("status", help="Print STATUS"))
     _add_common(sp.add_parser("st", help="Alias for status"))
+    s_lo = _add_common(sp.add_parser("last-op", help="Show last MOVE/HOME timing (device)"))
+    s_lo.add_argument("id", nargs="?", help="Motor id 0-7 or ALL; omit to list all")
 
     for name in ("wake", "sleep"):
         s = _add_common(sp.add_parser(name, help=f"{name.upper()} a motor or ALL"))
@@ -112,6 +130,23 @@ def make_parser() -> argparse.ArgumentParser:
     s_alias.add_argument("--speed", type=int, help="Optional speed (steps/s)")
     s_alias.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
     s_alias.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
+
+    # estimation/measurement helpers
+    s = _add_common(sp.add_parser("check-move", help="Compute estimate and measure actual MOVE duration"))
+    s.add_argument("id", type=str, help="Motor id 0-7")
+    s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
+    s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
+    s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
+    s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
+
+    s = _add_common(sp.add_parser("check-home", help="Compute estimate and measure actual HOME duration"))
+    s.add_argument("id", type=str, help="Motor id 0-7 or ALL")
+    s.add_argument("--overshoot", type=int, default=800, help="Overshoot steps")
+    s.add_argument("--backoff", type=int, default=50, help="Backoff steps")
+    s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
+    s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
+    s.add_argument("--full-range", type=int, default=2400, dest="full_range", help="Full range steps")
+    s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
 
     # interactive TUI
     s = _add_common(sp.add_parser("interactive", help="Interactive TUI (poll STATUS and accept commands)"))
@@ -327,6 +362,119 @@ def main(argv=None) -> int:
     ns = make_parser().parse_args(argv)
     if ns.command == "interactive":
         return run_interactive(ns)
+
+    # Estimation + measurement utilities
+    if ns.command in ("check-move", "check-home"):
+        if serial is None:
+            print("pyserial not installed. Install 'pyserial'.", file=sys.stderr)
+            return 2
+        if not ns.port:
+            print("--port is required for this command", file=sys.stderr)
+            return 2
+        import time as _t
+
+        def _ceil_div(a: int, b: int) -> int:
+            return (a + b - 1) // b if b > 0 else 0
+
+        def estimate_move_ms(distance: int, speed: int, accel: int) -> int:
+            d = abs(int(distance))
+            v = max(1, int(speed))
+            a = max(1, int(accel))
+            d_thresh = _ceil_div(v * v, a)
+            if d >= d_thresh:
+                return _ceil_div(d * 1000, v) + _ceil_div(v * 1000, a)
+            # triangular profile
+            import math as _m
+            scaled = _ceil_div(d * 1_000_000, a)
+            s_ms = int(_m.isqrt(max(0, int(scaled))))
+            if s_ms * s_ms < scaled:
+                s_ms += 1
+            return 2 * s_ms
+
+        def estimate_home_ms(o: int, b: int, fr: int, v: int, a: int) -> int:
+            return (
+                estimate_move_ms(fr + o, v, a)
+                + estimate_move_ms(b, v, a)
+                + estimate_move_ms(fr // 2, v, a)
+            )
+
+        try:
+            with serial.Serial(ns.port, ns.baud, timeout=ns.timeout) as ser:
+                est_ms = None
+                if ns.command == "check-move":
+                    target = int(ns.abs_steps)
+                    speed = int(ns.speed)
+                    accel = int(ns.accel)
+                    ser.write(f"MOVE:{ns.id},{target},{speed},{accel}\n".encode())
+                    resp = read_response(ser, ns.timeout)
+                else:
+                    o = int(ns.overshoot)
+                    b = int(ns.backoff)
+                    fr = int(ns.full_range)
+                    speed = int(ns.speed)
+                    accel = int(ns.accel)
+                    cmd = _join_home_with_placeholders(str(ns.id), o, b, speed, accel, fr)
+                    ser.write(cmd.encode())
+                    resp = read_response(ser, ns.timeout)
+
+                # Extract est_ms from CTRL:OK line
+                est_ms = None
+                for ln in resp.splitlines()[::-1]:
+                    ln = ln.strip()
+                    if ln.startswith("CTRL:OK"):
+                        parts = ln.split()
+                        for p in parts:
+                            if p.startswith("est_ms="):
+                                try:
+                                    est_ms = int(p.split("=", 1)[1])
+                                except Exception:
+                                    pass
+                        break
+                if est_ms is None:
+                    print("Device did not return est_ms in CTRL:OK", file=sys.stderr)
+                    return 1
+
+                start = _t.time()
+                # Poll device-side timing endpoint for accurate duration
+                target_id = str(ns.id)
+                if not target_id:
+                    target_id = "0"
+                deadline = start + (est_ms / 1000.0) + 5.0
+                last_ms_val = None
+                while _t.time() < deadline:
+                    ser.write(f"GET LAST_OP_TIMING:{target_id}\n".encode())
+                    txt = read_response(ser, ns.timeout)
+                    ongoing = None
+                    est = None
+                    last_ms = None
+                    for tok in txt.strip().split():
+                        if tok.startswith("ongoing="):
+                            try: ongoing = int(tok.split("=",1)[1])
+                            except Exception: pass
+                        elif tok.startswith("actual_ms="):
+                            try: last_ms = int(tok.split("=",1)[1])
+                            except Exception: pass
+                        elif tok.startswith("est_ms="):
+                            try: est = int(tok.split("=",1)[1])
+                            except Exception: pass
+                    if ongoing == 0 and last_ms is not None:
+                        last_ms_val = last_ms
+                        break
+                    _t.sleep(0.05)
+                if last_ms_val is None:
+                    print("Timeout waiting for LAST_OP_TIMING", file=sys.stderr)
+                    return 1
+                actual_ms = int(last_ms_val)
+                tol = max(0.0, float(ns.tolerance))
+                lower = max(0, est_ms - 100)
+                upper = est_ms + 100
+                print(f"estimate_ms={est_ms} actual_ms={actual_ms} acceptable=[{lower},{upper}]")
+                if actual_ms < lower or actual_ms > upper:
+                    return 1
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+        return 0
 
     cmd = build_command(ns)
     if ns.dry_run:

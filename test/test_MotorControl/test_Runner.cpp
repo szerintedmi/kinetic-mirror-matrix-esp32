@@ -33,6 +33,8 @@ void test_steps_since_home_resets_after_second_home();
 // Thermal
 void test_help_includes_thermal_get_set();
 void test_get_thermal_runtime_limiting_default_on_and_max_budget();
+void test_last_op_timing_move();
+void test_last_op_timing_home();
 
 // KinematicsAndStub
 void test_estimator_trapezoidal_matches_simple_formula();
@@ -86,6 +88,8 @@ int main(int, char**) {
   // Thermal flag GET/SET (and later: preflight/enforcement)
   setUp(); RUN_TEST(test_help_includes_thermal_get_set);
   setUp(); RUN_TEST(test_get_thermal_runtime_limiting_default_on_and_max_budget);
+  setUp(); RUN_TEST(test_last_op_timing_move);
+  setUp(); RUN_TEST(test_last_op_timing_home);
 
   // Kinematics/stub integration
   setUp(); RUN_TEST(test_estimator_trapezoidal_matches_simple_formula);
@@ -104,4 +108,3 @@ int main(int, char**) {
 
   return UNITY_END();
 }
-

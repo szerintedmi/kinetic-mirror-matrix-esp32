@@ -57,6 +57,10 @@ No visual assets provided.
   - Insufficient current budget: include `budget_s`, `ttfc_s`, and `max_budget_s`.
   - WAKE rejection only when `budget_s` is 0.
 
+- MOVE/HOME success responses include device-side `est_ms` so host tools do not re-compute:
+  - `CTRL:OK est_ms=<ms>`
+  - When limits are disabled and a pre-check would have warned: `CTRL:WARN ...` then the final `CTRL:OK est_ms=...`.
+
 ### Non-Functional Requirements
 - No motion speed reductions; maintain configured speed profiles (avoid underpowering/step loss).
 - Low runtime overhead; integrate with existing MotorControl timing without jitter.
@@ -80,3 +84,12 @@ No visual assets provided.
 - Add runtime monitor to detect overrun and trigger auto-SLEEP + move cancellation.
 - Update `MotorCommandProcessor` to parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and handle `GET THERMAL_RUNTIME_LIMITING`; leave STATUS formatting unchanged.
 - Update Python CLI to show global limit status; existing metrics remain unchanged.
+- For MOVE/HOME tooling, host must consume `est_ms` returned by device (no host-side re-estimation).
+ - Provide `GET LAST_OP_TIMING[:<id|ALL>]` for device-side timing:
+   - With `<id>`: `CTRL:OK LAST_OP_TIMING ongoing=0|1 id=<id> est_ms=<N> started_ms=<ms> [actual_ms=<N>]`
+   - With no param or `ALL`: multi-line block with header `LAST_OP_TIMING` then per-motor lines: `id=<n> ongoing=0|1 est_ms=<N> started_ms=<ms> [actual_ms=<N>]`
+   - Host `check-move`/`check-home` poll until completion and use `actual_ms` for ±100 ms validation.
+
+### Testing
+- Unit tests assert `CTRL:OK est_ms=...` for MOVE/HOME and that WARN paths still end with `CTRL:OK est_ms=...`.
+- CLI tests validate HOME placeholder serialization and that device-provided `est_ms` is parsed by check-move/check-home commands.

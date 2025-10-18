@@ -1,5 +1,6 @@
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotorControlConstants.h"
+#include "MotorControl/MotionKinematics.h"
 #include <string.h>
 
 #if defined(ARDUINO)
@@ -15,7 +16,13 @@ HardwareMotorController::HardwareMotorController(IShift595& shift, IFasAdapter& 
   shift_ = &shift;
   fas_ = &fas;
   for (uint8_t i = 0; i < count_; ++i) {
-    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0 };
+    motors_[i] = MotorState{ i, 0,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2,
+      false, false,
+      false, 0,
+      MotorControlConstants::BUDGET_TENTHS_MAX,
+      0, 0, 0, 0, 0, false };
     homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   // Initialize hardware/adapters
@@ -50,7 +57,13 @@ HardwareMotorController::HardwareMotorController() {
   fas_ = owned_fas_.get();
 
   for (uint8_t i = 0; i < count_; ++i) {
-    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0 };
+    motors_[i] = MotorState{ i, 0,
+      MotorControlConstants::DEFAULT_SPEED_SPS,
+      MotorControlConstants::DEFAULT_ACCEL_SPS2,
+      false, false,
+      false, 0,
+      MotorControlConstants::BUDGET_TENTHS_MAX,
+      0, 0, 0, 0, 0, false };
     homing_[i] = HomingPlan{ false, 0, 0, 0, 0, 0, 0 };
   }
   shift_->begin();
@@ -143,7 +156,7 @@ bool HardwareMotorController::sleepMask(uint32_t mask) {
   return true;
 }
 
-bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed, int accel, uint32_t /*now_ms*/) {
+bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed, int accel, uint32_t now_ms) {
   // Busy if any selected motor is already running
   if (isAnyMovingForMask(mask)) return false;
 
@@ -163,6 +176,13 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
       if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
       sleep_bits_ |= (1u << i);
 #endif
+      // Record last op timing
+      long dist = (target > cur) ? (target - cur) : (cur - target);
+      uint32_t est = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+      motors_[i].last_op_type = 1;
+      motors_[i].last_op_started_ms = now_ms;
+      motors_[i].last_op_est_ms = est;
+      motors_[i].last_op_ongoing = true;
     }
   }
  
@@ -179,7 +199,7 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
   return ok;
 }
 
-bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t /*now_ms*/) {
+bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) {
   // Reject if any targeted motor is currently busy
   if (isAnyMovingForMask(mask)) return false;
 
@@ -206,6 +226,12 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
       if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
       sleep_bits_ |= (1u << i);
 #endif
+      // Record last op timing (entire HOME sequence estimate)
+      uint32_t est = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+      motors_[i].last_op_type = 2;
+      motors_[i].last_op_started_ms = now_ms;
+      motors_[i].last_op_est_ms = est;
+      motors_[i].last_op_ongoing = true;
     }
   }
 #if !defined(ARDUINO)
@@ -288,6 +314,13 @@ void HardwareMotorController::tick(uint32_t now_ms) {
         motors_[i].steps_since_home = 0;
         hp.active = false;
         // Awake state will be handled by regular logic above on next tick
+      }
+    }
+    // Record completion time for last op when no longer moving and no active homing
+    if (motors_[i].last_op_ongoing && !motors_[i].moving && !homing_[i].active) {
+      motors_[i].last_op_ongoing = false;
+      if (motors_[i].last_op_started_ms != 0) {
+        motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
       }
     }
   }

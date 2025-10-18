@@ -6,6 +6,7 @@
 - Added MotionKinematics helper with `estimateMoveTimeMs(distance, speed, accel)` and `estimateHomeTimeMs(overshoot, backoff, speed, accel)`.
 - Estimator uses triangular/trapezoidal profiles with integer math and ceil rounding; avoids floating point and provides conservative durations.
 - Integrated estimator into `StubMotorController` for MOVE and HOME duration planning.
+- Added `estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel)` for full HOME sequence (run to end + overshoot, backoff, center to midpoint).
 - Adjusted tests that assumed fixed HOME duration to use estimator-derived timing and added new estimator-specific tests.
 
 ## Testing

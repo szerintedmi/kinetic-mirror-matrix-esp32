@@ -8,7 +8,7 @@ static uint32_t maskForId(uint8_t id) { return 1u << id; }
 StubMotorController::StubMotorController(uint8_t count) : count_(count) {
   if (count_ > 8) count_ = 8;
   for (uint8_t i = 0; i < count_; ++i) {
-    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0 };
+    motors_[i] = MotorState{ i, 0, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, false, false, false, 0, MotorControlConstants::BUDGET_TENTHS_MAX, 0, 0, 0, 0, 0, false };
     plans_[i] = MovePlan{ false, false, 0, 0, 0 };
   }
 }
@@ -59,6 +59,10 @@ bool StubMotorController::moveAbsMask(uint32_t mask, long target, int speed, int
       plans_[i].target = target;
       plans_[i].start_pos = motors_[i].position;
       plans_[i].end_ms = now_ms + dur_ms;
+      motors_[i].last_op_type = 1;
+      motors_[i].last_op_started_ms = now_ms;
+      motors_[i].last_op_est_ms = dur_ms;
+      motors_[i].last_op_ongoing = true;
     }
   }
   return true;
@@ -78,6 +82,10 @@ bool StubMotorController::homeMask(uint32_t mask, long overshoot, long backoff, 
       plans_[i].target = 0;
       plans_[i].start_pos = motors_[i].position;
       plans_[i].end_ms = now_ms + dur_ms;
+      motors_[i].last_op_type = 2;
+      motors_[i].last_op_started_ms = now_ms;
+      motors_[i].last_op_est_ms = dur_ms;
+      motors_[i].last_op_ongoing = true;
     }
   }
   return true;
@@ -112,6 +120,12 @@ void StubMotorController::tick(uint32_t now_ms) {
       motors_[i].position = plans_[i].target;
       motors_[i].moving = false;
       motors_[i].awake = false;
+      if (motors_[i].last_op_ongoing) {
+        motors_[i].last_op_ongoing = false;
+        if (motors_[i].last_op_started_ms != 0) {
+          motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
+        }
+      }
       if (plans_[i].is_home) {
         motors_[i].homed = true;
         motors_[i].steps_since_home = 0;

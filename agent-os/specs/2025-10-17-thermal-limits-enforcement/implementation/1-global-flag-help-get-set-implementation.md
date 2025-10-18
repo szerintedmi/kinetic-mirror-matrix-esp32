@@ -6,7 +6,7 @@
 - Added global `thermal_limits_enabled_` flag (default ON) to `MotorCommandProcessor`.
 - Implemented `GET THERMAL_RUNTIME_LIMITING` and `SET THERMAL_RUNTIME_LIMITING=OFF|ON` handlers.
 - Updated parser to accept colon or space separation for GET/SET (e.g., `GET THERMAL_RUNTIME_LIMITING` or `GET:THERMAL_RUNTIME_LIMITING`).
-- Extended `HELP` to list the new GET/SET commands.
+- Extended `HELP` to list the new GET/SET commands and `GET LAST_OP_TIMING[:<id|ALL>]`.
 - No changes were made to the per‑motor `STATUS` output.
 
 ## Testing

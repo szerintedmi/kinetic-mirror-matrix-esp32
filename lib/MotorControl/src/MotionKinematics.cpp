@@ -79,5 +79,19 @@ uint32_t estimateHomeTimeMs(int64_t overshoot_steps, int64_t backoff_steps,
   return t1 + t2;
 }
 
-} // namespace MotionKinematics
+uint32_t estimateHomeTimeMsWithFullRange(int64_t overshoot_steps, int64_t backoff_steps,
+                                         int64_t full_range_steps,
+                                         int64_t speed_sps, int64_t accel_sps2) {
+  int64_t o = iabs64(overshoot_steps);
+  int64_t b = iabs64(backoff_steps);
+  int64_t fr = iabs64(full_range_steps);
+  // Leg1: full_range + overshoot (negative direction)
+  uint32_t t1 = estimateMoveTimeMs(fr + o, speed_sps, accel_sps2);
+  // Leg2: backoff (positive)
+  uint32_t t2 = estimateMoveTimeMs(b, speed_sps, accel_sps2);
+  // Leg3: center to midpoint (positive), approx fr/2
+  uint32_t t3 = estimateMoveTimeMs(fr / 2, speed_sps, accel_sps2);
+  return t1 + t2 + t3;
+}
 
+} // namespace MotionKinematics

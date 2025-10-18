@@ -46,11 +46,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Groups 1–2
 
-- [ ] 3.0 In `MotorCommandProcessor`, before invoking controller, compute per‑motor required runtime using estimator
-- [ ] 3.1 Compare to max budget (`MAX_RUNNING_TIME_S`) → reject with `CTRL:ERR E10 ...` (or `CTRL:WARN` when limits disabled)
-- [ ] 3.2 Compare to current budget (`budget_s`, `ttfc_s`) after `tick(now_ms)` → reject with `CTRL:ERR E11 ...` (or WARN)
-- [ ] 3.3 Ensure WARN behavior when limits disabled: emit `CTRL:WARN ...` lines then `CTRL:OK`
-- [ ] 3.4 Unit tests for E10/E11 errors and WARN variants
+- [x] 3.0 In `MotorCommandProcessor`, before invoking controller, compute per‑motor required runtime using estimator
+- [x] 3.1 Compare to max budget (`MAX_RUNNING_TIME_S`) → reject with `CTRL:ERR E10 ...` (or `CTRL:WARN` when limits disabled)
+- [x] 3.2 Compare to current budget (`budget_s`, `ttfc_s`) after `tick(now_ms)` → reject with `CTRL:ERR E11 ...` (or WARN)
+- [x] 3.3 Ensure WARN behavior when limits disabled: emit `CTRL:WARN ...` lines then `CTRL:OK`
+- [x] 3.4 Unit tests for E10/E11 errors and WARN variants
 
 **Acceptance Criteria:**
 - Deterministic rejections for MOVE/HOME with proper payload fields

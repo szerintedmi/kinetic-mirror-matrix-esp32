@@ -73,9 +73,12 @@ No visual assets for this feature.
 
 - Errors and Messaging
   - Keep protocol prefix: `CTRL:ERR`.
+  - MOVE/HOME success responses include `est_ms` so host tools don’t need to re‑compute:
+    - `CTRL:OK est_ms=<ms>`
+    - When limits are disabled and a pre‑check would have warned, the device emits `CTRL:WARN ...` then the final `CTRL:OK est_ms=...`.
   - New error codes and payloads:
-    - `E10 THERMAL_BEYOND_MAX_BUDGET max_budget_s=<N>` (MOVE/HOME estimated runtime exceeds potential maximum budget)
-    - `E11 THERMAL_INSUFFICIENT_BUDGET budget_s=<B> ttfc_s=<T> max_budget_s=<N>` (MOVE/HOME would exceed current budget)
+    - `E10 THERMAL_BEYOND_MAX_BUDGET req_ms=<N> max_budget_s=<N>` (estimated runtime exceeds potential maximum budget)
+    - `E11 THERMAL_INSUFFICIENT_BUDGET req_ms=<N> budget_s=<B> ttfc_s=<T> max_budget_s=<N>` (would exceed current budget)
     - `E12 THERMAL_NO_BUDGET_WAKE` (WAKE rejected due to zero/negative budget)
   - When `thermal_limits_enabled == false`, still emit non-blocking warnings using the same schema as errors, but prefixed with `CTRL:WARN` instead of `CTRL:ERR`. Commands proceed and end with `CTRL:OK`.
     - `CTRL:WARN E10 THERMAL_BEYOND_MAX_BUDGET max_budget_s=<N>`
@@ -86,6 +89,11 @@ No visual assets for this feature.
 - STATUS/CLI
   - STATUS: unchanged per‑motor lines only; no trailing meta line.
   - Python CLI: fetch `GET THERMAL_RUNTIME_LIMITING` on startup and after toggles to display the flag (header/footer). Keep existing `budget_s`/`ttfc_s` columns. When `CTRL:WARN ...` appears alongside `CTRL:OK`, surface the warning text in the log/output.
+    - For MOVE/HOME, rely on the returned `est_ms` instead of recomputing on host. Use `est_ms` to display estimates and to compare against measured durations in host tests/tools.
+  - Add `GET LAST_OP_TIMING[:<id|ALL>]` endpoint for device-side durations:
+    - With `<id>`: `CTRL:OK LAST_OP_TIMING ongoing=0|1 id=<id> est_ms=<N> started_ms=<ms> [actual_ms=<N>]`
+    - No param or `ALL`: multi-line block with header `LAST_OP_TIMING` then one line per motor: `id=<n> ongoing=0|1 est_ms=<N> started_ms=<ms> [actual_ms=<N>]`
+    - CLI check-move/check-home poll until `ongoing=0`, then use `actual_ms` for validation.
 
 - Testing
   - Unit tests for:
