@@ -68,7 +68,7 @@ No mockups provided. CLI table should be readable in a standard terminal (80–1
 - CLI table (host-side):
   - Parse STATUS lines; render columns: `id pos moving awake homed steps_since_home budget_s ttfc_s`.
   - Default refresh ~2 Hz; one‑shot remains available via `serial_cli.py status`.
-  - Interactive mode: use a curses (or similar) TUI with a status pane (auto‑refresh) and an input line for commands. Ensure serial I/O is synchronized; do not block refresh while waiting for responses.
+  - Interactive mode: use a Textual-based TUI with a status pane (auto‑refresh) and an input line for commands. Ensure serial I/O is synchronized; do not block refresh while waiting for responses.
 
 ## Out of Scope
 - Enforcing runtime/thermal limits (covered by new roadmap item “Thermal Limits Enforcement”).

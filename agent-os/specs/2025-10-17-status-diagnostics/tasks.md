@@ -61,7 +61,7 @@ Standards: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standa
     - Target 4 tests; run ONLY these tests for this group
   - [x] 2.2 Add `interactive` subcommand to `tools/serial_cli.py`
     - Options: `--port`, `--baud`, `--timeout`, `--rate` (default ~2 Hz)
-  - [x] 2.3 Implement TUI loop (curses or graceful fallback)
+  - [x] 2.3 Implement TUI loop (Textual)
     - Non‑blocking input line for commands (`HELP`, `MOVE`, `HOME`, `WAKE`, `SLEEP`)
     - Poll STATUS at configured rate; render compact fixed‑width table
     - Show command responses in a log pane without breaking the table

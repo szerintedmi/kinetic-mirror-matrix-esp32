@@ -1,5 +1,5 @@
 ## Summary
-- Added `interactive` subcommand with a curses-based TUI that polls STATUS at a configurable rate (default 2 Hz), renders a compact fixed-width table, and accepts commands concurrently. Implemented pure helpers for parsing STATUS output and rendering the table, plus a serial worker thread to synchronize I/O without blocking UI refresh.
+- Added `interactive` subcommand with a Textual-based TUI that polls STATUS at a configurable rate (default 2 Hz), renders a compact table, and accepts commands concurrently. Implemented pure helpers for parsing STATUS output and rendering the table, plus a serial worker thread to synchronize I/O without blocking UI refresh.
 - Refactored the CLI into a proper Python package under `tools/serial_cli/` with a top-level shim (`serial_cli/`) so the tool runs as `python3 -m serial_cli`. Moved tests to `tools/tests/python/` and updated the PlatformIO test wrapper to execute the Python test runner.
 
 ## Changes
@@ -13,10 +13,9 @@
 
 - TUI loop structure and non-blocking input
   - `_SerialWorker` thread handles all serial I/O, interleaving command processing with STATUS polling to avoid stalling refresh
-  - Curses UI draws: table (top), log pad (middle, scrollable), and command prompt (bottom)
-  - Help overlay (`/h`) as a full-screen, two-column, wrapped view (left: keys + status columns; right: device HELP output)
-  - Pads reserve one column for an ASCII scrollbar; scroll with PgUp/PgDn; Up/Down navigates command history
-  - Host meta-commands prefixed with `/` (`/q`, `/h`) to avoid collisions with device commands
+  - Textual UI draws: status table (top), log view (middle, scrollable), and command input (bottom)
+  - Help overlay (`?` or via Command Palette) as a full-screen, two-column, wrapped view (left: keys + status columns; right: device HELP output)
+  - Scroll with PgUp/PgDn; Up/Down navigates command history
 
 - Robust serial I/O
   - Asynchronous response capture; only first response line is prefixed with `> ` in the log

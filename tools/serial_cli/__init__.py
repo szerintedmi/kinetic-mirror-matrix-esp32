@@ -581,16 +581,16 @@ def run_interactive(ns: argparse.Namespace) -> int:
         print("--port is required for interactive mode", file=sys.stderr)
         return 2
     try:
-        from .tui.curses_ui import CursesUI  # type: ignore
+        from .tui.textual_ui import TextualUI as UIClass  # type: ignore
     except Exception as e:
-        print("curses UI is required. On Windows install: pip install windows-curses", file=sys.stderr)
+        print("textual is required for interactive mode. Install with: pip install textual rich", file=sys.stderr)
         print(f"Import error: {e}", file=sys.stderr)
         return 2
 
     worker = _SerialWorker(ns.port, ns.baud, ns.timeout, ns.rate)
     worker.start()
     try:
-        ui = CursesUI(worker, render_table)
+        ui = UIClass(worker, render_table)  # type: ignore[call-arg]
         rc = ui.run()
     finally:
         worker.stop()
