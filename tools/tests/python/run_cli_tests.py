@@ -15,6 +15,7 @@ def main() -> int:
     tests = [
         root / "test_cli_mapping.py",
         root / "test_cli_interactive.py",
+        root / "test_cli_thermal_flag.py",
     ]
     failed = 0
     for t in tests:
@@ -30,4 +31,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -13,16 +13,16 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Dependencies:** None
 
 - [x] 1.0 Add global `thermal_limits_enabled` (default ON)
-- [x] 1.1 Parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` in `MotorCommandProcessor`
-- [x] 1.2 Update `HELP` to include both `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
-- [x] 1.3 Implement `GET THERMAL_RUNTIME_LIMITING` → `CTRL:OK THERMAL_RUNTIME_LIMITING=ON|OFF max_budget_s=<N>`
+- [x] 1.1 Parse `SET THERMAL_LIMITING=OFF|ON` in `MotorCommandProcessor`
+- [x] 1.2 Update `HELP` to include both `SET THERMAL_LIMITING=OFF|ON` and `GET THERMAL_LIMITING`
+- [x] 1.3 Implement `GET THERMAL_LIMITING` → `CTRL:OK THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
 - [x] 1.4 Keep existing per-motor STATUS output unchanged (no meta lines)
 - [x] 1.5 Unit tests: HELP lists GET/SET; GET returns expected payload
 
 **Acceptance Criteria:**
-- `HELP` lists `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
+- `HELP` lists `SET THERMAL_LIMITING=OFF|ON` and `GET THERMAL_LIMITING`
 - STATUS per-motor lines unchanged; no trailing meta lines
-- `GET THERMAL_RUNTIME_LIMITING` returns `ON` by default and correct `max_budget_s`
+- `GET THERMAL_LIMITING` returns `ON` by default and correct `max_budget_s`
 
 ### Firmware: Motion Kinematics
 
@@ -78,11 +78,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 1
 
-- [ ] 5.0 Show `thermal_limits` global flag (header/footer) using `GET THERMAL_RUNTIME_LIMITING`
-- [ ] 5.1 Surface any `CTRL:WARN ...` lines alongside `CTRL:OK` in logs/output
-- [ ] 5.2 Keep existing STATUS table columns unchanged
-- [ ] 5.3 On startup and after toggles, issue `GET THERMAL_RUNTIME_LIMITING` and render flag
-- [ ] 5.4 Tests: verify WARN lines are captured and rendered without treating as failure
+- [x] 5.0 Show `thermal_limits` global flag (header/footer) using `GET THERMAL_LIMITING`
+- [x] 5.1 Surface any `CTRL:WARN ...` lines alongside `CTRL:OK` in logs/output
+- [x] 5.2 Keep existing STATUS table columns unchanged
+- [x] 5.3 On startup and after toggles, issue `GET THERMAL_LIMITING` and render flag
+- [x] 5.4 Tests: verify WARN lines are captured and rendered without treating as failure
 
 **Acceptance Criteria:**
 - CLI shows thermal flag state

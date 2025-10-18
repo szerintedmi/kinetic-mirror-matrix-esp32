@@ -17,7 +17,7 @@ yes, thermal limits enforcement
 **Answer:** Do not slow down. Reject MOVE and HOME in advance if they would exceed limit based on deterministic budget calc from speed/accel. WAKE cannot be pre-guarded (unknown sleep time); implement auto-shutdown if runtime overruns budget by configured amount, also cancelling active moves as guardrail. Introduce new constant: `AUTO_SLEEP_IF_OVER_BUDGET_S`.
 
 **Q4:** Config surface (commands to tune thresholds) and global enable?
-**Answer:** No runtime tuning; use code constants. Add global ON/OFF: `SET THERMAL_RUNTIME_LIMITING=OFF|ON` (default ON). Expose via `GET THERMAL_RUNTIME_LIMITING`; keep STATUS unchanged.
+**Answer:** No runtime tuning; use code constants. Add global ON/OFF: `SET THERMAL_LIMITING=OFF|ON` (default ON). Expose via `GET THERMAL_LIMITING`; keep STATUS unchanged.
 
 **Q5:** Error semantics for rejections and WAKE?
 **Answer:** Multiple reasons: (a) Command beyond potential max budget → include max budget in error. (b) Command within range but not enough current budget → include `budget_s`, `ttfc_s`, and max budget. (c) WAKE can only be rejected when no budget left.
@@ -38,7 +38,7 @@ yes, thermal limits enforcement
 - Metrics: `budget_s`, `ttfc_s` per `agent-os/specs/2025-10-17-status-diagnostics/spec.md` and existing STATUS implementation.
 - Constants: `MAX_RUNNING_TIME_S`, `FULL_COOL_DOWN_TIME_S`, `REFILL_RATE` in `lib/MotorControl/include/MotorControl/MotorControlConstants.h`.
 - New constant to add: `AUTO_SLEEP_IF_OVER_BUDGET_S` (seconds beyond budget before forced SLEEP + cancel moves).
-- Command processor: extend to handle `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`; do not change STATUS format.
+- Command processor: extend to handle `SET THERMAL_LIMITING=OFF|ON` and `GET THERMAL_LIMITING`; do not change STATUS format.
 
 ## Visual Assets
 
@@ -51,7 +51,7 @@ No visual assets provided.
 - Use compile-time constants: `MAX_RUNNING_TIME_S`, `FULL_COOL_DOWN_TIME_S`, `REFILL_RATE`; introduce `AUTO_SLEEP_IF_OVER_BUDGET_S`.
 - Pre-flight guardrails for MOVE and HOME: deterministically compute required budget from planned motion (speed, accel, steps) and reject if it would exceed budget.
 - WAKE handling: allow unless no budget remains; if runtime exceeds budget by `AUTO_SLEEP_IF_OVER_BUDGET_S`, auto-SLEEP the motor and cancel active moves.
-- Global enable/disable via `SET THERMAL_RUNTIME_LIMITING=OFF|ON` (default ON). Expose via `GET THERMAL_RUNTIME_LIMITING` and show in CLI header/footer; do not alter STATUS rows.
+- Global enable/disable via `SET THERMAL_LIMITING=OFF|ON` (default ON). Expose via `GET THERMAL_LIMITING` and show in CLI header/footer; do not alter STATUS rows.
 - Error responses:
   - Beyond potential max budget: include `max_budget_s`.
   - Insufficient current budget: include `budget_s`, `ttfc_s`, and `max_budget_s`.
@@ -82,7 +82,7 @@ No visual assets provided.
 ### Technical Considerations
 - Implement deterministic budget estimation for planned MOVE/HOME using current speed/accel and step counts.
 - Add runtime monitor to detect overrun and trigger auto-SLEEP + move cancellation.
-- Update `MotorCommandProcessor` to parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and handle `GET THERMAL_RUNTIME_LIMITING`; leave STATUS formatting unchanged.
+- Update `MotorCommandProcessor` to parse `SET THERMAL_LIMITING=OFF|ON` and handle `GET THERMAL_LIMITING`; leave STATUS formatting unchanged.
 - Update Python CLI to show global limit status; existing metrics remain unchanged.
 - For MOVE/HOME tooling, host must consume `est_ms` returned by device (no host-side re-estimation).
  - Provide `GET LAST_OP_TIMING[:<id|ALL>]` for device-side timing:

@@ -83,6 +83,52 @@ def read_response(ser, timeout: float, idle_grace: float = 0.06) -> str:
     return "".join(chunks).strip()
 
 
+def parse_thermal_get_response(text: str) -> Optional[Tuple[bool, Optional[int]]]:
+    """Parse GET THERMAL_LIMITING response.
+    Returns (enabled, max_budget_s) or None if not parseable.
+    """
+    if not text:
+        return None
+    enabled = None
+    max_budget = None
+    try:
+        # Expect line like: CTRL:OK THERMAL_LIMITING=ON max_budget_s=90
+        for tok in text.strip().split():
+            if tok.startswith("THERMAL_LIMITING="):
+                val = tok.split("=", 1)[1].strip().upper()
+                enabled = (val == "ON")
+            elif tok.startswith("max_budget_s="):
+                try:
+                    max_budget = int(tok.split("=", 1)[1])
+                except Exception:
+                    max_budget = None
+        if enabled is None:
+            return None
+        return (enabled, max_budget)
+    except Exception:
+        return None
+
+
+def extract_est_ms_from_ctrl_ok(text: str) -> Optional[int]:
+    """Extract est_ms=N from the final CTRL:OK line in a response.
+    Safe when WARN lines precede OK; returns None if not present.
+    """
+    if not text:
+        return None
+    lines = text.splitlines()
+    for ln in reversed(lines):
+        ln = ln.strip()
+        if ln.startswith("CTRL:OK"):
+            for part in ln.split():
+                if part.startswith("est_ms="):
+                    try:
+                        return int(part.split("=", 1)[1])
+                    except Exception:
+                        return None
+            return None
+    return None
+
+
 def _add_common(sub):
     sub.add_argument("--port", "-p", help="Serial port (e.g., /dev/ttyUSB0, COM3)")
     sub.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)")
@@ -224,6 +270,9 @@ class _SerialWorker(threading.Thread):
         self._last_help_text: str = ""
         self._had_disconnect: bool = False
         self._reconnect_dots: int = 0
+        # Thermal flag state
+        self._thermal_state: Optional[Tuple[bool, Optional[int]]] = None
+        self._need_thermal_refresh: bool = True
 
     def get_state(self) -> Tuple[List[Dict[str, str]], List[str], Optional[str], float, str]:
         with self._lock:
@@ -234,6 +283,20 @@ class _SerialWorker(threading.Thread):
                 self._last_update_ts,
                 self._last_help_text,
             )
+
+    def get_thermal_status_text(self) -> str:
+        st = self._thermal_state
+        if not st:
+            return ""
+        enabled, max_budget = st
+        prefix = "thermal limiting=ON" if enabled else "thermal limiting=OFF"
+        if isinstance(max_budget, int):
+            return f"{prefix} (max={max_budget}s)"
+        return prefix
+
+    def get_thermal_state(self) -> Optional[Tuple[bool, Optional[int]]]:
+        with self._lock:
+            return self._thermal_state
 
     def queue_cmd(self, cmd: str) -> None:
         with self._lock:
@@ -304,6 +367,16 @@ class _SerialWorker(threading.Thread):
                             try:
                                 if self._pending_cmd and self._pending_cmd.strip().upper().startswith("HELP"):
                                     self._last_help_text = resp_text
+                                # Track thermal flag updates
+                                if self._pending_cmd and "THERMAL_LIMITING" in self._pending_cmd.upper():
+                                    if self._pending_cmd.strip().upper().startswith("GET"):
+                                        parsed = parse_thermal_get_response(resp_text)
+                                        if parsed:
+                                            self._thermal_state = parsed
+                                            self._need_thermal_refresh = False
+                                    elif self._pending_cmd.strip().upper().startswith("SET"):
+                                        # After SET, request GET to refresh view
+                                        self._need_thermal_refresh = True
                             except Exception:
                                 pass
                         self._pending_cmd = None
@@ -328,6 +401,15 @@ class _SerialWorker(threading.Thread):
                     continue
 
                 if now >= next_tick:
+                    # Fetch thermal flag periodically on demand
+                    if self._need_thermal_refresh and self._pending_cmd is None:
+                        self._ser.write(b"GET THERMAL_LIMITING\n")
+                        self._pending_cmd = "GET THERMAL_LIMITING\n"
+                        self._pending_buf = ""
+                        self._pending_deadline = time.time() + max(0.25, min(self.timeout, 2.0))
+                        self._pending_last_rx = 0.0
+                        time.sleep(0.01)
+                        continue
                     self._ser.write(b"STATUS\n")
                     status_text = read_response(self._ser, min(self.timeout, self.period * 0.8))
                     rows = parse_status_lines(status_text)
@@ -407,6 +489,7 @@ def main(argv=None) -> int:
                     accel = int(ns.accel)
                     ser.write(f"MOVE:{ns.id},{target},{speed},{accel}\n".encode())
                     resp = read_response(ser, ns.timeout)
+                    est_ms = extract_est_ms_from_ctrl_ok(resp)
                 else:
                     o = int(ns.overshoot)
                     b = int(ns.backoff)
@@ -417,19 +500,9 @@ def main(argv=None) -> int:
                     ser.write(cmd.encode())
                     resp = read_response(ser, ns.timeout)
 
-                # Extract est_ms from CTRL:OK line
-                est_ms = None
-                for ln in resp.splitlines()[::-1]:
-                    ln = ln.strip()
-                    if ln.startswith("CTRL:OK"):
-                        parts = ln.split()
-                        for p in parts:
-                            if p.startswith("est_ms="):
-                                try:
-                                    est_ms = int(p.split("=", 1)[1])
-                                except Exception:
-                                    pass
-                        break
+                # Extract est_ms from CTRL:OK line (tolerant of preceding WARN)
+                if est_ms is None:
+                    est_ms = extract_est_ms_from_ctrl_ok(resp)
                 if est_ms is None:
                     print("Device did not return est_ms in CTRL:OK", file=sys.stderr)
                     return 1

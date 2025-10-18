@@ -97,8 +97,8 @@ std::string MotorCommandProcessor::handleHELP()
   os << "STATUS\n";
   os << "GET LAST_OP_TIMING[:<id|ALL>]\n";
   // Thermal runtime limiting controls
-  os << "GET THERMAL_RUNTIME_LIMITING\n";
-  os << "SET THERMAL_RUNTIME_LIMITING=OFF|ON\n";
+  os << "GET THERMAL_LIMITING\n";
+  os << "SET THERMAL_LIMITING=OFF|ON\n";
   os << "WAKE:<id|ALL>\n";
   os << "SLEEP:<id|ALL>\n";
   os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS";
@@ -119,9 +119,9 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
 {
   // Support both colon and space-separated payloads; args already contains payload
   std::string key = to_upper_copy(trim_copy(args));
-  if (key == "THERMAL_RUNTIME_LIMITING") {
+  if (key == "THERMAL_LIMITING") {
     std::ostringstream os;
-    os << "CTRL:OK THERMAL_RUNTIME_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
+    os << "CTRL:OK THERMAL_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
        << " max_budget_s=" << (int)MotorControlConstants::MAX_RUNNING_TIME_S;
     return os.str();
   }
@@ -165,7 +165,7 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
 
 std::string MotorCommandProcessor::handleSET(const std::string &args)
 {
-  // Expect: THERMAL_RUNTIME_LIMITING=OFF|ON (allow optional spaces around '=')
+  // Expect: THERMAL_LIMITING=OFF|ON (allow optional spaces around '=')
   std::string payload = trim_copy(args);
   // Normalize for comparison without destroying original spacing
   std::string up = to_upper_copy(payload);
@@ -174,7 +174,7 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
   if (eq == std::string::npos) return "CTRL:ERR E03 BAD_PARAM";
   std::string key = trim_copy(up.substr(0, eq));
   std::string val = trim_copy(up.substr(eq + 1));
-  if (key != "THERMAL_RUNTIME_LIMITING") return "CTRL:ERR E03 BAD_PARAM";
+  if (key != "THERMAL_LIMITING") return "CTRL:ERR E03 BAD_PARAM";
   if (val == "ON") {
     thermal_limits_enabled_ = true;
     controller_->setThermalLimitsEnabled(thermal_limits_enabled_);

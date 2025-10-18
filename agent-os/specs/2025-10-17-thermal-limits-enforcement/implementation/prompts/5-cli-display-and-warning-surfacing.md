@@ -6,10 +6,10 @@ We're continuing our implementation of Thermal Limits Enforcement by implementin
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 1
 
-- [ ] 5.0 Show `thermal_limits` global flag (header/footer) using `GET THERMAL_RUNTIME_LIMITING`
+- [ ] 5.0 Show `thermal_limits` global flag (header/footer) using `GET THERMAL_LIMITING`
 - [ ] 5.1 Surface any `CTRL:WARN ...` lines alongside `CTRL:OK` in logs/output
 - [ ] 5.2 Keep existing STATUS table columns unchanged
-- [ ] 5.3 On startup and after toggles, issue `GET THERMAL_RUNTIME_LIMITING` and render flag
+- [ ] 5.3 On startup and after toggles, issue `GET THERMAL_LIMITING` and render flag
 - [ ] 5.4 Tests: verify WARN lines are captured and rendered without treating as failure
 
 **Acceptance Criteria:**
@@ -53,4 +53,3 @@ Create `agent-os/specs/2025-10-17-thermal-limits-enforcement/implementation/5-cl
 @agent-os/standards/testing/unit-testing.md
 @agent-os/standards/testing/hardware-validation.md
 @agent-os/standards/testing/build-validation.md
-

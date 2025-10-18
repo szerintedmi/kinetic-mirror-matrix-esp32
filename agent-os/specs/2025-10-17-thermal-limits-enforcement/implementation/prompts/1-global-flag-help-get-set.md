@@ -7,16 +7,16 @@ We're continuing our implementation of Thermal Limits Enforcement by implementin
 **Dependencies:** None
 
 - [ ] 1.0 Add global `thermal_limits_enabled` (default ON)
-- [ ] 1.1 Parse `SET THERMAL_RUNTIME_LIMITING=OFF|ON` in `MotorCommandProcessor`
-- [ ] 1.2 Update `HELP` to include both `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
-- [ ] 1.3 Implement `GET THERMAL_RUNTIME_LIMITING` → `CTRL:OK THERMAL_RUNTIME_LIMITING=ON|OFF max_budget_s=<N>`
+- [ ] 1.1 Parse `SET THERMAL_LIMITING=OFF|ON` in `MotorCommandProcessor`
+- [ ] 1.2 Update `HELP` to include both `SET THERMAL_LIMITING=OFF|ON` and `GET THERMAL_LIMITING`
+- [ ] 1.3 Implement `GET THERMAL_LIMITING` → `CTRL:OK THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
 - [ ] 1.4 Keep existing per-motor STATUS output unchanged (no meta lines)
 - [ ] 1.5 Unit tests: HELP lists GET/SET; GET returns expected payload
 
 **Acceptance Criteria:**
-- `HELP` lists `SET THERMAL_RUNTIME_LIMITING=OFF|ON` and `GET THERMAL_RUNTIME_LIMITING`
+- `HELP` lists `SET THERMAL_LIMITING=OFF|ON` and `GET THERMAL_LIMITING`
 - STATUS per-motor lines unchanged; no trailing meta lines
-- `GET THERMAL_RUNTIME_LIMITING` returns `ON` by default and correct `max_budget_s`
+- `GET THERMAL_LIMITING` returns `ON` by default and correct `max_budget_s`
 
 ## Understand the context
 
@@ -79,4 +79,3 @@ Use the following structure for the content of your implementation documentation
 @agent-os/standards/testing/unit-testing.md
 @agent-os/standards/testing/hardware-validation.md
 @agent-os/standards/testing/build-validation.md
-

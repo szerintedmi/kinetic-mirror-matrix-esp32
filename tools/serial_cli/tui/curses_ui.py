@@ -61,6 +61,18 @@ class CursesUI(BaseUI):
                 # Clear the virtual screen; we'll batch all drawing and flush once
                 stdscr.erase()
                 sh, sw = stdscr.getmaxyx()
+                # Initialize colors (safe to call repeatedly)
+                try:
+                    import curses as _c
+                    _c.start_color()
+                    _c.use_default_colors()
+                    try:
+                        _c.init_pair(1, _c.COLOR_BLACK, _c.COLOR_GREEN)  # ON
+                        _c.init_pair(2, _c.COLOR_BLACK, _c.COLOR_RED)    # OFF
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
                 rows, log, err, last_ts, help_text = self.worker.get_state()
                 pending_help = None
                 pending_log = None
@@ -190,13 +202,65 @@ class CursesUI(BaseUI):
                     if last_ts:
                         import time as _t
                         age = max(0.0, _t.time() - last_ts)
-                    status = f"port={self.worker.port} baud={self.worker.baud} last status={age:.1f}s"
+                    thermal = ""
+                    try:
+                        if hasattr(self.worker, "get_thermal_status_text"):
+                            thermal = getattr(self.worker, "get_thermal_status_text")()
+                    except Exception:
+                        thermal = ""
+                    base = f"port={self.worker.port} baud={self.worker.baud} last status={age:.1f}s  "
+                    # Draw separators
                     try:
                         stdscr.hline(sh - 4, 0, curses.ACS_HLINE, max(0, sw - 1))
                     except Exception:
                         pass
+                    # Draw the status line with colored thermal limiting flag
                     try:
-                        stdscr.addnstr(sh - 3, 0, status.ljust(max(0, sw - 1)), max(0, sw - 1))
+                        y = max(0, sh - 3)
+                        x = 0
+                        def _draw(s: str, attr: int = 0):
+                            nonlocal x
+                            if not s:
+                                return
+                            maxw = max(0, sw - 1 - x)
+                            if maxw <= 0:
+                                return
+                            try:
+                                stdscr.addnstr(y, x, s[:maxw], maxw, attr)
+                            except Exception:
+                                pass
+                            x += len(s)
+
+                        _draw(base)
+                        t_state = None
+                        try:
+                            if hasattr(self.worker, "get_thermal_state"):
+                                t_state = getattr(self.worker, "get_thermal_state")()
+                        except Exception:
+                            t_state = None
+                        if t_state is not None:
+                            enabled, max_budget = t_state
+                            _draw("thermal limiting=")
+                            try:
+                                attr_on = curses.color_pair(1)
+                                attr_off = curses.color_pair(2)
+                            except Exception:
+                                attr_on = 0
+                                attr_off = 0
+                            if enabled:
+                                _draw("ON", attr_on)
+                            else:
+                                _draw("OFF", attr_off)
+                            if isinstance(max_budget, int):
+                                _draw(f" (max={max_budget}s)")
+                        # Pad rest of line
+                        rem = max(0, sw - 1 - x)
+                        if rem:
+                            try:
+                                stdscr.addnstr(y, x, " " * rem, rem)
+                            except Exception:
+                                pass
+                        # Draw hint and input lines
                         stdscr.addnstr(sh - 2, 0, hint.ljust(max(0, sw - 1)), max(0, sw - 1))
                         stdscr.addnstr(sh - 1, 0, ("cmd> " + input_line).ljust(max(0, sw - 1)), max(0, sw - 1))
                         stdscr.move(max(0, sh - 1), min(len("cmd> ") + len(input_line), max(0, sw - 2)))

@@ -9,20 +9,20 @@
 void test_help_includes_thermal_get_set() {
   MotorCommandProcessor p;
   std::string help = p.processLine("HELP", 0);
-  TEST_ASSERT_TRUE(help.find("GET THERMAL_RUNTIME_LIMITING") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("SET THERMAL_RUNTIME_LIMITING=OFF|ON") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("GET THERMAL_LIMITING") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("SET THERMAL_LIMITING=OFF|ON") != std::string::npos);
 }
 
 void test_get_thermal_runtime_limiting_default_on_and_max_budget() {
   MotorCommandProcessor p;
-  std::string r1 = p.processLine("GET THERMAL_RUNTIME_LIMITING", 0);
-  TEST_ASSERT_TRUE(r1.find("CTRL:OK THERMAL_RUNTIME_LIMITING=ON") != std::string::npos);
+  std::string r1 = p.processLine("GET THERMAL_LIMITING", 0);
+  TEST_ASSERT_TRUE(r1.find("CTRL:OK THERMAL_LIMITING=ON") != std::string::npos);
   std::string exp = std::string("max_budget_s=") + std::to_string((int)MotorControlConstants::MAX_RUNNING_TIME_S);
   TEST_ASSERT_TRUE(r1.find(exp) != std::string::npos);
-  std::string s = p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0);
+  std::string s = p.processLine("SET THERMAL_LIMITING=OFF", 0);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", s.c_str());
-  std::string r2 = p.processLine("GET THERMAL_RUNTIME_LIMITING", 0);
-  TEST_ASSERT_TRUE(r2.find("THERMAL_RUNTIME_LIMITING=OFF") != std::string::npos);
+  std::string r2 = p.processLine("GET THERMAL_LIMITING", 0);
+  TEST_ASSERT_TRUE(r2.find("THERMAL_LIMITING=OFF") != std::string::npos);
 }
 
 void test_preflight_e10_move_enabled_err() {
@@ -46,7 +46,7 @@ void test_preflight_e11_move_enabled_err() {
 void test_preflight_warn_when_disabled_then_ok() {
   MotorCommandProcessor p;
   // Disable limits
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   // This would exceed max -> expect WARN then OK
   std::string r1 = p.processLine("MOVE:0,1200,1,1000", 0);
   TEST_ASSERT_TRUE(r1.find("CTRL:WARN THERMAL_REQ_GT_MAX") == 0);
@@ -116,7 +116,7 @@ void test_wake_reject_enabled_no_budget() {
 
 void test_wake_warn_disabled_no_budget_then_ok() {
   MotorCommandProcessor p;
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:0", 0).c_str());
   (void)p.processLine("STATUS", 100000);
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SLEEP:0", 100000).c_str());
@@ -128,12 +128,12 @@ void test_wake_warn_disabled_no_budget_then_ok() {
 void test_auto_sleep_overrun_cancels_move_and_awake() {
   MotorCommandProcessor p;
   // Disable to allow starting a very long move
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=OFF", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   // Long move: target at limit with very low speed to exceed budget
   std::string r = p.processLine("MOVE:0,1200,1,1000", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:OK est_ms=") != std::string::npos);
   // Re-enable enforcement
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_RUNTIME_LIMITING=ON", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=ON", 0).c_str());
   // Advance time past zero budget + grace period
   const uint32_t t_ms = (MotorControlConstants::MAX_RUNNING_TIME_S + MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S + 1) * 1000;
   (void)p.processLine("STATUS", t_ms);

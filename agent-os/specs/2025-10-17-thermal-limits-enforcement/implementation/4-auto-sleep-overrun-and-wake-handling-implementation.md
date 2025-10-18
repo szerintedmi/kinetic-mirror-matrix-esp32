@@ -25,6 +25,7 @@ Key Changes
 - lib/MotorControl/src/MotorCommandProcessor.cpp
   - Initialized controller with current flag; kept in sync on SET.
   - WAKE: reject with `CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE` when enabled and no budget; when disabled, emit `CTRL:WARN THERMAL_NO_BUDGET_WAKE` then `CTRL:OK`.
+  - Updated GET/SET verbs to `THERMAL_LIMITING`.
 
 Tests
 - test/test_MotorControl/test_Thermal.cpp
