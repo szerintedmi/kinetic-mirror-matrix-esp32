@@ -18,6 +18,7 @@ class TextualUI(BaseUI):
                 VerticalScroll,
             )
             from textual.screen import Screen, ModalScreen
+            from textual.events import Key
             from textual.reactive import var
             from textual.widgets import (
                 DataTable,
@@ -185,6 +186,11 @@ class TextualUI(BaseUI):
                 self._cols_ready = False
                 self._hist: List[str] = []
                 self._hist_idx: Optional[int] = None
+                # Buffer to remember the user's in-progress input when
+                # they first enter history navigation with Up/Down.
+                # When they navigate back past the newest history item,
+                # we restore this text instead of clearing the field.
+                self._hist_buffer: Optional[str] = None
 
             def compose(self) -> ComposeResult:  # type: ignore[override]
                 yield Header(show_clock=False)
@@ -268,31 +274,50 @@ class TextualUI(BaseUI):
                 if (not self._hist) or self._hist[-1] != text:
                     self._hist.append(text)
                 self._hist_idx = None
+                self._hist_buffer = None
                 self.notify(f"Sent: {text}", timeout=1.5)
                 event.input.value = ""
 
-            def on_input_key(self, event: Input.Key) -> None:
-                # Command history navigation when input focused
+            def on_key(self, event: Key) -> None:
+                # Only intercept keys for history when the command input has focus
+                try:
+                    cmd_input = self.query_one("#cmd_input", Input)
+                except Exception:
+                    return
+                if not getattr(cmd_input, "has_focus", False):
+                    return
                 if event.key == "up":
                     if self._hist:
                         if self._hist_idx is None:
+                            # Remember current in-progress edit before entering history
+                            self._hist_buffer = cmd_input.value
                             self._hist_idx = len(self._hist) - 1
                         elif self._hist_idx > 0:
                             self._hist_idx -= 1
-                        self.query_one("#cmd_input", Input).value = self._hist[
-                            self._hist_idx
-                        ]
+                        cmd_input.value = self._hist[self._hist_idx]
+                        try:
+                            cmd_input.cursor_position = len(cmd_input.value or "")
+                        except Exception:
+                            pass
                         event.stop()
                 elif event.key == "down":
                     if self._hist and self._hist_idx is not None:
                         if self._hist_idx < len(self._hist) - 1:
                             self._hist_idx += 1
-                            self.query_one("#cmd_input", Input).value = self._hist[
-                                self._hist_idx
-                            ]
+                            cmd_input.value = self._hist[self._hist_idx]
+                            try:
+                                cmd_input.cursor_position = len(cmd_input.value or "")
+                            except Exception:
+                                pass
                         else:
                             self._hist_idx = None
-                            self.query_one("#cmd_input", Input).value = ""
+                            # Restore original in-progress text if any
+                            cmd_input.value = self._hist_buffer or ""
+                            self._hist_buffer = None
+                        try:
+                            cmd_input.cursor_position = len(cmd_input.value or "")
+                        except Exception:
+                            pass
                         event.stop()
                 elif event.key == "?" or getattr(event, "character", None) == "?":
                     # Single universal binding for help
