@@ -28,12 +28,12 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 2.0 Implement per-motor SLEEP gating + DIR guard windows
-  - [ ] 2.1 Write 2-6 unit tests for guard timing logic and “no-STEP during DIR flip” rules
-  - [ ] 2.2 Define constants `DIR_GUARD_US_[PRE,POST]` (microseconds) per spec
-  - [ ] 2.3 Integrate 74HC595 latch updates so SLEEP/DIR changes avoid STEP edges
-  - [ ] 2.4 Align re-enable timing to next safe STEP gap
-  - [ ] 2.5 Ensure tests in 2.1 pass
+- [x] 2.0 Implement per-motor SLEEP gating + DIR guard windows
+  - [x] 2.1 Write 2-6 unit tests for guard timing logic and “no-STEP during DIR flip” rules
+  - [x] 2.2 Define constants `DIR_GUARD_US_[PRE,POST]` (microseconds) per spec
+  - [x] 2.3 Integrate 74HC595 latch updates so SLEEP/DIR changes avoid STEP edges
+  - [x] 2.4 Align re-enable timing to next safe STEP gap
+  - [x] 2.5 Ensure tests in 2.1 pass
 
 **Acceptance Criteria:**
 - Guard constants used; logic prevents STEP coinciding with DIR transitions in tests

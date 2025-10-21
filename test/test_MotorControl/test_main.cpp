@@ -59,6 +59,11 @@ void test_shared_timing_period_basic();
 void test_shared_timing_align_to_next_edge();
 void test_shared_timing_guard_fits();
 
+// SharedStepGuards
+void test_dir_guard_constants_reasonable();
+void test_compute_flip_window_mid_gap();
+void test_compute_flip_window_aligns_from_edge();
+
 // Hardware
 void test_bitpack_dir_sleep_basic();
 void test_backend_latch_before_start();
@@ -139,6 +144,11 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_shared_timing_period_basic);
   setUp(); RUN_TEST(test_shared_timing_align_to_next_edge);
   setUp(); RUN_TEST(test_shared_timing_guard_fits);
+
+  // Shared STEP DIR/SLEEP guards
+  setUp(); RUN_TEST(test_dir_guard_constants_reasonable);
+  setUp(); RUN_TEST(test_compute_flip_window_mid_gap);
+  setUp(); RUN_TEST(test_compute_flip_window_aligns_from_edge);
 
   return UNITY_END();
 }
