@@ -12,12 +12,12 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** None
 
-- [ ] 1.0 Prototype hardware-timed STEP generator
-  - [ ] 1.1 Write 2-6 focused unit tests for timing helpers (period calc, start/stop gating points)
-  - [ ] 1.2 Implement minimal RMT-based pulse generator at global `SPEED` (steps/s)
-  - [ ] 1.3 Expose start/stop and edge-aligned callback hooks
-  - [ ] 1.4 Add compile flag to select SharedSTEP vs FastAccelStepper paths
-  - [ ] 1.5 Ensure tests in 1.1 pass (native/host if possible)
+- [x] 1.0 Prototype hardware-timed STEP generator
+  - [x] 1.1 Write 2-6 focused unit tests for timing helpers (period calc, start/stop gating points)
+  - [x] 1.2 Implement minimal RMT-based pulse generator at global `SPEED` (steps/s)
+  - [x] 1.3 Expose start/stop and edge-aligned callback hooks
+  - [x] 1.4 Add compile flag to select SharedSTEP vs FastAccelStepper paths
+  - [x] 1.5 Ensure tests in 1.1 pass (native/host if possible)
 
 **Acceptance Criteria:**
 - Unit tests for timing helpers pass

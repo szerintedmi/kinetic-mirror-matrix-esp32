@@ -54,6 +54,11 @@ void test_estimator_triangular_above_naive_bound();
 void test_stub_move_uses_estimator_duration();
 void test_stub_home_uses_estimator_duration();
 
+// SharedStepTiming
+void test_shared_timing_period_basic();
+void test_shared_timing_align_to_next_edge();
+void test_shared_timing_guard_fits();
+
 // Hardware
 void test_bitpack_dir_sleep_basic();
 void test_backend_latch_before_start();
@@ -130,6 +135,10 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_backend_dir_latched_once_per_move);
   setUp(); RUN_TEST(test_backend_speed_accel_passed_to_adapter);
 
+  // Shared STEP timing helpers (host-only)
+  setUp(); RUN_TEST(test_shared_timing_period_basic);
+  setUp(); RUN_TEST(test_shared_timing_align_to_next_edge);
+  setUp(); RUN_TEST(test_shared_timing_guard_fits);
+
   return UNITY_END();
 }
-
