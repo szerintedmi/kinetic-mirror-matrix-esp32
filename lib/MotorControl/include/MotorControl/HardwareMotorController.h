@@ -3,6 +3,9 @@
 #include "MotorControl/MotorController.h"
 #include "Hal/Shift595.h"
 #include "Hal/FasAdapter.h"
+#if defined(ARDUINO)
+#include "drivers/Esp32/AdapterFactory.h"
+#endif
 
 // Hardware-backed motor controller integrating FastAccelStepper and
 // two chained 74HC595 for DIR/SLEEP.

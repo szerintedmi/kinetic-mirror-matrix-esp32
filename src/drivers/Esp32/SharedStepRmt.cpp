@@ -10,16 +10,17 @@
 
 // Pick an LEDC channel/timer that doesn't clash with existing code
 static constexpr int kLedcChannel = 6;
-static constexpr int kLedcTimer   = 2;
+static constexpr int kLedcTimer = 2;
 #ifndef SHARED_STEP_GPIO
-#define SHARED_STEP_GPIO 14
+#define SHARED_STEP_GPIO 4
 #endif
-static constexpr int kStepPin     = SHARED_STEP_GPIO; // overridable via -DSHARED_STEP_GPIO
+static constexpr int kStepPin = SHARED_STEP_GPIO; // overridable via -DSHARED_STEP_GPIO
 
 SharedStepRmtGenerator::SharedStepRmtGenerator()
-  : speed_sps_(0), hook_(nullptr) {}
+    : speed_sps_(0), hook_(nullptr) {}
 
-bool SharedStepRmtGenerator::begin() {
+bool SharedStepRmtGenerator::begin()
+{
   // Configure STEP pin
   pinMode(kStepPin, OUTPUT);
   digitalWrite(kStepPin, LOW);
@@ -29,9 +30,11 @@ bool SharedStepRmtGenerator::begin() {
   return true;
 }
 
-void SharedStepRmtGenerator::setSpeed(uint32_t speed_sps) {
+void SharedStepRmtGenerator::setSpeed(uint32_t speed_sps)
+{
   speed_sps_ = speed_sps;
-  if (speed_sps_ == 0) {
+  if (speed_sps_ == 0)
+  {
     ledcWrite(kLedcChannel, 0);
     return;
   }
@@ -42,17 +45,21 @@ void SharedStepRmtGenerator::setSpeed(uint32_t speed_sps) {
   ledcWrite(kLedcChannel, 512);
 }
 
-void SharedStepRmtGenerator::start() {
-  if (speed_sps_ == 0) return;
+void SharedStepRmtGenerator::start()
+{
+  if (speed_sps_ == 0)
+    return;
   // LEDC already running after setSpeed via writeTone; ensure duty set
   ledcWrite(kLedcChannel, 512);
 }
 
-void SharedStepRmtGenerator::stop() {
+void SharedStepRmtGenerator::stop()
+{
   ledcWrite(kLedcChannel, 0);
 }
 
-void SharedStepRmtGenerator::setEdgeHook(SharedStepEdgeHook hook) {
+void SharedStepRmtGenerator::setEdgeHook(SharedStepEdgeHook hook)
+{
   hook_ = hook;
   // Note: With LEDC, we don't get an ISR per edge. When migrating to RMT,
   // the hook can be invoked in the RMT ISR after a rising edge item.

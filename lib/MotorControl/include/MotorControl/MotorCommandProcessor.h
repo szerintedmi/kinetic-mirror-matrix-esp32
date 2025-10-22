@@ -25,4 +25,8 @@ private:
   bool parseIdMask(const std::string& token, uint32_t& mask);
   static bool parseInt(const std::string& s, long& out);
   static bool parseInt(const std::string& s, int& out);
+
+  // Global motion defaults (can be changed via SET SPEED/ACCEL)
+  int default_speed_sps_;
+  int default_accel_sps2_;
 };

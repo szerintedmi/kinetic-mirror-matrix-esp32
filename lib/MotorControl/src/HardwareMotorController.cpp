@@ -51,9 +51,8 @@ HardwareMotorController::HardwareMotorController() {
   // Own the concrete drivers under Arduino/ESP32
   owned_shift_.reset(new Shift595Esp32(SHIFT595_RCLK, SHIFT595_OE));
   shift_ = owned_shift_.get();
-  // Fas adapter constructed in its own compilation unit
-  extern IFasAdapter* createEsp32FasAdapter();
-  owned_fas_.reset(createEsp32FasAdapter());
+  // Motion adapter factory selects shared-step or FAS based on build flags
+  owned_fas_.reset(createEsp32MotionAdapter());
   fas_ = owned_fas_.get();
 
   for (uint8_t i = 0; i < count_; ++i) {
@@ -107,7 +106,7 @@ void HardwareMotorController::startMoveSingle_(uint8_t i, long target, int speed
   motors_[i].accel = accel;
   motors_[i].moving = true;
 #if defined(ARDUINO)
-  motors_[i].awake = true; // FAS handles outputs
+  motors_[i].awake = true;
 #else
   long delta = target - cur;
   if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
@@ -170,7 +169,9 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
       motors_[i].accel = accel;
       motors_[i].moving = true;
 #if defined(ARDUINO)
-      motors_[i].awake = true; // FAS will enable outputs via callback
+      // Arduino backends (FAS or SharedStep adapter) manage DIR/SLEEP internally.
+      // Reflect desired intent in state only; actual gating handled by adapter.
+      motors_[i].awake = true;
 #else
       long delta = target - cur;
       if (delta >= 0) { dir_bits_ |= (1u << i); } else { dir_bits_ &= (uint8_t)~(1u << i); }
@@ -219,6 +220,7 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
       motors_[i].accel = accel;
       motors_[i].moving = true;
 #if defined(ARDUINO)
+      // Arduino backends (FAS or SharedStep) manage DIR/SLEEP; set intent only.
       motors_[i].awake = true;
 #else
       long target = cur - (full_range + oshot);
@@ -272,9 +274,9 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     long pos = fas_->currentPosition(i);
     long old_pos = motors_[i].position;
     if (motors_[i].homed && pos != old_pos) {
-      long delta = pos - old_pos;
-      if (delta < 0) delta = -delta;
-      motors_[i].steps_since_home += (int32_t)delta;
+      long d = pos - old_pos;
+      if (d < 0) d = -d;
+      motors_[i].steps_since_home += (int32_t)d;
     }
     motors_[i].position = pos;
 #if defined(ARDUINO)
@@ -351,4 +353,5 @@ void HardwareMotorController::tick(uint32_t now_ms) {
       }
     }
   }
+  // Native: start/stop latches handled above; Arduino: adapter handles gating
 }

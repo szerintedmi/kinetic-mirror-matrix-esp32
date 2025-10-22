@@ -43,13 +43,13 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Groups 1-2
 
-- [ ] 3.0 Integrate shared STEP into `HardwareMotorController` (constant speed only)
-  - [ ] 3.1 Remove per-move/home `<speed>,<accel>` from parser and HELP output
-  - [ ] 3.2 Add `GET SPEED` / `SET SPEED=<v>` (global); reject `SET SPEED` while any motor is moving
-  - [ ] 3.3 Wire `MOVE`/`HOME` to shared STEP generator using global `SPEED`; ignore acceleration for now
-  - [ ] 3.4 Maintain positions by counting pulses only while SLEEP is enabled per motor; start generator on first active motor, stop on last finish
-  - [ ] 3.5 Enforce overlap rule: concurrent moves are allowed only at the single global `SPEED`
-  - [ ] 3.6 Write 2-6 parser tests for simplified grammar and erroring on legacy params
+- [x] 3.0 Integrate shared STEP into `HardwareMotorController` (constant speed only)
+  - [x] 3.1 Remove per-move/home `<speed>,<accel>` from parser and HELP output
+  - [x] 3.2 Add `GET SPEED` / `SET SPEED=<v>` (global); reject `SET SPEED` while any motor is moving
+  - [x] 3.3 Wire `MOVE`/`HOME` to shared STEP generator using global `SPEED`; ignore acceleration for now
+  - [x] 3.4 Maintain positions by counting pulses only while SLEEP is enabled per motor; start generator on first active motor, stop on last finish
+  - [x] 3.5 Enforce overlap rule: concurrent moves are allowed only at the single global `SPEED`
+  - [x] 3.6 Write 2-6 parser tests for simplified grammar and erroring on legacy params
   - [ ] 3.7 CLI smoke (manual): via `python -m serial_cli`
         - `GET SPEED` → defaults
         - `SET SPEED=4000` → `CTRL:OK`

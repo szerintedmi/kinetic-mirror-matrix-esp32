@@ -28,8 +28,10 @@ void test_get_thermal_runtime_limiting_default_on_and_max_budget() {
 
 void test_preflight_e10_move_enabled_err() {
   MotorCommandProcessor p;
-  // Very slow long move -> required runtime exceeds MAX_RUNNING_TIME_S
-  std::string r = p.processLine("MOVE:0,1200,1,1000", 0);
+  // Very slow long move via global SPEED -> required runtime exceeds MAX_RUNNING_TIME_S
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=1", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=1000", 0).c_str());
+  std::string r = p.processLine("MOVE:0,1200", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:ERR E10 THERMAL_REQ_GT_MAX") == 0);
   TEST_ASSERT_TRUE(r.find(" id=0 ") != std::string::npos || r.find(" id=0") != std::string::npos);
 }
@@ -40,7 +42,9 @@ void test_preflight_e11_move_enabled_err() {
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:0", 0).c_str());
   // After 100s, budget will be <= 0
   (void)p.processLine("STATUS", 100000);
-  std::string r = p.processLine("MOVE:0,10,4000,16000", 100000);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=4000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=16000", 0).c_str());
+  std::string r = p.processLine("MOVE:0,10", 100000);
   TEST_ASSERT_TRUE(r.find("CTRL:ERR E11 THERMAL_NO_BUDGET") == 0);
 }
 
@@ -49,7 +53,9 @@ void test_preflight_warn_when_disabled_then_ok() {
   // Disable limits
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   // This would exceed max -> expect WARN then OK
-  std::string r1 = p.processLine("MOVE:0,1200,1,1000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=1", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=1000", 0).c_str());
+  std::string r1 = p.processLine("MOVE:0,1200", 0);
   bool r1_warn = (r1.find("CTRL:WARN THERMAL_REQ_GT_MAX") == 0);
   if (!r1_warn) { std::printf("[DEBUG] r1 unexpected response:\n%s\n", r1.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r1_warn, "Expected r1 to start with CTRL:WARN THERMAL_REQ_GT_MAX");
@@ -61,7 +67,7 @@ void test_preflight_warn_when_disabled_then_ok() {
   // Use a different motor id (1) to avoid BUSY from the long-running move on id=0
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("WAKE:1", 0).c_str());
   (void)p.processLine("STATUS", 100000);
-  std::string r2 = p.processLine("MOVE:1,10,4000,16000", 100000);
+  std::string r2 = p.processLine("MOVE:1,10", 100000);
   bool r2_warn = (r2.find("CTRL:WARN THERMAL_NO_BUDGET") == 0);
   if (!r2_warn) { std::printf("[DEBUG] r2 unexpected response:\n%s\n", r2.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r2_warn, "Expected r2 to start with CTRL:WARN THERMAL_NO_BUDGET");
@@ -72,14 +78,17 @@ void test_preflight_warn_when_disabled_then_ok() {
 
 void test_preflight_e10_home_enabled_err() {
   MotorCommandProcessor p;
-  // HOME with speed=1 => ~850s required > MAX_RUNNING_TIME_S
-  std::string r = p.processLine("HOME:0,,,1", 0);
+  // HOME with global speed=1 => ~850s required > MAX_RUNNING_TIME_S
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=1", 0).c_str());
+  std::string r = p.processLine("HOME:0", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:ERR E10 THERMAL_REQ_GT_MAX") == 0);
 }
 
 void test_move_ok_returns_estimate() {
   MotorCommandProcessor p;
-  std::string r = p.processLine("MOVE:0,10,4000,16000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=4000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=16000", 0).c_str());
+  std::string r = p.processLine("MOVE:0,10", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:OK est_ms=") == 0);
 }
 
@@ -91,7 +100,9 @@ void test_home_ok_returns_estimate() {
 
 void test_last_op_timing_move() {
   MotorCommandProcessor p;
-  std::string r = p.processLine("MOVE:0,50,1000,1000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=1000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=1000", 0).c_str());
+  std::string r = p.processLine("MOVE:0,50", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:OK est_ms=") == 0);
   // During operation, device may report either pre-start or moving state; skip strict check
   // After completion
@@ -140,7 +151,9 @@ void test_auto_sleep_overrun_cancels_move_and_awake() {
   // Disable to allow starting a very long move
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=OFF", 0).c_str());
   // Long move: target at limit with very low speed to exceed budget
-  std::string r = p.processLine("MOVE:0,1200,1,1000", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET SPEED=1", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET ACCEL=1000", 0).c_str());
+  std::string r = p.processLine("MOVE:0,1200", 0);
   TEST_ASSERT_TRUE(r.find("CTRL:OK est_ms=") != std::string::npos);
   // Re-enable enforcement
   TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine("SET THERMAL_LIMITING=ON", 0).c_str());

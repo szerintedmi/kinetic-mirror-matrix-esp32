@@ -83,7 +83,8 @@ void test_home_and_steps_since_home() {
   TEST_ASSERT_TRUE(L0.find("homed=1") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
-  auto r2 = p.processLine("MOVE:0,10,100", th);
+  // Use default/global speed; ensure command accepted without per-move params
+  auto r2 = p.processLine("MOVE:0,10", th);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:OK", 0) == 0);
   p.tick(th + 200);
   auto st1 = p.processLine("STATUS", th + 200);
@@ -173,7 +174,7 @@ void test_steps_since_home_resets_after_second_home() {
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
   // Move to accumulate steps_since_home
-  auto r_move = p.processLine("MOVE:0,100,100", th2);
+  auto r_move = p.processLine("MOVE:0,100", th2);
   TEST_ASSERT_TRUE(r_move.rfind("CTRL:OK", 0) == 0);
   p.tick(th2 + 1100);
   auto st1 = p.processLine("STATUS", th2 + 1100);

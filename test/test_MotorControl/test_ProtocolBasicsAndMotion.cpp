@@ -55,8 +55,8 @@ void test_help_format() {
   std::string help = proto.processLine("HELP", 0);
   TEST_ASSERT_TRUE(help.find("HELP") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("STATUS") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("MOVE:<id|ALL>,<abs_steps>") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("WAKE:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("SLEEP:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("E0") == std::string::npos);
@@ -98,7 +98,7 @@ void test_all_addressing_and_status_awake() {
 }
 
 void test_busy_rule_and_completion() {
-  auto r1 = proto.processLine("MOVE:0,100,100", 0);
+  auto r1 = proto.processLine("MOVE:0,100", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto r2 = proto.processLine("MOVE:0,200", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
@@ -125,7 +125,7 @@ void test_home_defaults() {
 }
 
 void test_sleep_busy_then_ok() {
-  auto r1 = proto.processLine("MOVE:0,100,100", 0);
+  auto r1 = proto.processLine("MOVE:0,100", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto r2 = proto.processLine("SLEEP:0", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
@@ -168,12 +168,15 @@ void test_wake_sleep_single_and_status() {
 }
 
 void test_home_with_params_acceptance() {
-  auto r = proto.processLine("HOME:0,900,150,500,1000,2400", 0);
+  auto r = proto.processLine("HOME:0,900,150,2400", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:OK", 0) == 0);
 }
 
 void test_move_sets_speed_accel_in_status() {
-  auto r1 = proto.processLine("MOVE:0,10,5000,12000", 0);
+  // Set globals then move, and verify status reflects them
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", proto.processLine("SET SPEED=5000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", proto.processLine("SET ACCEL=12000", 0).c_str());
+  auto r1 = proto.processLine("MOVE:0,10", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto st = proto.processLine("STATUS", 1);
   auto lines = split_lines(st);
@@ -215,7 +218,8 @@ void test_home_parsing_comma_skips() {
 }
 
 void test_home_busy_rule_reject_when_moving() {
-  auto r1 = proto.processLine("MOVE:2,100,100", 0);
+  // Longer distance to ensure still moving at 10ms under default speed
+  auto r1 = proto.processLine("MOVE:2,1000", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
   auto r2 = proto.processLine("HOME:2", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
@@ -249,5 +253,5 @@ void test_home_all_concurrency_and_post_state() {
 
 void test_help_includes_home_line_again() {
   auto help = proto.processLine("HELP", 0);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") != std::string::npos);
 }

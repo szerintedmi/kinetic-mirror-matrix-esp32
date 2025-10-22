@@ -47,6 +47,8 @@ MotorCommandProcessor::MotorCommandProcessor()
 #endif
 {
   controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
+  default_speed_sps_ = MotorControlConstants::DEFAULT_SPEED_SPS;
+  default_accel_sps2_ = MotorControlConstants::DEFAULT_ACCEL_SPS2;
 }
 
 bool MotorCommandProcessor::parseInt(const std::string &s, long &out)
@@ -92,13 +94,17 @@ std::string MotorCommandProcessor::handleHELP()
 {
   std::ostringstream os;
   os << "HELP\n";
-  os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
-  os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
+  os << "MOVE:<id|ALL>,<abs_steps>\n";
+  os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
   os << "STATUS\n";
   os << "GET LAST_OP_TIMING[:<id|ALL>]\n";
+  os << "GET SPEED\n";
+  os << "GET ACCEL\n";
   // Thermal runtime limiting controls
   os << "GET THERMAL_LIMITING\n";
   os << "SET THERMAL_LIMITING=OFF|ON\n";
+  os << "SET SPEED=<steps_per_second>\n";
+  os << "SET ACCEL=<steps_per_second^2>\n";
   os << "WAKE:<id|ALL>\n";
   os << "SLEEP:<id|ALL>\n";
   os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS";
@@ -119,6 +125,14 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
 {
   // Support both colon and space-separated payloads; args already contains payload
   std::string key = to_upper_copy(trim_copy(args));
+  if (key == "SPEED") {
+    std::ostringstream os; os << "CTRL:OK SPEED=" << default_speed_sps_;
+    return os.str();
+  }
+  if (key == "ACCEL") {
+    std::ostringstream os; os << "CTRL:OK ACCEL=" << default_accel_sps2_;
+    return os.str();
+  }
   if (key == "THERMAL_LIMITING") {
     std::ostringstream os;
     os << "CTRL:OK THERMAL_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
@@ -174,14 +188,33 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
   if (eq == std::string::npos) return "CTRL:ERR E03 BAD_PARAM";
   std::string key = trim_copy(up.substr(0, eq));
   std::string val = trim_copy(up.substr(eq + 1));
-  if (key != "THERMAL_LIMITING") return "CTRL:ERR E03 BAD_PARAM";
-  if (val == "ON") {
-    thermal_limits_enabled_ = true;
-    controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
+  if (key == "THERMAL_LIMITING") {
+    if (val == "ON") {
+      thermal_limits_enabled_ = true;
+      controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
+      return "CTRL:OK";
+    } else if (val == "OFF") {
+      thermal_limits_enabled_ = false;
+      controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
+      return "CTRL:OK";
+    }
+    return "CTRL:ERR E03 BAD_PARAM";
+  }
+  if (key == "SPEED") {
+    long v; if (!parseInt(val, v) || v <= 0) return "CTRL:ERR E03 BAD_PARAM";
+    // reject changes while any motor is moving
+    for (uint8_t id = 0; id < controller_->motorCount(); ++id) {
+      if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
+    }
+    default_speed_sps_ = (int)v;
     return "CTRL:OK";
-  } else if (val == "OFF") {
-    thermal_limits_enabled_ = false;
-    controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
+  }
+  if (key == "ACCEL") {
+    long v; if (!parseInt(val, v) || v <= 0) return "CTRL:ERR E03 BAD_PARAM";
+    for (uint8_t id = 0; id < controller_->motorCount(); ++id) {
+      if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
+    }
+    default_accel_sps2_ = (int)v;
     return "CTRL:OK";
   }
   return "CTRL:ERR E03 BAD_PARAM";
@@ -270,18 +303,11 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
     return "CTRL:ERR E03 BAD_PARAM";
   if (target < kMinPos || target > kMaxPos)
     return "CTRL:ERR E07 POS_OUT_OF_RANGE";
-  int speed = kDefaultSpeed;
-  int accel = kDefaultAccel;
-  if (parts.size() >= 3 && !parts[2].empty())
-  {
-    if (!parseInt(parts[2], speed))
-      return "CTRL:ERR E03 BAD_PARAM";
-  }
-  if (parts.size() >= 4 && !parts[3].empty())
-  {
-    if (!parseInt(parts[3], accel))
-      return "CTRL:ERR E03 BAD_PARAM";
-  }
+  int speed = default_speed_sps_;
+  int accel = default_accel_sps2_;
+  // Legacy per-move params are no longer accepted
+  if ((parts.size() >= 3 && !parts[2].empty()) || (parts.size() >= 4 && !parts[3].empty()))
+    return "CTRL:ERR E03 BAD_PARAM";
   // Thermal pre-flight: tick to current time and check budgets
   controller_->tick(now_ms);
   // Compute per-motor required runtime and compare to limits
@@ -372,8 +398,8 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
   if (!parseIdMask(parts[0], mask))
     return "CTRL:ERR E02 BAD_ID";
   long overshoot = kDefaultOvershoot, backoff = kDefaultBackoff, full_range = 0;
-  int speed = kDefaultSpeed;
-  int accel = kDefaultAccel;
+  int speed = default_speed_sps_;
+  int accel = default_accel_sps2_;
   if (parts.size() >= 2 && !parts[1].empty())
   {
     if (!parseInt(parts[1], overshoot))
@@ -386,17 +412,7 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
   }
   if (parts.size() >= 4 && !parts[3].empty())
   {
-    if (!parseInt(parts[3], speed))
-      return "CTRL:ERR E03 BAD_PARAM";
-  }
-  if (parts.size() >= 5 && !parts[4].empty())
-  {
-    if (!parseInt(parts[4], accel))
-      return "CTRL:ERR E03 BAD_PARAM";
-  }
-  if (parts.size() >= 6 && !parts[5].empty())
-  {
-    if (!parseInt(parts[5], full_range))
+    if (!parseInt(parts[3], full_range))
       return "CTRL:ERR E03 BAD_PARAM";
   }
   // Thermal pre-flight: tick and check required time vs limits

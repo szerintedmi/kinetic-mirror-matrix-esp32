@@ -1,8 +1,9 @@
-#if defined(ARDUINO)
+#if defined(ARDUINO) && !defined(USE_SHARED_STEP)
 
 #include "drivers/Esp32/FasAdapterEsp32.h"
 #include <Arduino.h>
 #include <FastAccelStepper.h>
+#include "MotorControl/BuildConfig.h"
 
 // External pin integration state
 static IShift595 *g_shift = nullptr;
@@ -29,7 +30,9 @@ public:
   void begin() override
   {
     engine_.init();
+#if !(USE_SHARED_STEP)
     engine_.setExternalCallForPin(&FasAdapterEsp32::externalPinHandler);
+#endif
   }
 
   void configureStepPin(uint8_t id, int gpio) override
@@ -47,8 +50,12 @@ public:
         uint8_t vsleep = (uint8_t)(SLEEP_BASE + id) | PIN_EXTERNAL_FLAG;
         st->setDirectionPin(vdir, true /*HighCountsUp*/, 200 /*us delay*/);
         st->setEnablePin(vsleep, false /*low_active_enables_stepper?*/);
+#if !(USE_SHARED_STEP)
         st->setAutoEnable(true);
         st->setDelayToEnable(2000);
+#else
+        st->setAutoEnable(false);
+#endif
       }
     }
   }

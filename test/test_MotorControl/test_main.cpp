@@ -73,6 +73,12 @@ void test_backend_busy_rule_overlapping_move();
 void test_backend_dir_latched_once_per_move();
 void test_backend_speed_accel_passed_to_adapter();
 
+// Protocol speed/accel globals
+void test_get_set_speed_ok();
+void test_get_set_accel_ok();
+void test_set_speed_busy_reject();
+void test_home_uses_speed_accel_globals();
+
 extern void setUp();
 extern void tearDown();
 
@@ -149,6 +155,12 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_dir_guard_constants_reasonable);
   setUp(); RUN_TEST(test_compute_flip_window_mid_gap);
   setUp(); RUN_TEST(test_compute_flip_window_aligns_from_edge);
+
+  // Protocol globals (GET/SET SPEED, ACCEL)
+  setUp(); RUN_TEST(test_get_set_speed_ok);
+  setUp(); RUN_TEST(test_get_set_accel_ok);
+  setUp(); RUN_TEST(test_set_speed_busy_reject);
+  setUp(); RUN_TEST(test_home_uses_speed_accel_globals);
 
   return UNITY_END();
 }
