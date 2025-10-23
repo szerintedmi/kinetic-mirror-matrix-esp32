@@ -23,7 +23,7 @@ Built firmware for `esp32dev` and executed homing bench checks. All checklist it
 
 ## Testing
 - Native: `pio test -e native` — All MotorControl/Drivers unit tests passed, including new HOME tests.
-- On-device: `pio test -e esp32dev` with optional `-O "build_flags = -Iinclude -DUSE_HARDWARE_BACKEND -DTEST_MOTOR_ID=7"` parameter to select motor.
+- On-device: `pio test -e esp32dev` with optional `-O "build_flags = -Iinclude -DTEST_MOTOR_ID=7"` parameter to select motor.
   - Tests covered WAKE/SLEEP, short MOVE, and HOME to zero using real backend.
 
 ## User Standards & Preferences Compliance

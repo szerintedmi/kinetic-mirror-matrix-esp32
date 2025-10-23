@@ -3,7 +3,7 @@
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/BuildConfig.h"
 #include "StubMotorController.h"
-#if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
+#if !defined(USE_STUB_BACKEND) && !defined(UNIT_TEST)
 #include "MotorControl/HardwareMotorController.h"
 #endif
 #include <sstream>
@@ -41,7 +41,7 @@ static std::vector<std::string> split(const std::string &s, char delim)
 }
 
 MotorCommandProcessor::MotorCommandProcessor()
-#if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
+#if !defined(USE_STUB_BACKEND) && !defined(UNIT_TEST)
     : controller_(new HardwareMotorController())
 #else
     : controller_(new StubMotorController(8))

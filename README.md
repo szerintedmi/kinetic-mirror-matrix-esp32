@@ -130,8 +130,8 @@ Tests
 
 ## Setup & Tuning Knobs
 
-- Build flags and test routing: [platformio.ini](./platformio.ini)
-  - `-DUSE_HARDWARE_BACKEND` selects hardware controller for ESP32 env
+ - Build flags and test routing: [platformio.ini](./platformio.ini)
+  - `-DUSE_STUB_BACKEND` selects the stub backend (hardware is default)
   - Default test filter limits on‑device tests to driver layer
 - Motion/limits constants: [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h)
   - Defaults: `DEFAULT_SPEED_SPS`, `DEFAULT_ACCEL_SPS2`

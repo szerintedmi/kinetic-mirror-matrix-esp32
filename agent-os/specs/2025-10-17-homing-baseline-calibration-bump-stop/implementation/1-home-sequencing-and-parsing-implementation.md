@@ -47,7 +47,7 @@ Rationale: Focused tests cover parsing, concurrency, busy rule, and post-state a
 
 ### Manual Testing Performed
 - Verified native unit tests: `pio test -e native` → all MotorControl and Drivers tests passed.
-- Verified on-device tests on motor 7: `pio test -e esp32dev -O "build_flags = -Iinclude -DUSE_HARDWARE_BACKEND -DTEST_MOTOR_ID=7"`.
+- Verified on-device tests on motor 7: `pio test -e esp32dev -O "build_flags = -Iinclude -DTEST_MOTOR_ID=7"`.
   - WAKE/SLEEP toggled correctly.
   - Short MOVE to +100 completed with expected final position.
   - HOME completed with final logical position 0 and asleep.

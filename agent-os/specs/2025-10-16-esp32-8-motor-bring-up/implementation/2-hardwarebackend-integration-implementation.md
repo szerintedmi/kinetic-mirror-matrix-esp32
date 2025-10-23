@@ -13,7 +13,7 @@ Integrate a hardware-backed backend for motion using FastAccelStepper for STEP g
 - Added `HardwareMotorController` implementing `MotorController`, delegating DIR/SLEEP timing to FastAccelStepper on Arduino via external pins; maintains `MotorState`, enforces BUSY, and calls moveTo().
 - Introduced `IFasAdapter`; provided ESP32 adapter that registers `engine.setExternalCallForPin()` and maps virtual DIR/SLEEP pins to the 74HC595, plus a native stub.
 - Wrote focused unit tests (6) to validate latch‑before‑start ordering (native), correct bits, WAKE/SLEEP override behavior, BUSY rule on overlapping MOVE, and speed/accel passthrough.
-- Compile‑time selection via `-DUSE_HARDWARE_BACKEND` (esp32dev); native uses stub backend. OE gating added to ensure safe boot (all motors sleep).
+- Compile‑time selection defaults to hardware; native uses stub via `-DUSE_STUB_BACKEND`. OE gating added to ensure safe boot (all motors sleep).
 
 ## Files Changed/Created
 
@@ -26,8 +26,8 @@ Integrate a hardware-backed backend for motion using FastAccelStepper for STEP g
 - `test/test_MotorControl/test_HardwareBackend.cpp` - 6 unit tests covering sequencing, overrides, and BUSY rule.
 
 ### Modified Files
-- `lib/MotorControl/src/MotorCommandProcessor.cpp` - Compile-time selection between `StubMotorController` and `HardwareMotorController` via `USE_HARDWARE_BACKEND`.
-- `platformio.ini` - Added `-DUSE_HARDWARE_BACKEND` to `env:esp32dev` build flags.
+- `lib/MotorControl/src/MotorCommandProcessor.cpp` - Compile-time selection defaults to hardware; define `USE_STUB_BACKEND` to pick the stub controller.
+- `platformio.ini` - Removed hardware flag from ESP32 envs; added `-DUSE_STUB_BACKEND` to the native env.
 - `agent-os/specs/2025-10-16-esp32-8-motor-bring-up/tasks.md` - Marked 2.1–2.5 as complete.
 
 ## Key Implementation Details
@@ -97,7 +97,7 @@ Integrate a hardware-backed backend for motion using FastAccelStepper for STEP g
 
 ## Dependencies
 - Uses existing `gin66/FastAccelStepper@^0.33.7` for ESP32; no new external dependencies added.
-- Configuration: `platformio.ini` updated to define `USE_HARDWARE_BACKEND` for `esp32dev`.
+- Configuration: `platformio.ini` updated to default ESP32 envs to hardware and set `USE_STUB_BACKEND` for the native env.
 
 ---
 
