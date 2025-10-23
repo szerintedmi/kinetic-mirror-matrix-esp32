@@ -58,6 +58,9 @@ void test_stub_home_uses_estimator_duration();
 void test_shared_timing_period_basic();
 void test_shared_timing_align_to_next_edge();
 void test_shared_timing_guard_fits();
+// SharedStepRamp
+void test_stop_distance_basic();
+void test_stop_distance_edges();
 
 // SharedStepGuards
 void test_dir_guard_constants_reasonable();
@@ -157,6 +160,9 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_shared_timing_period_basic);
   setUp(); RUN_TEST(test_shared_timing_align_to_next_edge);
   setUp(); RUN_TEST(test_shared_timing_guard_fits);
+  // Shared STEP ramp helpers
+  setUp(); RUN_TEST(test_stop_distance_basic);
+  setUp(); RUN_TEST(test_stop_distance_edges);
 
   // Shared STEP DIR/SLEEP guards
   setUp(); RUN_TEST(test_dir_guard_constants_reasonable);

@@ -29,5 +29,13 @@ inline bool guard_fits_between_edges(uint32_t period_us, uint32_t pre_us, uint32
   return (period_us > 0) && (total + 2 /*margin*/ < period_us);
 }
 
-} // namespace SharedStepTiming
+// Compute stopping distance in steps to decelerate from current speed to zero
+// at acceleration 'accel_sps2'. Returns ceil(v^2 / (2a)).
+inline uint32_t stop_distance_steps(uint32_t speed_sps, uint32_t accel_sps2) {
+  if (accel_sps2 == 0) return 0;
+  const uint64_t v2 = (uint64_t)speed_sps * (uint64_t)speed_sps;
+  const uint64_t den = 2ull * (uint64_t)accel_sps2;
+  return (uint32_t)((v2 + den - 1) / den);
+}
 
+} // namespace SharedStepTiming

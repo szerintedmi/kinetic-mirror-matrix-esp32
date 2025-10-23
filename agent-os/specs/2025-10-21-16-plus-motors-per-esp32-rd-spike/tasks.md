@@ -72,11 +72,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 3 (constant speed integrated)
 
-- [ ] 4.0 Implement global acceleration support
-  - [ ] 4.1 Add `GET ACCEL` / `SET ACCEL=<a>`; reject `SET ACCEL` while moving
-  - [ ] 4.2 Add trapezoidal ramp scheduling in the shared STEP generator (period updates)
-  - [ ] 4.3 Update estimates to use MotionKinematics with global `SPEED`/`ACCEL`
-  - [ ] 4.4 Write 2-6 unit tests for ramp period scheduling and corner cases (short moves, accel-limited)
+- [x] 4.0 Implement global acceleration support
+  - [x] 4.1 Add `GET ACCEL` / `SET ACCEL=<a>`; reject `SET ACCEL` while moving
+  - [x] 4.2 Add trapezoidal ramp scheduling in the shared STEP generator (period updates)
+  - [x] 4.3 Update estimates to use MotionKinematics with global `SPEED`/`ACCEL`
+  - [x] 4.4 Write 2-6 unit tests for ramp period scheduling and corner cases (short moves, accel-limited)
   - [ ] 4.5 CLI smoke (manual):
         - `SET SPEED=4000`, `SET ACCEL=16000`
         - `MOVE:0,800` → `CTRL:OK est_ms=...` then `GET LAST_OP_TIMING:0` to compare
