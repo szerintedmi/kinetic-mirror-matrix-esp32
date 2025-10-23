@@ -8,6 +8,7 @@ Outcomes
 - New shared‑STEP build: `env:esp32SharedStep` uses an RMT/ISR generator with a single shared STEP pin (no FAS dependency). Baseline `env:esp32Fas` remains.
 - Shared‑STEP adapter owns DIR/SLEEP on Arduino; guard windows enforce SLEEP low → DIR flip → SLEEP high within safe gaps.
 - Estimates aligned: shared‑STEP builds use constant‑speed estimates; FAS builds keep MotionKinematics. On‑device tests compare actual vs firmware estimate with symmetric tolerance.
+- Serial multi‑command: `;`‑separated commands supported for simple manual concurrency. The line is rejected if targeted motor sets overlap (e.g., `H:7;M:7,1000`, `M:ALL,100;M:5,1200`).
 - Temporary debug and per‑adapter diagnostics removed; on‑device tests consolidated under a single runner.
 
 Builds and environments

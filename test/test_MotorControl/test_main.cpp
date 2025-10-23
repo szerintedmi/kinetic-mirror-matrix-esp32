@@ -79,6 +79,13 @@ void test_get_set_accel_ok();
 void test_set_speed_busy_reject();
 void test_home_uses_speed_accel_globals();
 
+// Multi-command
+void test_multi_cmd_accept_disjoint();
+void test_multi_cmd_reject_overlap_simple();
+void test_multi_cmd_reject_overlap_all();
+void test_multi_cmd_sequence_responses();
+void test_multi_cmd_whitespace_and_case();
+
 extern void setUp();
 extern void tearDown();
 
@@ -161,6 +168,13 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_get_set_accel_ok);
   setUp(); RUN_TEST(test_set_speed_busy_reject);
   setUp(); RUN_TEST(test_home_uses_speed_accel_globals);
+
+  // Multi-command parsing
+  setUp(); RUN_TEST(test_multi_cmd_accept_disjoint);
+  setUp(); RUN_TEST(test_multi_cmd_reject_overlap_simple);
+  setUp(); RUN_TEST(test_multi_cmd_reject_overlap_all);
+  setUp(); RUN_TEST(test_multi_cmd_sequence_responses);
+  setUp(); RUN_TEST(test_multi_cmd_whitespace_and_case);
 
   return UNITY_END();
 }

@@ -58,6 +58,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
         - While moving, `SET SPEED=4500` → error (reject while moving)
         - `MOVE:0,200,4000` (legacy param) → `CTRL:ERR E03 BAD_PARAM`
   - [x] 3.8 Estimates aligned for shared‑STEP: firmware uses constant‑speed estimator; on‑device tests assert symmetric tolerance vs. firmware estimate
+  - [x] 3.9 Serial multi-command input: support `;`-separated commands for manual concurrency; reject the whole line if targeted motor sets overlap (e.g., `H:7;M:7,1000` or `M:ALL,100;M:5,1200`)
 
 **Acceptance Criteria:**
 - Parser accepts simplified grammar; HELP shows no per-move/home speed/accel

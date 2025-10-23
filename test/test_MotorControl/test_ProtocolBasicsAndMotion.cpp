@@ -190,6 +190,41 @@ void test_move_sets_speed_accel_in_status() {
   TEST_ASSERT_TRUE(ok);
 }
 
+// Multi-command parsing (semicolon-separated)
+void test_multi_cmd_accept_disjoint() {
+  auto r = proto.processLine("WAKE:0;WAKE:1", 0);
+  auto lines = split_lines(r);
+  TEST_ASSERT_EQUAL_INT(2, (int)lines.size());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[0].c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[1].c_str());
+}
+
+void test_multi_cmd_reject_overlap_simple() {
+  auto r = proto.processLine("WAKE:0;SLEEP:0", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM MULTI_CMD_CONFLICT", r.c_str());
+}
+
+void test_multi_cmd_reject_overlap_all() {
+  auto r = proto.processLine("M:ALL,100;M:5,1200", 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM MULTI_CMD_CONFLICT", r.c_str());
+}
+
+void test_multi_cmd_sequence_responses() {
+  auto r = proto.processLine("WAKE:0;MOVE:1,10", 0);
+  auto lines = split_lines(r);
+  TEST_ASSERT_TRUE(lines.size() >= 2);
+  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[0].c_str());
+  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:OK", 0) == 0);
+}
+
+void test_multi_cmd_whitespace_and_case() {
+  auto r = proto.processLine("  m:0,10 ;  h:1  ", 0);
+  auto lines = split_lines(r);
+  TEST_ASSERT_TRUE(lines.size() >= 2);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:OK", 0) == 0);
+}
+
 // HOME sequencing (from previous dedicated file)
 static bool line_for_id_has(const std::vector<std::string>& lines, int id, const std::string& needle) {
   for (const auto &L : lines) {

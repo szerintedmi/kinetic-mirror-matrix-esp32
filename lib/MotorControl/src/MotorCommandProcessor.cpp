@@ -108,7 +108,8 @@ std::string MotorCommandProcessor::handleHELP()
   os << "SET ACCEL=<steps_per_second^2>\n";
   os << "WAKE:<id|ALL>\n";
   os << "SLEEP:<id|ALL>\n";
-  os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS";
+  os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS\n";
+  os << "Multicommand: <cmd1>;<cmd2> note: no cmd queuing; only distinct motors allowed";
   return os.str();
 }
 
@@ -517,6 +518,69 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
   std::string s = trim(line);
   if (s.empty())
     return "";
+  // Multi-command support: allow ';'-separated commands in one line for simple manual concurrency.
+  // Reject the whole line if multiple commands target overlapping motor sets.
+  if (s.find(';') != std::string::npos) {
+    auto parts = split(s, ';');
+    std::vector<std::string> cmds;
+    cmds.reserve(parts.size());
+    for (auto &p : parts) {
+      auto t = trim(p);
+      if (!t.empty()) cmds.push_back(t);
+    }
+    // Pre-scan for overlapping motor targets: consider MOVE/M, HOME/H, WAKE, SLEEP
+    auto mask_for = [&](const std::string &cmd) -> uint32_t {
+      // Parse verb/args like below
+      size_t sp = cmd.find(' ');
+      size_t cp = cmd.find(':');
+      std::string verb = cmd;
+      std::string args;
+      if (sp != std::string::npos && (cp == std::string::npos || sp < cp)) {
+        verb = cmd.substr(0, sp);
+        args = cmd.substr(sp + 1);
+      } else if (cp != std::string::npos) {
+        verb = cmd.substr(0, cp);
+        args = cmd.substr(cp + 1);
+      }
+      std::transform(verb.begin(), verb.end(), verb.begin(), ::toupper);
+      uint32_t mask = 0;
+      auto args_trim = trim(args);
+      if (verb == "MOVE" || verb == "M") {
+        auto ap = split(args_trim, ',');
+        if (!ap.empty()) {
+          (void)parseIdMask(trim(ap[0]), mask); // ignore parse failure; mask stays 0
+        }
+      } else if (verb == "HOME" || verb == "H") {
+        auto ap = split(args_trim, ',');
+        if (!ap.empty()) {
+          (void)parseIdMask(trim(ap[0]), mask);
+        }
+      } else if (verb == "WAKE") {
+        (void)parseIdMask(args_trim, mask);
+      } else if (verb == "SLEEP") {
+        (void)parseIdMask(args_trim, mask);
+      }
+      return mask;
+    };
+    uint32_t seen = 0;
+    for (const auto &c : cmds) {
+      uint32_t m = mask_for(c);
+      if (m != 0 && (m & seen)) {
+        return "CTRL:ERR E03 BAD_PARAM MULTI_CMD_CONFLICT";
+      }
+      seen |= m;
+    }
+    // Execute sequentially and join responses
+    std::string combined;
+    for (size_t i = 0; i < cmds.size(); ++i) {
+      auto r = processLine(cmds[i], now_ms);
+      if (!r.empty()) {
+        if (!combined.empty()) combined.push_back('\n');
+        combined += r;
+      }
+    }
+    return combined;
+  }
   // Split verb/args: prefer space separator if it appears before ':'
   size_t sp = s.find(' ');
   size_t cp = s.find(':');
