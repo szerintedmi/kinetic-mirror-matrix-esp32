@@ -68,3 +68,7 @@ No visual assets provided.
 - Global `SPEED`/`ACCEL` applied consistently; attempts to change while moving are rejected with error.
 - Unit tests pass for guard timing and gating logic; build remains stable under PlatformIO.
 
+## Behavior Notes (Shared STEP)
+- Global ramp coupling is expected: a single STEP time-base drives all motors. When a motor starts or ends a move (or HOME leg), the global acceleration/deceleration profile adapts to that motor’s constraints and remaining distance. Other motors still stepping will temporarily speed up or slow down accordingly.
+- Concurrency trade-off: frequent short moves while a long move is active can increase the long move’s total duration. This is by design in the shared-STEP spike and considered acceptable for this phase.
+- Direction unchanged on join: when a motor starts a move and its direction already matches the latched DIR, the adapter does not drop SLEEP or schedule a guard window; it enables immediately without a pause.

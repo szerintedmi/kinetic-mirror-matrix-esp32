@@ -24,6 +24,11 @@ Key changes
 Notes on guard alignment
 - On each speed change, the adapter updates `period_us_` and resets `phase_anchor_us_` to `micros()` so future guard windows align to the current period. Start‑of‑move immediate flips avoid edge hazards when the generator is idle; guarded windows are used only when the generator is already running.
 
+Expected behavior with multiple concurrent moves
+- Because a single STEP time‑base is shared, the global ramp responds to whichever motor needs to accelerate or decelerate next (based on minimum remaining distance and `ACCEL`). This can momentarily slow or speed other motors that are still moving.
+- This coupling is an intentional trade‑off in the shared‑STEP spike and is acceptable for this phase. We do not implement “join‑at‑safe‑speed” scheduling at this time to avoid added complexity; we may revisit if it becomes a problem.
+- Optimization: when a joining motor’s desired direction matches the current latched DIR, we skip SLEEP‑low and the guard window to avoid a tiny pause; the motor enables immediately.
+
 Build/Run
 - Host tests: `pio test -e native`
 - ESP32 (shared‑STEP): `pio run -e esp32SharedStep`
