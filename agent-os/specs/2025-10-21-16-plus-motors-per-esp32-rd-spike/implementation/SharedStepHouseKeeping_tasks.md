@@ -4,6 +4,14 @@ Scope: Integration + Protocol Simplification (Constant Speed) and ESP32 shared-S
 
 This checklist captures current findings, decisions, and proposed refactors to keep the spike coherent without overengineering. Preference is for fewer, larger steps that land complete features and avoid double‑refactors.
 
+### Status Update (2025‑10‑23)
+- Unified interface in place: HardwareMotorController no longer manipulates DIR/SLEEP on Arduino; `SharedStepAdapterEsp32` is the sole owner (native path unchanged for tests).
+- Guard helpers (`SharedStepTiming`, `SharedStepGuards`) integrated; adapter schedules SLEEP low → DIR flip → SLEEP high mid‑gap. Added fast‑forward completion if a window is missed.
+- Generator migrated to RMT with ISR‑driven TX requeue (no loop mode). Edge hook provides a per‑period anchor. Shared STEP pin selectable via `-DSHARED_STEP_GPIO`.
+- Auto‑sleep implemented on move completion unless WAKE override is active.
+- Builds: `esp32Fas` and `esp32SharedStep` compile and link; native tests pass.
+- On‑device smoke: repeated MOVE/HOME cycles run without freeze; heartbeat and adapter debug paths removed.
+
 ### 0) Cross‑check: FAS build guards
 - Observation: `src/drivers/Esp32/FasAdapterEsp32.cpp` starts with `#if defined(ARDUINO) && !defined(USE_SHARED_STEP)` before including `BuildConfig.h`. This works as intended because command‑line `-DUSE_SHARED_STEP=1` controls the guard. In FAS builds (no `-DUSE_SHARED_STEP`), the file compiles; in Shared builds it’s excluded. Inner blocks use `#if !(USE_SHARED_STEP)` which resolve correctly after including `BuildConfig.h` (macro defaults to 0 if not set).
 - Status: OK functionally.
@@ -25,17 +33,22 @@ This checklist captures current findings, decisions, and proposed refactors to k
   - Schedule `SLEEP=LOW` → `DIR flip` → `SLEEP=HIGH` inside that window, with a single `setDirSleep()` latch per change.
 - Deliverable: RMT‑based `SharedStepRmtGenerator` with an ISR calling a hook after each rising edge (or item boundary), and adapter logic that drives guarded flips.
 
+Note: Completed. Classic RMT loop mode was replaced by ISR‑driven TX requeue to avoid loop‑mode wedge and provide precise edge hooks.
+
 ### 3) LEDC generator caveats and transition
 - Current: LEDC `writeTone()` + 50% duty in `SharedStepRmt.cpp` functions for a spike but lacks deterministic edge callbacks and fine duty control.
 - Action: Treat LEDC as temporary. Prioritize RMT migration (Task 2) so we don’t refactor twice.
+
+Status: RMT ISR‑driven requeue in place; serial freeze resolved.
 
 ### 4) ‘Awake’ vs hardware SLEEP source of truth
 - Issue: `MotorState.awake` (controller view) and hardware SLEEP (adapter latch) can diverge when both layers manipulate SLEEP.
 - Plan: After Task 1, the adapter becomes the single source of truth for hardware SLEEP. `HardwareMotorController` should reflect adapter state into `MotorState.awake` (or derive from adapter operations) and avoid direct SLEEP toggling on Arduino.
 
-### 5) Position integration semantics
-- Current: Adapter updates position using time integration (`micros()` * sps), gated by `awake`. This approximates pulse counting.
-- Note: Acceptable for the spike. With RMT edge hooks, we can switch to per‑pulse accounting later for exact positions. Document this as a known limitation until RMT lands.
+### 5) Position + estimates semantics
+- Positions: Adapter updates position using time integration (`micros()` * sps), gated by `awake`.
+- Estimates: For shared‑STEP builds, firmware uses constant‑speed estimates (ceil steps/speed in ms) for MOVE and HOME. FAS builds keep trapezoid/triangular estimates.
+  - On‑device tests use symmetric tolerance vs. firmware’s estimate.
 
 ### 6) PlatformIO environment names and filters
 - Rename envs for clarity:
@@ -65,3 +78,25 @@ This checklist captures current findings, decisions, and proposed refactors to k
 Owner: api‑engineer
 Status: Draft — to be used as the reference list for the next integration iteration.
 
+### Next Steps (focused, few big moves)
+1) Bench verification and limits
+   - Run: `SET SPEED=800`, `MOVE:0,1200`, `HOME:0`, repeating; verify stable response across >10 cycles.
+   - Confirm auto‑sleep behavior and that `slp` shows only active motors.
+   - Verify `SHARED_STEP_GPIO` matches wiring; adjust in `platformio.ini` if needed.
+
+2) Prepare for global ACCEL (Task Group 6)
+   - With ISR edges in place, add period updates for trapezoid and keep guard scheduling aligned.
+   - Add unit tests for period scheduling on host (simulated sequence generation), and minimal on‑device smoke.
+
+### Debugging Aids: cleanup
+The temporary debugging aids have been removed:
+- Heartbeat in `SerialConsole.cpp` deleted
+- IFasAdapter/HardwareMotorController/SharedStepAdapterEsp32 debug APIs removed
+- GET `ADAPTER_*` handlers removed from `MotorCommandProcessor.cpp`
+- Adapter ring buffer and event logging removed
+
+Checklist:
+- Build succeeds for `esp32Fas`, `esp32SharedStep`, and `native` — OK
+- Heartbeat no longer prints — OK
+- `GET ADAPTER_*` returns `BAD_PARAM` — OK
+- No residual debug symbols — OK

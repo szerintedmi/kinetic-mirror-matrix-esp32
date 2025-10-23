@@ -50,6 +50,10 @@ private:
   void flushLatch_() const;
   void updateProgress_(uint8_t id) const;
   void runFlipScheduler_(uint8_t id, uint32_t now_us) const;
+  
+  // Edge hook plumbing (ISR context)
+  static void IRAM_ATTR onRisingEdgeHook_();
+  static SharedStepAdapterEsp32* self_;
 
   mutable Slot slots_[8];
   mutable FlipSchedule flips_[8];
@@ -61,6 +65,8 @@ private:
   mutable uint64_t phase_anchor_us_ = 0; // approximate reference for edge alignment
   mutable uint8_t dir_bits_ = 0;
   mutable uint8_t sleep_bits_ = 0;
+
+  
 };
 
 #endif // ARDUINO

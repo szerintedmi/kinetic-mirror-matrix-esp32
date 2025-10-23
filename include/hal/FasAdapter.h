@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <cstddef>
 #include "Hal/Shift595.h"
 
 // Abstract adapter over FastAccelStepper (or equivalent) to enable

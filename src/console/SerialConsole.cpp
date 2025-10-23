@@ -104,6 +104,8 @@ void serial_console_tick()
   {
     commandProcessor->tick(millis());
   }
+
+  // Debug heartbeat removed after stabilization
 }
 
 #endif // ARDUINO

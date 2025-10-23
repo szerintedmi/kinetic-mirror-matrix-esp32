@@ -4,10 +4,21 @@
 using namespace SharedStepTiming;
 using namespace SharedStepGuards;
 
+// Static storage for ISR hook
+SharedStepAdapterEsp32* SharedStepAdapterEsp32::self_ = nullptr;
+void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_() {
+  if (self_) {
+    self_->phase_anchor_us_ = micros();
+  }
+}
+
 SharedStepAdapterEsp32::SharedStepAdapterEsp32() {}
 
 void SharedStepAdapterEsp32::begin() {
   gen_.begin();
+  // Attach rising-edge hook to align guard scheduling to generator edges
+  self_ = this;
+  gen_.setEdgeHook(&SharedStepAdapterEsp32::onRisingEdgeHook_);
   gen_running_ = false;
   current_speed_sps_ = 0;
   period_us_ = 0;
@@ -24,12 +35,14 @@ void SharedStepAdapterEsp32::maybeStartGen_(int speed_sps) {
     current_speed_sps_ = speed_sps;
     period_us_ = step_period_us((uint32_t)(speed_sps > 0 ? speed_sps : 1));
     phase_anchor_us_ = micros();
+    
   } else {
     if (speed_sps != current_speed_sps_) {
       gen_.setSpeed((uint32_t)speed_sps);
       current_speed_sps_ = speed_sps;
       period_us_ = step_period_us((uint32_t)(speed_sps > 0 ? speed_sps : 1));
       phase_anchor_us_ = micros();
+      
     }
   }
 }
@@ -79,6 +92,7 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
   // Immediately force SLEEP low for this motor to avoid any edge hazard
   sleep_bits_ &= (uint8_t)~(1u << id);
   flushLatch_();
+  
   // Schedule guarded DIR flip + SLEEP high in the next safe gap
   FlipSchedule &fs = flips_[id];
   fs.active = false; fs.phase = 0; fs.new_dir_sign = desired_dir;
@@ -93,6 +107,7 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
       fs.w.t_sleep_high= w.t_sleep_high+ phase_anchor_us_;
       fs.phase = 0;
       fs.active = true;
+      
     }
   }
   if (!fs.active) {
@@ -105,6 +120,7 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
     sleep_bits_ |= (1u << id);
     flushLatch_();
     fs.active = false;
+    
   }
   // Start move bookkeeping; s.awake becomes true after SLEEP high phase
   s.dir_sign = desired_dir;
@@ -144,6 +160,7 @@ void SharedStepAdapterEsp32::updateProgress_(uint8_t id) const {
       sleep_bits_ &= (uint8_t)~(1u << id);
       flushLatch_();
       s.awake = false;
+      
     }
     maybeStopGen_();
   }
@@ -157,12 +174,23 @@ void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t id, uint32_t now_us) cons
     fs.active = false;
     return;
   }
+  // Fast-forward: if we've already passed the end of the window, complete in one shot
+  if (now_us >= fs.w.t_sleep_high) {
+    if (fs.new_dir_sign > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
+    sleep_bits_ |= (1u << id);
+    flushLatch_();
+    slots_[id].awake = true;
+    fs.active = false;
+    
+    return;
+  }
   // Phase 0: drop SLEEP low in window (idempotent; we already dropped before scheduling)
   if (fs.phase == 0) {
     if (now_us >= fs.w.t_sleep_low) {
       sleep_bits_ &= (uint8_t)~(1u << id);
       flushLatch_();
       fs.phase = 1;
+      
     } else {
       return;
     }
@@ -173,6 +201,7 @@ void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t id, uint32_t now_us) cons
       if (fs.new_dir_sign > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
       flushLatch_();
       fs.phase = 2;
+      
     } else {
       return;
     }
@@ -185,7 +214,8 @@ void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t id, uint32_t now_us) cons
       // Motor is now allowed to step again
       slots_[id].awake = true;
       fs.active = false;
-    }
+      
+}
   }
 }
 
@@ -206,5 +236,7 @@ void SharedStepAdapterEsp32::setCurrentPosition(uint8_t id, long pos) {
   Slot &s = slots_[id];
   s.pos = pos;
 }
+
+// Debug helpers removed after stabilization
 
 #endif // ARDUINO

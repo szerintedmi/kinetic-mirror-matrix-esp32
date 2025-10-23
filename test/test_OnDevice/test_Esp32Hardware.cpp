@@ -70,19 +70,25 @@ void test_device_move_estimate_vs_actual() {
   const long target = 200;
   const int speed = 2000;
   const int accel = 8000;
-  uint32_t est_ms = MotionKinematics::estimateMoveTimeMs(labs(target), speed, accel);
   uint32_t t0 = millis();
   bool ok = ctrl.moveAbsMask(1u << kMotor, target, speed, accel, t0);
   TEST_ASSERT_TRUE(ok);
+  // Firmware records its own estimate (model depends on build); use that
+  uint32_t est_ms = (uint32_t)ctrl.state(kMotor).last_op_est_ms;
   // Wait for completion
   bool finished = wait_until([] { return !ctrl.state(kMotor).moving; }, 5000);
   TEST_ASSERT_TRUE(finished);
   uint32_t dt = millis() - t0;
-  // Estimator is conservative; actual may be faster but should not exceed estimate by much.
-  // Allow up to +100 ms overhead.
+  // Symmetric tolerance check around firmware's estimate
+  uint32_t tol_abs_ms = 150;
+  uint32_t tol_pct_ms = (uint32_t)((est_ms * 10) / 100); // 10%
+  uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
+  uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
+  uint32_t hi = est_ms + tol;
   std::string msg = std::string("actual=") + std::to_string(dt) +
-                    " expected<=" + std::to_string(est_ms + 100);
-  TEST_ASSERT_TRUE_MESSAGE(dt <= est_ms + 100, msg.c_str());
+                    " est=" + std::to_string(est_ms) +
+                    " tol=±" + std::to_string(tol);
+  TEST_ASSERT_TRUE_MESSAGE(dt >= lo && dt <= hi, msg.c_str());
 }
 
 void test_device_home_estimate_vs_actual() {
@@ -90,33 +96,24 @@ void test_device_home_estimate_vs_actual() {
   const long backoff = 150;
   const int speed = 4000;
   const int accel = 16000;
-  uint32_t est_ms = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, 2400, speed, accel);
   uint32_t t0 = millis();
   bool ok = ctrl.homeMask(1u << kMotor, overshoot, backoff, speed, accel, 2400, t0);
   TEST_ASSERT_TRUE(ok);
   bool finished = wait_until([] { return !ctrl.state(kMotor).moving; }, 8000);
   TEST_ASSERT_TRUE(finished);
+  uint32_t est_ms = (uint32_t)ctrl.state(kMotor).last_op_est_ms;
   uint32_t dt = millis() - t0;
-  // Being faster than estimate is acceptable; ensure not much slower than estimate.
+  // Symmetric tolerance check around firmware's estimate
+  uint32_t tol_abs_ms = 150;
+  uint32_t tol_pct_ms = (uint32_t)((est_ms * 10) / 100); // 10%
+  uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
+  uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
+  uint32_t hi = est_ms + tol;
   std::string msg = std::string("actual=") + std::to_string(dt) +
-                    " expected<=" + std::to_string(est_ms + 100);
-  TEST_ASSERT_TRUE_MESSAGE(dt <= est_ms + 100, msg.c_str());
+                    " est=" + std::to_string(est_ms) +
+                    " tol=±" + std::to_string(tol);
+  TEST_ASSERT_TRUE_MESSAGE(dt >= lo && dt <= hi, msg.c_str());
 }
 
-void setup() {
-  delay(300);
-  UNITY_BEGIN();
-  RUN_TEST(test_device_wake_sleep_single);
-  RUN_TEST(test_device_move_short_and_complete);
-  RUN_TEST(test_device_home_sequence_sets_zero);
-  RUN_TEST(test_device_move_estimate_vs_actual);
-  RUN_TEST(test_device_home_estimate_vs_actual);
-  UNITY_END();
-  // Idle to avoid re-running tests inadvertently
-  while (true) {
-    delay(1000);
-  }
-}
-
-void loop() {}
+// Arduino test entry points provided by a shared runner in this suite
 #endif

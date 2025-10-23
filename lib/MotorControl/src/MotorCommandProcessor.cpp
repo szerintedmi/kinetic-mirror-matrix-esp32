@@ -1,6 +1,7 @@
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/MotionKinematics.h"
+#include "MotorControl/BuildConfig.h"
 #include "StubMotorController.h"
 #if defined(USE_HARDWARE_BACKEND) && !defined(UNIT_TEST)
 #include "MotorControl/HardwareMotorController.h"
@@ -174,6 +175,7 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
     if (!s.last_op_ongoing) os << " actual_ms=" << s.last_op_last_ms;
     return os.str();
   }
+  // ADAPTER_* debug commands removed during cleanup; fall through to BAD_PARAM
   return "CTRL:ERR E03 BAD_PARAM";
 }
 
@@ -319,7 +321,13 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
     if ((tmp & (1u << id)) == 0) continue;
     const MotorState &s = controller_->state(id);
     long dist = std::labs(target - s.position);
-    uint32_t req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+    uint32_t req_ms = 0;
+#if (USE_SHARED_STEP)
+    // Shared-STEP spike runs at constant speed (accel ignored)
+    req_ms = (uint32_t)((dist * 1000 + speed - 1) / (speed > 0 ? speed : 1));
+#else
+    req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+#endif
     if (req_ms > max_req_ms) max_req_ms = req_ms;
     int req_s = (int)((req_ms + 999) / 1000); // ceil to seconds
     // E10: required exceeds max budget
@@ -420,7 +428,20 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
   if (full_range <= 0) {
     full_range = (MotorControlConstants::MAX_POS_STEPS - MotorControlConstants::MIN_POS_STEPS);
   }
-  uint32_t req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+  uint32_t req_ms_total = 0;
+#if (USE_SHARED_STEP)
+  // Constant-speed approximation for shared-STEP spike
+  int64_t leg1 = (int64_t)full_range + (int64_t)std::llabs(overshoot);
+  int64_t leg2 = (int64_t)std::llabs(backoff);
+  int64_t leg3 = (int64_t)(full_range / 2);
+  auto ceil_ms = [&](int64_t steps) -> uint32_t {
+    int64_t v = (speed > 0 ? speed : 1);
+    return (uint32_t)((steps * 1000 + v - 1) / v);
+  };
+  req_ms_total = ceil_ms(leg1) + ceil_ms(leg2) + ceil_ms(leg3);
+#else
+  req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+#endif
   int req_s = (int)((req_ms_total + 999) / 1000);
   if (req_s > (int)MotorControlConstants::MAX_RUNNING_TIME_S)
   {

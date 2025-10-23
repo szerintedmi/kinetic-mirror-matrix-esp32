@@ -1,6 +1,7 @@
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/MotionKinematics.h"
+#include "MotorControl/BuildConfig.h"
 #include <string.h>
 
 #if defined(ARDUINO)
@@ -179,7 +180,14 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
 #endif
       // Record last op timing
       long dist = (target > cur) ? (target - cur) : (cur - target);
-      uint32_t est = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+      uint32_t est = 0;
+#if defined(ARDUINO) && (USE_SHARED_STEP)
+      // Constant-speed time for shared-STEP spike
+      int v = (speed > 0 ? speed : 1);
+      est = (uint32_t)(((int64_t)dist * 1000 + v - 1) / v);
+#else
+      est = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+#endif
       motors_[i].last_op_type = 1;
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = est;
@@ -229,7 +237,20 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
       sleep_bits_ |= (1u << i);
 #endif
       // Record last op timing (entire HOME sequence estimate)
-      uint32_t est = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+      uint32_t est = 0;
+#if defined(ARDUINO) && (USE_SHARED_STEP)
+      // Constant-speed estimate: (fr+overshoot) + backoff + fr/2
+      int v = (speed > 0 ? speed : 1);
+      int64_t leg1 = (int64_t)full_range + (overshoot < 0 ? -overshoot : overshoot);
+      int64_t leg2 = (backoff < 0 ? -backoff : backoff);
+      int64_t leg3 = (int64_t)(full_range / 2);
+      auto ceil_ms = [&](int64_t steps) -> uint32_t {
+        return (uint32_t)((steps * 1000 + v - 1) / v);
+      };
+      est = ceil_ms(leg1) + ceil_ms(leg2) + ceil_ms(leg3);
+#else
+      est = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+#endif
       motors_[i].last_op_type = 2;
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = est;
@@ -355,3 +376,5 @@ void HardwareMotorController::tick(uint32_t now_ms) {
   }
   // Native: start/stop latches handled above; Arduino: adapter handles gating
 }
+
+// Debug adapter hooks removed (cleanup after RMT ISR stabilization)

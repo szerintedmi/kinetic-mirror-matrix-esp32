@@ -18,6 +18,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
   - [x] 1.3 Expose start/stop and edge-aligned callback hooks
   - [x] 1.4 Add compile flag to select SharedSTEP vs FastAccelStepper paths
   - [x] 1.5 Ensure tests in 1.1 pass (native/host if possible)
+  - [x] 1.6 New shared-STEP PlatformIO env: `esp32SharedStep` uses RMT with ISR-driven requeue (no FAS dependency)
 
 **Acceptance Criteria:**
 - Unit tests for timing helpers pass
@@ -47,20 +48,22 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
   - [x] 3.1 Remove per-move/home `<speed>,<accel>` from parser and HELP output
   - [x] 3.2 Add `GET SPEED` / `SET SPEED=<v>` (global); reject `SET SPEED` while any motor is moving
   - [x] 3.3 Wire `MOVE`/`HOME` to shared STEP generator using global `SPEED`; ignore acceleration for now
-  - [x] 3.4 Maintain positions by counting pulses only while SLEEP is enabled per motor; start generator on first active motor, stop on last finish
+  - [x] 3.4 Maintain positions by time integration while awake (SLEEP=HIGH); start generator on first active motor, stop on last finish
   - [x] 3.5 Enforce overlap rule: concurrent moves are allowed only at the single global `SPEED`
   - [x] 3.6 Write 2-6 parser tests for simplified grammar and erroring on legacy params
-  - [ ] 3.7 CLI smoke (manual): via `python -m serial_cli`
+  - [x] 3.7 CLI smoke (manual): via `python -m serial_cli`
         - `GET SPEED` → defaults
         - `SET SPEED=4000` → `CTRL:OK`
         - `MOVE:0,200` then `STATUS` until `moving=0`
         - While moving, `SET SPEED=4500` → error (reject while moving)
         - `MOVE:0,200,4000` (legacy param) → `CTRL:ERR E03 BAD_PARAM`
+  - [x] 3.8 Estimates aligned for shared‑STEP: firmware uses constant‑speed estimator; on‑device tests assert symmetric tolerance vs. firmware estimate
 
 **Acceptance Criteria:**
 - Parser accepts simplified grammar; HELP shows no per-move/home speed/accel
 - `SPEED` global applies; rejected while moving; CLI smoke passes
 - Controller path updates position consistently; thermal checks preserved
+- Firmware and on‑device tests agree on estimates within tolerance
 
 ### Protocol & Host Tools
 

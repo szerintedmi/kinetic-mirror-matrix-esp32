@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include <stddef.h>
+#include <cstddef>
 
 struct MotorState {
   uint8_t id;
@@ -37,4 +37,5 @@ public:
 
   // Global thermal runtime limiting flag control
   virtual void setThermalLimitsEnabled(bool enabled) = 0;
+
 };

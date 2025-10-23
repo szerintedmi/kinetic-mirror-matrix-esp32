@@ -19,7 +19,10 @@ public:
   void setEdgeHook(SharedStepEdgeHook hook);
 
 private:
-  uint32_t speed_sps_;
+public:
+  void onTxEndIsr();
+private:
+  volatile uint32_t speed_sps_;
   SharedStepEdgeHook hook_;
+  volatile bool running_ = false;
 };
-
