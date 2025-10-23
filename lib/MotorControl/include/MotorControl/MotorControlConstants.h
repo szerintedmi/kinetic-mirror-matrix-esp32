@@ -14,7 +14,7 @@ namespace MotorControlConstants
     constexpr int DEFAULT_SPEED_SPS = 4000;   // steps per second
     constexpr int DEFAULT_ACCEL_SPS2 = 16000; // steps per second^2
     constexpr long DEFAULT_OVERSHOOT = 800;   // HOME overshoot (steps)
-    constexpr long DEFAULT_BACKOFF = 50;      // HOME backoff (steps)
+    constexpr long DEFAULT_BACKOFF = 125;     // HOME backoff (steps)
 
     // Runtime budget model (session-only, diagnostic only)
     // - Budget decreases while driver is awake; refills while asleep
