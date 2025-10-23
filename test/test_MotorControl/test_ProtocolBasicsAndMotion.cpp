@@ -220,9 +220,9 @@ void test_multi_cmd_sequence_responses() {
 void test_multi_cmd_whitespace_and_case() {
   auto r = proto.processLine("  m:0,10 ;  h:1  ", 0);
   auto lines = split_lines(r);
-  TEST_ASSERT_TRUE(lines.size() >= 2);
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:OK", 0) == 0);
-  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:OK", 0) == 0);
+  // With aggregation, MOVE/HOME batch returns single consolidated OK with est_ms
+  TEST_ASSERT_EQUAL_INT(1, (int)lines.size());
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:OK est_ms=", 0) == 0);
 }
 
 // HOME sequencing (from previous dedicated file)

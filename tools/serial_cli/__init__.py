@@ -233,9 +233,13 @@ def render_table(rows: List[Dict[str, str]]) -> str:
         ("moving", 6, "moving"),
         ("awake", 6, "awake"),
         ("homed", 6, "homed"),
-        ("steps_since_home", 18, "steps_since_homed"),
+        ("steps_since_home", 18, "steps_since_home"),
         ("budget_s", 15, "budget_s"),
         ("ttfc_s", 7, "ttfc_s"),
+        # New timing columns (mirrors GET LAST_OP_TIMING fields)
+        ("est_ms", 8, "est_ms"),
+        ("started_ms", 10, "started_ms"),
+        ("actual_ms", 9, "actual_ms"),
     ]
     header = " ".join([label[:width].rjust(width) for key, width, label in cols])
     lines = [header, "-" * len(header)]

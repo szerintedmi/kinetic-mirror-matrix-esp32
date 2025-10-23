@@ -269,7 +269,11 @@ std::string MotorCommandProcessor::handleSTATUS()
        << " budget_s=" << (budget_neg ? "-" : "") << (budget_abs / 10) << "." << (budget_abs % 10)
        << " ttfc_s=" << (ttfc_tenths / 10) << "." << (ttfc_tenths % 10)
        << " speed=" << s.speed
-       << " accel=" << s.accel;
+       << " accel=" << s.accel
+       // Timing summary columns mirroring GET LAST_OP_TIMING
+       << " est_ms=" << s.last_op_est_ms
+       << " started_ms=" << s.last_op_started_ms;
+    if (!s.last_op_ongoing) os << " actual_ms=" << s.last_op_last_ms;
     if (i + 1 < controller_->motorCount())
       os << "\n";
   }
@@ -602,15 +606,50 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
     s_in_batch = true;
     s_batch_initially_idle = initially_idle;
     std::string combined;
+    // Aggregate MOVE/HOME OK est_ms from sub-commands into a single final line
+    // Keep WARN/ERR lines from sub-commands. Drop individual OK est_ms lines.
+    uint32_t agg_est_ms = 0;
+    bool saw_est = false;
     for (size_t i = 0; i < cmds.size(); ++i) {
       auto r = processLine(cmds[i], now_ms);
       if (!r.empty()) {
-        if (!combined.empty()) combined.push_back('\n');
-        combined += r;
+        // Split into lines and filter/aggregate
+        size_t start = 0;
+        while (start <= r.size()) {
+          size_t pos = r.find('\n', start);
+          std::string ln = (pos == std::string::npos) ? r.substr(start) : r.substr(start, pos - start);
+          if (!ln.empty()) {
+            // Look for CTRL:OK est_ms=...
+            if (ln.rfind("CTRL:OK", 0) == 0 && ln.find("est_ms=") != std::string::npos) {
+              // parse est_ms value
+              size_t p = ln.find("est_ms=");
+              if (p != std::string::npos) {
+                p += 7; // past 'est_ms='
+                // read number
+                uint32_t v = 0;
+                while (p < ln.size() && ln[p] == ' ') ++p;
+                // Robust parse until non-digit
+                uint32_t acc = 0; bool any = false;
+                while (p < ln.size() && ln[p] >= '0' && ln[p] <= '9') { acc = acc * 10 + (uint32_t)(ln[p] - '0'); any = true; ++p; }
+                if (any) { if (acc > agg_est_ms) agg_est_ms = acc; saw_est = true; }
+              }
+              // Do not append this OK line; it will be consolidated later
+            } else {
+              if (!combined.empty()) combined.push_back('\n');
+              combined += ln;
+            }
+          }
+          if (pos == std::string::npos) break;
+          start = pos + 1;
+        }
       }
     }
     s_in_batch = prev_batch;
     s_batch_initially_idle = prev_idle;
+    if (saw_est) {
+      if (!combined.empty()) combined.push_back('\n');
+      std::ostringstream ok; ok << "CTRL:OK est_ms=" << agg_est_ms; combined += ok.str();
+    }
     return combined;
   }
   // Split verb/args: prefer space separator if it appears before ':'

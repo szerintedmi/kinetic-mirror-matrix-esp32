@@ -44,9 +44,13 @@ class TextualUI(BaseUI):
             ("moving", "moving", 8),
             ("awake", "awake", 8),
             ("homed", "homed", 8),
-            ("steps_since_home", "steps_since_homed", 20),
+            ("steps_since_home", "steps_since_home", 20),
             ("budget_s", "budget_s", 12),
             ("ttfc_s", "ttfc_s", 10),
+            # Timing summary from STATUS (mirrors GET LAST_OP_TIMING)
+            ("est_ms", "est_ms", 10),
+            ("started_ms", "started_ms", 12),
+            ("actual_ms", "actual_ms", 12),
         ]
 
         class HelpOverlay(ModalScreen[None]):
@@ -128,7 +132,8 @@ class TextualUI(BaseUI):
                     "",
                     "Status columns:",
                     "  id, pos, moving, awake, homed",
-                    "  steps_since_homed, budget_s, ttfc_s",
+                    "  steps_since_home, budget_s, ttfc_s",
+                    "  est_ms, started_ms, actual_ms",
                 ]
                 return "\n".join(left)
 
