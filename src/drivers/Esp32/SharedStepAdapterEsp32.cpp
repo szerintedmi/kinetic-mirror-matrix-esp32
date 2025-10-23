@@ -94,21 +94,25 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
   long delta = target - s.pos;
   if (delta == 0) { s.moving = false; return true; }
   int desired_dir = (delta > 0) ? +1 : -1;
+  int cur_dir_sign = (dir_bits_ & (1u << id)) ? +1 : -1;
+  bool need_flip = (desired_dir != cur_dir_sign);
   s.target = target;
   s.speed_sps = speed > 0 ? speed : 1;
   // Update global ramp targets
   v_max_sps_ = s.speed_sps;
   a_sps2_ = (accel > 0) ? accel : 1;
-  // Immediately force SLEEP low for this motor to avoid any edge hazard
-  sleep_bits_ &= (uint8_t)~(1u << id);
-  flushLatch_();
+  // If direction must change, force SLEEP low before scheduling flip
+  if (need_flip) {
+    sleep_bits_ &= (uint8_t)~(1u << id);
+    flushLatch_();
+  }
   
   // Decide safe approach: if generator is running, schedule a guarded flip in the next safe gap.
   // Otherwise, perform immediate safe sequence before starting pulses.
   FlipSchedule &fs = flips_[id];
   fs.active = false; fs.phase = 0; fs.new_dir_sign = desired_dir;
   uint32_t now_us = micros();
-  if (gen_running_ && period_us_ > 0) {
+  if (need_flip && gen_running_ && period_us_ > 0) {
     DirFlipWindow w{};
     uint64_t now_rel = (now_us >= phase_anchor_us_) ? (now_us - phase_anchor_us_) : 0;
     if (compute_flip_window(now_rel, period_us_, w)) {
@@ -120,10 +124,13 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
     }
   }
   if (!fs.active) {
-    // Immediate safe flip while generator is idle (or as a fallback)
-    if (desired_dir > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
-    flushLatch_();
-    delayMicroseconds(3);
+    if (need_flip) {
+      // Immediate safe flip while generator is idle (or as a fallback)
+      if (desired_dir > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
+      flushLatch_();
+      delayMicroseconds(3);
+    }
+    // Enable output without delay if direction already matches (no hazard)
     sleep_bits_ |= (1u << id);
     flushLatch_();
     slots_[id].awake = true;
