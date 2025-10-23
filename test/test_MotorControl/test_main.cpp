@@ -10,6 +10,7 @@ void test_all_addressing_and_status_awake();
 void test_busy_rule_and_completion();
 void test_home_defaults();
 void test_help_format();
+void test_get_all_settings_single_line();
 void test_status_format_lines();
 void test_home_parsing_comma_skips();
 void test_home_busy_rule_reject_when_moving();
@@ -106,6 +107,7 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_busy_rule_and_completion);
   setUp(); RUN_TEST(test_home_defaults);
   setUp(); RUN_TEST(test_help_format);
+  setUp(); RUN_TEST(test_get_all_settings_single_line);
   setUp(); RUN_TEST(test_status_format_lines);
   setUp(); RUN_TEST(test_home_parsing_comma_skips);
   setUp(); RUN_TEST(test_home_busy_rule_reject_when_moving);

@@ -100,6 +100,8 @@ std::string MotorCommandProcessor::handleHELP()
   os << "MOVE:<id|ALL>,<abs_steps>\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
   os << "STATUS\n";
+  os << "GET\n";
+  os << "GET ALL\n";
   os << "GET LAST_OP_TIMING[:<id|ALL>]\n";
   os << "GET SPEED\n";
   os << "GET ACCEL\n";
@@ -131,6 +133,17 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
 {
   // Support both colon and space-separated payloads; args already contains payload
   std::string key = to_upper_copy(trim_copy(args));
+  // No-arg or ALL -> return all core settings in a single OK line
+  if (key.empty() || key == "ALL") {
+    std::ostringstream os;
+    os << "CTRL:OK "
+       << "SPEED=" << default_speed_sps_ << ' '
+       << "ACCEL=" << default_accel_sps2_ << ' '
+       << "DECEL=" << default_decel_sps2_ << ' '
+       << "THERMAL_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
+       << " max_budget_s=" << (int)MotorControlConstants::MAX_RUNNING_TIME_S;
+    return os.str();
+  }
   if (key == "SPEED") {
     std::ostringstream os; os << "CTRL:OK SPEED=" << default_speed_sps_;
     return os.str();

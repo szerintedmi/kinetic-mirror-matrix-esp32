@@ -63,6 +63,16 @@ void test_help_format() {
   TEST_ASSERT_TRUE(help.find("ERR") == std::string::npos);
 }
 
+void test_get_all_settings_single_line() {
+  std::string r = proto.processLine("GET", 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:OK ", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" THERMAL_LIMITING=") != std::string::npos || r.find("THERMAL_LIMITING=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" max_budget_s=") != std::string::npos || r.find("max_budget_s=") != std::string::npos);
+}
+
 void test_status_format_lines() {
   std::string st = proto.processLine("STATUS", 0);
   auto lines = split_lines(st);

@@ -147,6 +147,7 @@ Tests
 Runtime Controls (device)
 
 - `GET THERMAL_LIMITING` → `CTRL:OK THERMAL_LIMITING=ON|OFF max_budget_s=N`
+- `GET` or `GET ALL` → `CTRL:OK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
 - `SET THERMAL_LIMITING=OFF|ON`
 - `GET LAST_OP_TIMING[:<id|ALL>]` to validate estimates (`est_ms`) and actual durations
 
@@ -156,6 +157,7 @@ Runtime Controls (device)
   - `MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]`
   - `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]`
   - `STATUS`, `WAKE:<id|ALL>`, `SLEEP:<id|ALL>`
+  - `GET` (all settings), `GET ALL`
   - `GET LAST_OP_TIMING[:<id|ALL>]`, `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
   - Responses: `CTRL:OK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, and `CTRL:WARN ...` when enforcement is OFF
 - Full spec: [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
