@@ -23,14 +23,12 @@ def main():
     failures += run_case(["wake", "ALL"], "WAKE:ALL\n")
     failures += run_case(["sleep", "0"], "SLEEP:0\n")
     failures += run_case(["move", "3", "1200"], "MOVE:3,1200\n")
-    failures += run_case(["move", "3", "1200", "--speed", "5000"], "MOVE:3,1200,5000\n")
-    failures += run_case(["move", "ALL", "-10", "--speed", "1", "--accel", "2"], "MOVE:ALL,-10,1,2\n")
-    failures += run_case(["m", "2", "-5", "--speed", "10", "--accel", "20"], "MOVE:2,-5,10,20\n")
+    # Legacy per-move speed/accel removed; ensure alias still works
+    failures += run_case(["m", "2", "-5"], "MOVE:2,-5\n")
     failures += run_case(["home", "0"], "HOME:0\n")
     failures += run_case(["home", "ALL", "--overshoot", "800", "--backoff", "150"], "HOME:ALL,800,150\n")
-    failures += run_case(["home", "1", "--overshoot", "900", "--speed", "4000", "--accel", "16000", "--full-range", "2400"], "HOME:1,900,,4000,16000,2400\n")
+    failures += run_case(["home", "1", "--overshoot", "900", "--full-range", "2400"], "HOME:1,900,,2400\n")
     failures += run_case(["h", "7", "--overshoot", "50", "--backoff", "25"], "HOME:7,50,25\n")
-    failures += run_case(["home", "0", "--speed", "1"], "HOME:0,,,1\n")
     failures += run_case(["last-op"], "GET LAST_OP_TIMING\n")
     failures += run_case(["last-op", "1"], "GET LAST_OP_TIMING:1\n")
     if failures:

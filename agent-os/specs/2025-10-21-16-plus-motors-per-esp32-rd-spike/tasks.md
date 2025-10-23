@@ -93,11 +93,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 3
 
-- [ ] 5.0 Update Python CLI/TUI to match protocol
-  - [ ] 5.1 Write 2-4 focused tests for CLI command builders/parsing (if present)
-  - [ ] 5.2 Remove speed/accel inputs from `MOVE`/`HOME` paths
-  - [ ] 5.3 Update HELP and interactive hints to the new grammar
-  - [ ] 5.4 Keep STATUS polling unchanged
+- [x] 5.0 Update Python CLI/TUI to match protocol
+  - [x] 5.1 Write 2-4 focused tests for CLI command builders/parsing (if present)
+  - [x] 5.2 Remove speed/accel inputs from `MOVE`/`HOME` paths
+  - [x] 5.3 Update HELP and interactive hints to the new grammar
+  - [x] 5.4 Keep STATUS polling unchanged
 
 **Acceptance Criteria:**
 - CLI/TUI sends valid simplified commands and surfaces HELP correctly

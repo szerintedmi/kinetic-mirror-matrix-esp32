@@ -10,18 +10,16 @@ except Exception:
     serial = None
 
 
-def _join_home_with_placeholders(id_token: str, overshoot, backoff, speed, accel, full_range) -> str:
-    fields = [None, None, None, None, None]
+def _join_home_with_placeholders(id_token: str, overshoot, backoff, full_range) -> str:
+    # Build HOME payload supporting optional fields without legacy speed/accel.
+    # Grammar: HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n
+    fields = [None, None, None]
     if overshoot is not None:
         fields[0] = str(overshoot)
     if backoff is not None:
         fields[1] = str(backoff)
-    if speed is not None:
-        fields[2] = str(speed)
-    if accel is not None:
-        fields[3] = str(accel)
     if full_range is not None:
-        fields[4] = str(full_range)
+        fields[2] = str(full_range)
     hi = -1
     for i in range(len(fields) - 1, -1, -1):
         if fields[i] is not None:
@@ -48,14 +46,12 @@ def build_command(ns: argparse.Namespace) -> str:
     if cmd == "sleep":
         return f"SLEEP:{ns.id}\n"
     if cmd == "move" or cmd == "m":
+        # Simplified grammar: no per-move speed/accel
         parts = [str(ns.id), str(ns.abs_steps)]
-        if ns.speed is not None:
-            parts.append(str(ns.speed))
-        if ns.accel is not None:
-            parts.append(str(ns.accel))
         return f"MOVE:{','.join(parts)}\n"
     if cmd == "home" or cmd == "h":
-        return _join_home_with_placeholders(str(ns.id), ns.overshoot, ns.backoff, ns.speed, ns.accel, ns.full_range)
+        # Simplified grammar: no per-home speed/accel
+        return _join_home_with_placeholders(str(ns.id), ns.overshoot, ns.backoff, ns.full_range)
     raise SystemExit(f"Unknown command: {cmd}")
 
 
@@ -152,30 +148,22 @@ def make_parser() -> argparse.ArgumentParser:
         s = _add_common(sp.add_parser(name, help=f"{name.upper()} a motor or ALL"))
         s.add_argument("id", help="Motor id 0-7 or ALL")
 
-    s = _add_common(sp.add_parser("move", help="MOVE absolute position"))
+    s = _add_common(sp.add_parser("move", help="MOVE absolute position (uses global SPEED/ACCEL)"))
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
-    s.add_argument("--speed", type=int, help="Optional speed (steps/s)")
-    s.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
     s_alias = _add_common(sp.add_parser("m", help="Alias for move"))
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
-    s_alias.add_argument("--speed", type=int, help="Optional speed (steps/s)")
-    s_alias.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
 
-    s = _add_common(sp.add_parser("home", help="HOME with optional params"))
+    s = _add_common(sp.add_parser("home", help="HOME with optional params (overshoot/backoff/full_range)"))
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("--overshoot", type=int, help="Optional overshoot steps")
     s.add_argument("--backoff", type=int, help="Optional backoff steps")
-    s.add_argument("--speed", type=int, help="Optional speed (steps/s)")
-    s.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
     s.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
     s_alias = _add_common(sp.add_parser("h", help="Alias for home"))
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("--overshoot", type=int, help="Optional overshoot steps")
     s_alias.add_argument("--backoff", type=int, help="Optional backoff steps")
-    s_alias.add_argument("--speed", type=int, help="Optional speed (steps/s)")
-    s_alias.add_argument("--accel", type=int, help="Optional accel (steps/s^2)")
     s_alias.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
 
     # estimation/measurement helpers
@@ -492,18 +480,16 @@ def main(argv=None) -> int:
                 est_ms = None
                 if ns.command == "check-move":
                     target = int(ns.abs_steps)
-                    speed = int(ns.speed)
-                    accel = int(ns.accel)
-                    ser.write(f"MOVE:{ns.id},{target},{speed},{accel}\n".encode())
+                    # Send simplified MOVE without legacy per-move params
+                    ser.write(f"MOVE:{ns.id},{target}\n".encode())
                     resp = read_response(ser, ns.timeout)
                     est_ms = extract_est_ms_from_ctrl_ok(resp)
                 else:
                     o = int(ns.overshoot)
                     b = int(ns.backoff)
                     fr = int(ns.full_range)
-                    speed = int(ns.speed)
-                    accel = int(ns.accel)
-                    cmd = _join_home_with_placeholders(str(ns.id), o, b, speed, accel, fr)
+                    # Send simplified HOME without legacy per-home params
+                    cmd = _join_home_with_placeholders(str(ns.id), o, b, fr)
                     ser.write(cmd.encode())
                     resp = read_response(ser, ns.timeout)
 
