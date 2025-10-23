@@ -59,7 +59,12 @@ def build_command(ns: argparse.Namespace) -> str:
     raise SystemExit(f"Unknown command: {cmd}")
 
 
-def read_response(ser, timeout: float, idle_grace: float = 0.06) -> str:
+def read_response(ser, timeout: float, idle_grace: float = 0.10) -> str:
+    """Read until a quiet period (idle_grace) or timeout.
+
+    This avoids truncating multi-line responses where lines arrive in bursts
+    (e.g., multi-command batches returning multiple CTRL:OK lines).
+    """
     ser.timeout = max(0.01, timeout)
     chunks = []
     start = time.time()
@@ -70,13 +75,9 @@ def read_response(ser, timeout: float, idle_grace: float = 0.06) -> str:
             s = data.decode(errors="replace")
             chunks.append(s)
             last_rx = time.time()
-            if "CTRL:OK" in s or "CTRL:ERR" in s:
-                time.sleep(0.02)
-                more = ser.read(4096)
-                if more:
-                    chunks.append(more.decode(errors="replace"))
-                break
         else:
+            # If we've received something and the line has gone quiet long enough,
+            # treat the response as complete.
             if last_rx is not None and (time.time() - last_rx) >= idle_grace:
                 break
             time.sleep(0.01)
@@ -351,12 +352,14 @@ class _SerialWorker(threading.Thread):
                         if data:
                             self._pending_buf += data.decode(errors="replace")
                             self._pending_last_rx = time.time()
+                    # Consider complete when input has been quiet for a short
+                    # grace period, or when we hit our overall deadline.
+                    idle_grace = 0.10
+                    now_t = time.time()
                     complete = False
-                    if ("CTRL:OK" in self._pending_buf) or ("CTRL:ERR" in self._pending_buf):
+                    if self._pending_buf and (now_t - self._pending_last_rx) >= idle_grace:
                         complete = True
-                    elif self._pending_buf and (time.time() - self._pending_last_rx) >= 0.06:
-                        complete = True
-                    elif time.time() >= self._pending_deadline:
+                    elif now_t >= self._pending_deadline:
                         complete = True
                     if complete:
                         resp_text = self._pending_buf.strip()
