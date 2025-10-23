@@ -28,6 +28,7 @@ void SharedStepAdapterEsp32::begin() {
   v_cur_sps_ = 0;
   v_max_sps_ = 0;
   a_sps2_ = 0;
+  d_sps2_ = 0;
   dv_accum_ = 0;
   ramp_last_us_ = micros();
 }
@@ -224,15 +225,20 @@ void SharedStepAdapterEsp32::updateRamp_(uint32_t now_us) const {
   ramp_last_us_ = now_us;
 
   // Decide whether to accelerate, coast, or decelerate
-  uint32_t accel = (a_sps2_ > 0) ? (uint32_t)a_sps2_ : 1u;
+  uint32_t accel_up = (a_sps2_ > 0) ? (uint32_t)a_sps2_ : 1u;
+  uint32_t decel_down = (d_sps2_ > 0) ? (uint32_t)d_sps2_ : 0u;
   uint32_t vcur = (v_cur_sps_ > 0) ? (uint32_t)v_cur_sps_ : 0u;
   uint32_t vmax = (v_max_sps_ > 0) ? (uint32_t)v_max_sps_ : (uint32_t)kMinGenSps;
   // stop distance to zero under accel: ceil(v^2 / (2a))
-  uint32_t d_stop = ceil_div_u32((uint64_t)vcur * (uint64_t)vcur, 2ull * (uint64_t)accel);
-  bool need_decel = (min_remaining <= d_stop) || (vcur > vmax);
+  uint32_t d_stop = 0;
+  if (decel_down > 0) {
+    d_stop = ceil_div_u32((uint64_t)vcur * (uint64_t)vcur, 2ull * (uint64_t)decel_down);
+  }
+  bool need_decel = (decel_down > 0) && ((min_remaining <= d_stop) || (vcur > vmax));
   bool need_accel = (!need_decel) && (vcur < vmax);
   // Compute dv = accel * dt (sps^2 * us / 1e6)
-  uint64_t inc = (uint64_t)accel * (uint64_t)dt_us + (uint64_t)dv_accum_;
+  uint32_t a_eff = need_accel ? accel_up : (need_decel ? decel_down : 0u);
+  uint64_t inc = (uint64_t)a_eff * (uint64_t)dt_us + (uint64_t)dv_accum_;
   uint32_t dv = (uint32_t)(inc / 1000000ull);
   dv_accum_ = (uint32_t)(inc % 1000000ull);
   int new_v = (int)vcur;

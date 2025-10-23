@@ -5,6 +5,7 @@
 
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotionKinematics.h"
+#include "MotorControl/BuildConfig.h"
 
 #ifndef TEST_MOTOR_ID
 #define TEST_MOTOR_ID 0
@@ -79,9 +80,9 @@ void test_device_move_estimate_vs_actual() {
   bool finished = wait_until([] { return !ctrl.state(kMotor).moving; }, 5000);
   TEST_ASSERT_TRUE(finished);
   uint32_t dt = millis() - t0;
-  // Symmetric tolerance check around firmware's estimate
-  uint32_t tol_abs_ms = 150;
-  uint32_t tol_pct_ms = (uint32_t)((est_ms * 10) / 100); // 10%
+  // Symmetric tolerance check around firmware's estimate (tight for both backends)
+  uint32_t tol_abs_ms = 60;                        // 60 ms absolute
+  uint32_t tol_pct_ms = (uint32_t)(est_ms / 100);  // 1%
   uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
   uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
   uint32_t hi = est_ms + tol;
@@ -103,9 +104,9 @@ void test_device_home_estimate_vs_actual() {
   TEST_ASSERT_TRUE(finished);
   uint32_t est_ms = (uint32_t)ctrl.state(kMotor).last_op_est_ms;
   uint32_t dt = millis() - t0;
-  // Symmetric tolerance check around firmware's estimate
-  uint32_t tol_abs_ms = 150;
-  uint32_t tol_pct_ms = (uint32_t)((est_ms * 10) / 100); // 10%
+  // Symmetric tolerance check around firmware's estimate (tight for both backends)
+  uint32_t tol_abs_ms = 80;                        // HOME: allow a bit more for multi-leg barriers
+  uint32_t tol_pct_ms = (uint32_t)(est_ms / 100);  // 1%
   uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
   uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
   uint32_t hi = est_ms + tol;

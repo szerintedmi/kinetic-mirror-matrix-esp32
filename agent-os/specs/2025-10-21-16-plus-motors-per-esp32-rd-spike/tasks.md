@@ -77,10 +77,13 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
   - [x] 4.2 Add trapezoidal ramp scheduling in the shared STEP generator (period updates)
   - [x] 4.3 Update estimates to use MotionKinematics with global `SPEED`/`ACCEL`
   - [x] 4.4 Write 2-6 unit tests for ramp period scheduling and corner cases (short moves, accel-limited)
-  - [ ] 4.5 CLI smoke (manual):
+  - [x] 4.5 CLI smoke (manual):
         - `SET SPEED=4000`, `SET ACCEL=16000`
         - `MOVE:0,800` → `CTRL:OK est_ms=...` then `GET LAST_OP_TIMING:0` to compare
         - While moving, `SET ACCEL=8000` → error (reject while moving)
+  - [x] 4.6 Extend: split DECEL (GET/SET DECEL); ignore on FAS, used on shared‑STEP; default DECEL=0 on shared‑STEP.
+  - [x] 4.7 Extend: global MOVE guard for shared‑STEP builds (reject new MOVE while any motor is moving), allow multicommand batch starts when initially idle.
+  - [x] 4.8 Extend: homing group barriers (legs start together among addressed motors); unify estimates with asymmetric model + speed‑aware overhead (CTRL:OK and LAST_OP_TIMING agree).
 
 **Acceptance Criteria:**
 - Ramp logic produces expected period sequences in tests

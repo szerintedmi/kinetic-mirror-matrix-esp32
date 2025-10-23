@@ -14,6 +14,7 @@ public:
   bool homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) override;
   void tick(uint32_t now_ms) override;
   void setThermalLimitsEnabled(bool enabled) override { thermal_limits_enabled_ = enabled; }
+  void setDeceleration(int) override {}
 
 private:
   struct MovePlan { bool active; bool is_home; long target; uint32_t end_ms; long start_pos; };

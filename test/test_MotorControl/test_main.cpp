@@ -79,7 +79,9 @@ void test_backend_speed_accel_passed_to_adapter();
 // Protocol speed/accel globals
 void test_get_set_speed_ok();
 void test_get_set_accel_ok();
+void test_get_set_decel_ok();
 void test_set_speed_busy_reject();
+void test_set_decel_busy_reject();
 void test_home_uses_speed_accel_globals();
 
 // Multi-command
@@ -172,7 +174,9 @@ int main(int, char**) {
   // Protocol globals (GET/SET SPEED, ACCEL)
   setUp(); RUN_TEST(test_get_set_speed_ok);
   setUp(); RUN_TEST(test_get_set_accel_ok);
+  setUp(); RUN_TEST(test_get_set_decel_ok);
   setUp(); RUN_TEST(test_set_speed_busy_reject);
+  setUp(); RUN_TEST(test_set_decel_busy_reject);
   setUp(); RUN_TEST(test_home_uses_speed_accel_globals);
 
   // Multi-command parsing

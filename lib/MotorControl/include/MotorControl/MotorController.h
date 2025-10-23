@@ -38,4 +38,7 @@ public:
   // Global thermal runtime limiting flag control
   virtual void setThermalLimitsEnabled(bool enabled) = 0;
 
+  // Optional global deceleration hint for underlying adapter
+  virtual void setDeceleration(int /*decel_sps2*/) {}
+
 };

@@ -29,4 +29,5 @@ private:
   // Global motion defaults (can be changed via SET SPEED/ACCEL)
   int default_speed_sps_;
   int default_accel_sps2_;
+  int default_decel_sps2_;
 };

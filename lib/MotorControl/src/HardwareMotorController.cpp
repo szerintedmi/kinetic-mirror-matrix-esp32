@@ -180,7 +180,12 @@ bool HardwareMotorController::moveAbsMask(uint32_t mask, long target, int speed,
 #endif
       // Record last op timing
       long dist = (target > cur) ? (target - cur) : (cur - target);
-      uint32_t est = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+      uint32_t est = 0;
+#if (USE_SHARED_STEP)
+      est = MotionKinematics::estimateMoveTimeMsSharedStep(dist, speed, accel, decel_sps2_);
+#else
+      est = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+#endif
       motors_[i].last_op_type = 1;
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = est;
@@ -230,7 +235,12 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
       sleep_bits_ |= (1u << i);
 #endif
       // Record last op timing (entire HOME sequence estimate)
-      uint32_t est = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+      uint32_t est = 0;
+#if (USE_SHARED_STEP)
+      est = MotionKinematics::estimateHomeTimeMsWithFullRangeSharedStep(overshoot, backoff, full_range, speed, accel, decel_sps2_);
+#else
+      est = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+#endif
       motors_[i].last_op_type = 2;
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = est;
@@ -319,33 +329,7 @@ void HardwareMotorController::tick(uint32_t now_ms) {
       }
     }
 
-    // Homing sequence state machine
-    if (homing_[i].active && !motors_[i].moving) {
-      HomingPlan &hp = homing_[i];
-      if (hp.phase == 0) {
-        // Leg 2: backoff in positive direction by backoff
-        long cur = fas_->currentPosition(i);
-        long target = cur + hp.backoff;
-        startMoveSingle_(i, target, hp.speed, hp.accel);
-        hp.phase = 1;
-      } else if (hp.phase == 1) {
-        // Leg 3: center to soft midpoint (~ half of full_range forward)
-        long cur = fas_->currentPosition(i);
-        long mid_delta = (hp.full_range > 0) ? (hp.full_range / 2) : 1200;
-        long target = cur + mid_delta;
-        startMoveSingle_(i, target, hp.speed, hp.accel);
-        hp.phase = 2;
-      } else {
-        // Finalize: set runtime zero and complete
-        fas_->setCurrentPosition(i, 0);
-        motors_[i].position = 0;
-        motors_[i].moving = false;
-        motors_[i].homed = true;
-        motors_[i].steps_since_home = 0;
-        hp.active = false;
-        // Awake state will be handled by regular logic above on next tick
-      }
-    }
+    // Homing sequence state machine handled via group barriers below
     // Record completion time for last op when no longer moving and no active homing
     if (motors_[i].last_op_ongoing && !motors_[i].moving && !homing_[i].active) {
       motors_[i].last_op_ongoing = false;
@@ -354,7 +338,56 @@ void HardwareMotorController::tick(uint32_t now_ms) {
       }
     }
   }
+  // Group barrier for HOME legs: start next leg only when all motors in that leg have finished
+  for (uint8_t phase = 0; phase <= 1; ++phase) {
+    bool any = false;
+    bool all_done = true;
+    for (uint8_t i = 0; i < count_; ++i) {
+      if (homing_[i].active && homing_[i].phase == phase) {
+        any = true;
+        if (motors_[i].moving) { all_done = false; break; }
+      }
+    }
+    if (any && all_done) {
+      for (uint8_t i = 0; i < count_; ++i) {
+        if (!(homing_[i].active && homing_[i].phase == phase)) continue;
+        HomingPlan &hp = homing_[i];
+        if (phase == 0) {
+          long cur = fas_->currentPosition(i);
+          long target = cur + hp.backoff;
+          startMoveSingle_(i, target, hp.speed, hp.accel);
+          hp.phase = 1;
+        } else if (phase == 1) {
+          long cur = fas_->currentPosition(i);
+          long mid_delta = (hp.full_range > 0) ? (hp.full_range / 2) : 1200;
+          long target = cur + mid_delta;
+          startMoveSingle_(i, target, hp.speed, hp.accel);
+          hp.phase = 2;
+        }
+      }
+    }
+  }
+  // Finalize homing after last leg complete
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (homing_[i].active && homing_[i].phase == 2 && !motors_[i].moving) {
+      fas_->setCurrentPosition(i, 0);
+      motors_[i].position = 0;
+      motors_[i].moving = false;
+      motors_[i].homed = true;
+      motors_[i].steps_since_home = 0;
+      homing_[i].active = false;
+    }
+  }
   // Native: start/stop latches handled above; Arduino: adapter handles gating
+}
+
+void HardwareMotorController::setDeceleration(int decel_sps2) {
+#if defined(ARDUINO)
+  if (fas_) fas_->setDeceleration(decel_sps2);
+#else
+  (void)decel_sps2;
+#endif
+  decel_sps2_ = decel_sps2;
 }
 
 // Debug adapter hooks removed (cleanup after RMT ISR stabilization)

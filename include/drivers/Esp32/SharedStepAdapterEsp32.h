@@ -25,6 +25,7 @@ public:
   void setAutoEnable(uint8_t, bool) override {}
   void enableOutputs(uint8_t id) override;
   void disableOutputs(uint8_t id) override;
+  void setDeceleration(int decel_sps2) override { d_sps2_ = decel_sps2 > 0 ? decel_sps2 : 0; }
 
 private:
   struct Slot {
@@ -77,6 +78,7 @@ private:
   mutable int v_cur_sps_ = 0;    // current generator speed
   mutable int v_max_sps_ = 0;    // target cruise speed
   mutable int a_sps2_ = 0;       // global acceleration
+  mutable int d_sps2_ = 0;       // global deceleration (0 disables ramp-down)
   mutable uint32_t dv_accum_ = 0; // fractional accumulator in (sps*us)
 
   static constexpr uint32_t kMinGenSps = 20; // keep RMT durations in range

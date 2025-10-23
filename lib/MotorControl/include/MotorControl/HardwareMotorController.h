@@ -30,6 +30,7 @@ public:
   bool homeMask(uint32_t mask, long overshoot, long backoff, int speed, int accel, long full_range, uint32_t now_ms) override;
   void tick(uint32_t now_ms) override;
   void setThermalLimitsEnabled(bool enabled) override { thermal_limits_enabled_ = enabled; }
+  void setDeceleration(int decel_sps2) override;
 
 private:
   void latch_();
@@ -54,4 +55,5 @@ private:
   std::unique_ptr<IFasAdapter> owned_fas_;
 
   bool thermal_limits_enabled_ = true;
+  int decel_sps2_ = 0; // global deceleration hint for shared-STEP estimates
 };

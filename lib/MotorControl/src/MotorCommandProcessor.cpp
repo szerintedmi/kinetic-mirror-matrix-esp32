@@ -50,6 +50,8 @@ MotorCommandProcessor::MotorCommandProcessor()
   controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
   default_speed_sps_ = MotorControlConstants::DEFAULT_SPEED_SPS;
   default_accel_sps2_ = MotorControlConstants::DEFAULT_ACCEL_SPS2;
+  default_decel_sps2_ = 0; // shared-STEP default: no ramp-down unless set by user
+  controller_->setDeceleration(default_decel_sps2_);
 }
 
 bool MotorCommandProcessor::parseInt(const std::string &s, long &out)
@@ -101,11 +103,13 @@ std::string MotorCommandProcessor::handleHELP()
   os << "GET LAST_OP_TIMING[:<id|ALL>]\n";
   os << "GET SPEED\n";
   os << "GET ACCEL\n";
+  os << "GET DECEL\n";
   // Thermal runtime limiting controls
   os << "GET THERMAL_LIMITING\n";
   os << "SET THERMAL_LIMITING=OFF|ON\n";
   os << "SET SPEED=<steps_per_second>\n";
   os << "SET ACCEL=<steps_per_second^2>\n";
+  os << "SET DECEL=<steps_per_second^2>\n";
   os << "WAKE:<id|ALL>\n";
   os << "SLEEP:<id|ALL>\n";
   os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS\n";
@@ -133,6 +137,10 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
   }
   if (key == "ACCEL") {
     std::ostringstream os; os << "CTRL:OK ACCEL=" << default_accel_sps2_;
+    return os.str();
+  }
+  if (key == "DECEL") {
+    std::ostringstream os; os << "CTRL:OK DECEL=" << default_decel_sps2_;
     return os.str();
   }
   if (key == "THERMAL_LIMITING") {
@@ -220,6 +228,15 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
     default_accel_sps2_ = (int)v;
     return "CTRL:OK";
   }
+  if (key == "DECEL") {
+    long v; if (!parseInt(val, v) || v < 0) return "CTRL:ERR E03 BAD_PARAM";
+    for (uint8_t id = 0; id < controller_->motorCount(); ++id) {
+      if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
+    }
+    default_decel_sps2_ = (int)v;
+    controller_->setDeceleration(default_decel_sps2_);
+    return "CTRL:OK";
+  }
   return "CTRL:ERR E03 BAD_PARAM";
 }
 
@@ -293,6 +310,10 @@ std::string MotorCommandProcessor::handleSLEEP(const std::string &args)
   return "CTRL:OK";
 }
 
+// Batch context for multi-command processing
+static bool s_in_batch = false;
+static bool s_batch_initially_idle = false;
+
 std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t now_ms)
 {
   auto parts = split(args, ',');
@@ -311,6 +332,16 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
   // Legacy per-move params are no longer accepted
   if ((parts.size() >= 3 && !parts[2].empty()) || (parts.size() >= 4 && !parts[3].empty()))
     return "CTRL:ERR E03 BAD_PARAM";
+  // Shared-STEP global busy rule: block new MOVE while any motor is moving,
+  // but allow multi-command batches to start multiple MOVEs together when the
+  // batch begins idle.
+#if (USE_SHARED_STEP)
+  if (!(s_in_batch && s_batch_initially_idle)) {
+    for (uint8_t id = 0; id < controller_->motorCount(); ++id) {
+      if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
+    }
+  }
+#endif
   // Thermal pre-flight: tick to current time and check budgets
   controller_->tick(now_ms);
   // Compute per-motor required runtime and compare to limits
@@ -322,7 +353,12 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
     if ((tmp & (1u << id)) == 0) continue;
     const MotorState &s = controller_->state(id);
     long dist = std::labs(target - s.position);
-    uint32_t req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+    uint32_t req_ms = 0;
+#if (USE_SHARED_STEP)
+    req_ms = MotionKinematics::estimateMoveTimeMsSharedStep(dist, speed, accel, default_decel_sps2_);
+#else
+    req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+#endif
     if (req_ms > max_req_ms) max_req_ms = req_ms;
     int req_s = (int)((req_ms + 999) / 1000); // ceil to seconds
     // E10: required exceeds max budget
@@ -423,7 +459,12 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
   if (full_range <= 0) {
     full_range = (MotorControlConstants::MAX_POS_STEPS - MotorControlConstants::MIN_POS_STEPS);
   }
-  uint32_t req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+  uint32_t req_ms_total = 0;
+#if (USE_SHARED_STEP)
+  req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRangeSharedStep(overshoot, backoff, full_range, speed, accel, default_decel_sps2_);
+#else
+  req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRange(overshoot, backoff, full_range, speed, accel);
+#endif
   int req_s = (int)((req_ms_total + 999) / 1000);
   if (req_s > (int)MotorControlConstants::MAX_RUNNING_TIME_S)
   {
@@ -552,6 +593,14 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
       seen |= m;
     }
     // Execute sequentially and join responses
+    bool initially_idle = true;
+    for (uint8_t i = 0; i < controller_->motorCount(); ++i) {
+      if (controller_->state(i).moving) { initially_idle = false; break; }
+    }
+    bool prev_batch = s_in_batch;
+    bool prev_idle = s_batch_initially_idle;
+    s_in_batch = true;
+    s_batch_initially_idle = initially_idle;
     std::string combined;
     for (size_t i = 0; i < cmds.size(); ++i) {
       auto r = processLine(cmds[i], now_ms);
@@ -560,6 +609,8 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
         combined += r;
       }
     }
+    s_in_batch = prev_batch;
+    s_batch_initially_idle = prev_idle;
     return combined;
   }
   // Split verb/args: prefer space separator if it appears before ':'
