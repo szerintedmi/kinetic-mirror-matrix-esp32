@@ -1,15 +1,16 @@
-We're continuing our implementation of 16+ Motors per ESP32 (Shared STEP Spike) by implementing task group number 8:
+We're continuing our implementation of 16+ Motors per ESP32 (Shared STEP Spike) by implementing task group number 7:
 
 ## Implement this task and its sub-tasks:
 
-#### Task Group 8: Manual Bench Routines (No Analyzer)
+#### Task Group 7: Manual Bench Routines (No Analyzer)
 **Assigned implementer:** testing-engineer
-**Dependencies:** Task Groups 3, 6
+**Dependencies:** Task Groups 3, 4
 
 - [ ] 7.0 Create deterministic bench scripts and device routines
   - [ ] 7.1 Add a Python CLI script to run patterned back-and-forth sequences (varying distances/rhythms)
   - [ ] 7.2 Add a device-side routine to report final MCU-tracked positions after N cycles
   - [ ] 7.3 Lab checklist for comparing physical vs tracked positions
+  - [ ] 7.4 Bench smoke: shared-step env, `SET SPEED=800`, `MOVE:0,1200`, `HOME:0` repeated >10 cycles without freeze; verify auto-sleep
 
 ## Understand the context
 
@@ -28,6 +29,7 @@ Guide your implementation using:
 Self-verify and test your work by:
 - Running ONLY the tests you've written (if any) and ensuring those tests pass.
 - Execute the CLI script and compare MCU-tracked vs physical positions per the checklist.
+- Confirm RMT ISR-driven generator stability across repeated cycles; watch for serial responsiveness and generator stop conditions.
 
 ## Update tasks.md task status
 
@@ -35,7 +37,7 @@ Update this task group's checkboxes in `tasks.md` upon completion of sub-tasks y
 
 ## Document your implementation
 
-Create: `agent-os/specs/2025-10-21-16-plus-motors-per-esp32-rd-spike/implementation/8-bench-routines-implementation.md`
+Create: `agent-os/specs/2025-10-21-16-plus-motors-per-esp32-rd-spike/implementation/7-bench-routines-implementation.md`
 
 Structure: see template in implement-spec guide.
 

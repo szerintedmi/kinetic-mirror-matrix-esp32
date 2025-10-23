@@ -68,6 +68,24 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 
 ### Protocol & Host Tools
 
+#### Task Group 4: Acceleration (Global ACCEL + Trapezoid)
+**Assigned implementer:** api-engineer
+**Dependencies:** Task Group 3 (constant speed integrated)
+
+- [ ] 4.0 Implement global acceleration support
+  - [ ] 4.1 Add `GET ACCEL` / `SET ACCEL=<a>`; reject `SET ACCEL` while moving
+  - [ ] 4.2 Add trapezoidal ramp scheduling in the shared STEP generator (period updates)
+  - [ ] 4.3 Update estimates to use MotionKinematics with global `SPEED`/`ACCEL`
+  - [ ] 4.4 Write 2-6 unit tests for ramp period scheduling and corner cases (short moves, accel-limited)
+  - [ ] 4.5 CLI smoke (manual):
+        - `SET SPEED=4000`, `SET ACCEL=16000`
+        - `MOVE:0,800` → `CTRL:OK est_ms=...` then `GET LAST_OP_TIMING:0` to compare
+        - While moving, `SET ACCEL=8000` → error (reject while moving)
+
+**Acceptance Criteria:**
+- Ramp logic produces expected period sequences in tests
+- CLI smoke confirms commands and rejects during motion; estimates align with timing report
+
 #### Task Group 5: Host CLI/TUI Adjustments
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 3
@@ -81,29 +99,11 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Acceptance Criteria:**
 - CLI/TUI sends valid simplified commands and surfaces HELP correctly
 
-#### Task Group 6: Acceleration (Global ACCEL + Trapezoid)
-**Assigned implementer:** api-engineer
-**Dependencies:** Task Group 3 (constant speed integrated)
-
-- [ ] 6.0 Implement global acceleration support
-  - [ ] 6.1 Add `GET ACCEL` / `SET ACCEL=<a>`; reject `SET ACCEL` while moving
-  - [ ] 6.2 Add trapezoidal ramp scheduling in the shared STEP generator (period updates)
-  - [ ] 6.3 Update estimates to use MotionKinematics with global `SPEED`/`ACCEL`
-  - [ ] 6.4 Write 2-6 unit tests for ramp period scheduling and corner cases (short moves, accel-limited)
-  - [ ] 6.5 CLI smoke (manual):
-        - `SET SPEED=4000`, `SET ACCEL=16000`
-        - `MOVE:0,800` → `CTRL:OK est_ms=...` then `GET LAST_OP_TIMING:0` to compare
-        - While moving, `SET ACCEL=8000` → error (reject while moving)
-
-**Acceptance Criteria:**
-- Ramp logic produces expected period sequences in tests
-- CLI smoke confirms commands and rejects during motion; estimates align with timing report
-
 ### Validation & Bench
 
-#### Task Group 7: Unit Tests for Timing and Guards
+#### Task Group 6: Unit Tests for Timing and Guards
 **Assigned implementer:** testing-engineer
-**Dependencies:** Task Groups 1-3, 6
+**Dependencies:** Task Groups 1-3, 4
 
 - [ ] 6.0 Consolidate timing/guard tests
   - [ ] 6.1 Review tests from 1.1 and 2.1; add up to 6 more for edge cases
@@ -112,9 +112,9 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Acceptance Criteria:**
 - All timing/guard tests pass on host
 
-#### Task Group 8: Manual Bench Routines (No Analyzer)
+#### Task Group 7: Manual Bench Routines (No Analyzer)
 **Assigned implementer:** testing-engineer
-**Dependencies:** Task Groups 3, 6
+**Dependencies:** Task Groups 3, 4
 
 - [ ] 7.0 Create deterministic bench scripts and device routines
   - [ ] 7.1 Add a Python CLI script to run patterned back-and-forth sequences (varying distances/rhythms)
@@ -129,7 +129,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 1. Task Group 1: Pulse Generator Spike (RMT)
 2. Task Group 2: DIR/SLEEP Gating & Guards
 3. Task Group 3: Integration + Protocol Simplification (Constant Speed)
-4. Task Group 5: Host CLI/TUI Adjustments
-5. Task Group 6: Acceleration (Global ACCEL + Trapezoid)
-6. Task Group 7: Unit Tests for Timing and Guards
-7. Task Group 8: Manual Bench Routines (No Analyzer)
+4. Task Group 4: Acceleration (Global ACCEL + Trapezoid)
+5. Task Group 5: Host CLI/TUI Adjustments
+6. Task Group 6: Unit Tests for Timing and Guards
+7. Task Group 7: Manual Bench Routines (No Analyzer)

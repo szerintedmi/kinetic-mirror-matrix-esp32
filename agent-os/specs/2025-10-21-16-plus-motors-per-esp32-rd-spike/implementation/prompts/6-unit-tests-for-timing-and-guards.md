@@ -1,14 +1,15 @@
-We're continuing our implementation of 16+ Motors per ESP32 (Shared STEP Spike) by implementing task group number 7:
+We're continuing our implementation of 16+ Motors per ESP32 (Shared STEP Spike) by implementing task group number 6:
 
 ## Implement this task and its sub-tasks:
 
-#### Task Group 7: Unit Tests for Timing and Guards
+#### Task Group 6: Unit Tests for Timing and Guards
 **Assigned implementer:** testing-engineer
-**Dependencies:** Task Groups 1-3, 6
+**Dependencies:** Task Groups 1-3, 4
 
 - [ ] 6.0 Consolidate timing/guard tests
   - [ ] 6.1 Review tests from 1.1 and 2.1; add up to 6 more for edge cases
   - [ ] 6.2 Ensure host-native tests run under PlatformIO `env:native` if available
+  - [ ] 6.3 After ACCEL lands, add tests for period update scheduling continuity and no-STEP guard adherence during ramps
 
 ## Understand the context
 
@@ -26,6 +27,7 @@ Guide your implementation using:
 
 Self-verify and test your work by:
 - Running ONLY the tests you've written and ensuring those tests pass.
+- Confirm existing host tests (timing/guards, protocol, multi-command) remain green.
 
 ## Update tasks.md task status
 
@@ -33,7 +35,7 @@ Update this task group's checkboxes in `tasks.md` upon completion of sub-tasks y
 
 ## Document your implementation
 
-Create: `agent-os/specs/2025-10-21-16-plus-motors-per-esp32-rd-spike/implementation/7-timing-guards-tests-implementation.md`
+Create: `agent-os/specs/2025-10-21-16-plus-motors-per-esp32-rd-spike/implementation/6-timing-guards-tests-implementation.md`
 
 Structure: see template in implement-spec guide.
 
