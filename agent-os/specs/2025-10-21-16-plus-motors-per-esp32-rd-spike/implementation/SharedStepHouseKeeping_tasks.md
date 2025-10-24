@@ -9,7 +9,7 @@ This checklist captures current findings, decisions, and proposed refactors to k
 - Guard helpers (`SharedStepTiming`, `SharedStepGuards`) integrated; adapter schedules SLEEP low → DIR flip → SLEEP high mid‑gap. Added fast‑forward completion if a window is missed.
 - Generator migrated to RMT with ISR‑driven TX requeue (no loop mode). Edge hook provides a per‑period anchor. Shared STEP pin selectable via `-DSHARED_STEP_GPIO`.
 - Auto‑sleep implemented on move completion unless WAKE override is active.
-- Builds: `esp32Fas` and `esp32SharedStep` compile and link; native tests pass.
+- Builds: `esp32DedicatedStep` and `esp32SharedStep` compile and link; native tests pass.
 - On‑device smoke: repeated MOVE/HOME cycles run without freeze; heartbeat and adapter debug paths removed.
 
 ### 0) Cross‑check: FAS build guards
@@ -52,7 +52,7 @@ Status: RMT ISR‑driven requeue in place; serial freeze resolved.
 
 ### 6) PlatformIO environment names and filters
 - Rename envs for clarity:
-  - `[env:esp32dev]` → `[env:esp32Fas]`
+  - `[env:esp32dev]` → `[env:esp32DedicatedStep]`
   - `[env:esp32dev-shared]` → `[env:esp32SharedStep]`
 - Fix native build filter case:
   - `-<src/Drivers/Esp32/**>` → `-<src/drivers/Esp32/**>`
@@ -96,7 +96,7 @@ The temporary debugging aids have been removed:
 - Adapter ring buffer and event logging removed
 
 Checklist:
-- Build succeeds for `esp32Fas`, `esp32SharedStep`, and `native` — OK
+- Build succeeds for `esp32DedicatedStep`, `esp32SharedStep`, and `native` — OK
 - Heartbeat no longer prints — OK
 - `GET ADAPTER_*` returns `BAD_PARAM` — OK
 - No residual debug symbols — OK

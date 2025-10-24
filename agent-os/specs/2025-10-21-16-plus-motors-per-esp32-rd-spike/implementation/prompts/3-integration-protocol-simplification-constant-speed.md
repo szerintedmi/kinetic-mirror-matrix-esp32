@@ -21,7 +21,7 @@ What’s implemented
 
 Developer surface
 - PlatformIO envs
-  - `esp32Fas` (FastAccelStepper baseline)
+  - `esp32DedicatedStep` (baseline, currently FastAccelStepper‑based)
   - `esp32SharedStep` (shared‑STEP; `-DUSE_SHARED_STEP=1`, `-DSHARED_STEP_GPIO=<pin>`)
 - Key sources
   - RMT generator: `src/drivers/Esp32/SharedStepRmt.cpp`, header in `include/drivers/Esp32/SharedStepRmt.h`
@@ -34,4 +34,3 @@ Validation snapshot
 
 Next
 - Bench repetition to validate stability across cycles; then proceed to global ACCEL and ramp scheduling (Task Group 6).
-

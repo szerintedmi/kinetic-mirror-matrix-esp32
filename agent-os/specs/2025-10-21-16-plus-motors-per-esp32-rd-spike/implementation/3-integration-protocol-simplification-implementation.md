@@ -5,7 +5,7 @@ This report captures the current as‑built state for Task Group 3.
 Outcomes
 - Protocol simplified to constant‑speed. `MOVE:<id|ALL>,<abs_steps>` and `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]` only. Legacy per‑command speed/accel params are rejected.
 - Global controls: `GET/SET SPEED` and `GET/SET ACCEL` (ACCEL accepted but ignored in shared‑STEP until ramps land). `SET` rejected while any motor is moving.
-- New shared‑STEP build: `env:esp32SharedStep` uses an RMT/ISR generator with a single shared STEP pin (no FAS dependency). Baseline `env:esp32Fas` remains.
+- New shared‑STEP build: `env:esp32SharedStep` uses an RMT/ISR generator with a single shared STEP pin (no FAS dependency). Baseline `env:esp32DedicatedStep` remains.
 - Shared‑STEP adapter owns DIR/SLEEP on Arduino; guard windows enforce SLEEP low → DIR flip → SLEEP high within safe gaps.
 - Estimates aligned: shared‑STEP builds use constant‑speed estimates; FAS builds keep MotionKinematics. On‑device tests compare actual vs firmware estimate with symmetric tolerance.
 - Serial multi‑command: `;`‑separated commands supported for simple manual concurrency. The line is rejected if targeted motor sets overlap (e.g., `H:7;M:7,1000`, `M:ALL,100;M:5,1200`).
@@ -16,7 +16,7 @@ Builds and environments
   - Flags: `-DUSE_SHARED_STEP=1 -DSHARED_STEP_GPIO=<pin>`
   - RMT with 1 µs ticks, ISR‑driven TX requeue, edge hook per period.
   - No FastAccelStepper dependency.
-- `esp32Fas` (baseline FAS):
+- `esp32DedicatedStep` (baseline, FAS‑based):
   - Per‑motor STEP via FastAccelStepper; unchanged.
 
 Key modules and changes
@@ -37,15 +37,15 @@ Key modules and changes
 
 Validation
 - Native tests: pass.
-- ESP32 builds: `esp32SharedStep` and `esp32Fas` compile and link.
+- ESP32 builds: `esp32SharedStep` and `esp32DedicatedStep` compile and link.
 - On‑device timing tests now assert actual within ±max(10%, 150 ms) of firmware’s own estimate.
 - Manual smoke: GET/SET SPEED; MOVE/HOME cycles; busy rejections during motion.
 
 How to build/run
 - Shared‑STEP: `pio run -e esp32SharedStep`
-- FAS baseline: `pio run -e esp32Fas`
+- DedicatedStep baseline: `pio run -e esp32DedicatedStep`
 - Host tests: `pio test -e native`
-- On‑device tests (compile only): `pio test -e esp32Fas -f test_OnDevice --without-uploading` (adjust env as needed)
+- On‑device tests (compile only): `pio test -e esp32DedicatedStep -f test_OnDevice --without-uploading` (adjust env as needed)
 
 Next steps
 - Bench repetition across >10 MOVE/HOME cycles at varied speeds; verify stability and auto‑sleep.
