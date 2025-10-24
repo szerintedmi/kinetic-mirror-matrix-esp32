@@ -62,6 +62,13 @@ void test_shared_timing_guard_fits();
 // SharedStepRamp
 void test_stop_distance_basic();
 void test_stop_distance_edges();
+// SharedStep edge cases
+void test_shared_timing_period_zero();
+void test_guard_fit_thresholds();
+void test_compute_flip_window_too_tight_period();
+void test_compute_flip_window_spacing_matches_constants();
+void test_align_next_edge_near_boundary();
+void test_stop_distance_round_up_small_values();
 
 // SharedStepGuards
 void test_dir_guard_constants_reasonable();
@@ -167,6 +174,13 @@ int main(int, char**) {
   // Shared STEP ramp helpers
   setUp(); RUN_TEST(test_stop_distance_basic);
   setUp(); RUN_TEST(test_stop_distance_edges);
+  // Shared STEP edge-case timing/guards
+  setUp(); RUN_TEST(test_shared_timing_period_zero);
+  setUp(); RUN_TEST(test_guard_fit_thresholds);
+  setUp(); RUN_TEST(test_compute_flip_window_too_tight_period);
+  setUp(); RUN_TEST(test_compute_flip_window_spacing_matches_constants);
+  setUp(); RUN_TEST(test_align_next_edge_near_boundary);
+  setUp(); RUN_TEST(test_stop_distance_round_up_small_values);
 
   // Shared STEP DIR/SLEEP guards
   setUp(); RUN_TEST(test_dir_guard_constants_reasonable);

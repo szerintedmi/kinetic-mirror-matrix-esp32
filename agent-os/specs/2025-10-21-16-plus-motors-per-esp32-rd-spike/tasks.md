@@ -108,9 +108,9 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 1-3, 4
 
-- [ ] 6.0 Consolidate timing/guard tests
-  - [ ] 6.1 Review tests from 1.1 and 2.1; add up to 6 more for edge cases
-  - [ ] 6.2 Ensure host-native tests run under PlatformIO `env:native` if available
+- [x] 6.0 Consolidate timing/guard tests
+  - [x] 6.1 Review tests from 1.1 and 2.1; add up to 6 more for edge cases
+  - [x] 6.2 Ensure host-native tests run under PlatformIO `env:native` if available
 
 **Acceptance Criteria:**
 - All timing/guard tests pass on host
