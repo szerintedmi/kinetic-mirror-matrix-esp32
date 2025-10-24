@@ -119,10 +119,10 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 3, 4
 
-- [ ] 7.0 Create deterministic bench scripts and device routines
-  - [ ] 7.1 Add a Python CLI script to run patterned back-and-forth sequences (varying distances/rhythms)
-  - [ ] 7.2 Add a device-side routine to report final MCU-tracked positions after N cycles
-  - [ ] 7.3 Lab checklist for comparing physical vs tracked positions
+- [x] 7.0 Create deterministic bench scripts and device routines
+  - [x] 7.1 Add a Python CLI script to run patterned back-and-forth sequences (varying distances/rhythms)
+  - [x] 7.2 Add a device-side routine to report final MCU-tracked positions after N cycles
+  - [x] 7.3 Lab checklist for comparing physical vs tracked positions
 
 **Acceptance Criteria:**
 - Scripted routine runs without code edits; produces repeatable sequences
