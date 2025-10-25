@@ -97,8 +97,13 @@ std::string MotorCommandProcessor::handleHELP()
 {
   std::ostringstream os;
   os << "HELP\n";
+#if (USE_SHARED_STEP)
   os << "MOVE:<id|ALL>,<abs_steps>\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
+#else
+  os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
+  os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
+#endif
   os << "STATUS\n";
   os << "GET\n";
   os << "GET ALL\n";
@@ -346,9 +351,25 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
     return "CTRL:ERR E07 POS_OUT_OF_RANGE";
   int speed = default_speed_sps_;
   int accel = default_accel_sps2_;
-  // Legacy per-move params are no longer accepted
+#if (USE_SHARED_STEP)
+  // Per-move speed/accel not supported on shared-STEP builds
   if ((parts.size() >= 3 && !parts[2].empty()) || (parts.size() >= 4 && !parts[3].empty()))
     return "CTRL:ERR E03 BAD_PARAM";
+#else
+  // Dedicated-step builds: accept optional per-move speed/accel
+  if (parts.size() >= 3 && !parts[2].empty()) {
+    if (!parseInt(parts[2], speed) || speed <= 0) return "CTRL:ERR E03 BAD_PARAM";
+  }
+  if (parts.size() >= 4 && !parts[3].empty()) {
+    if (!parseInt(parts[3], accel) || accel <= 0) return "CTRL:ERR E03 BAD_PARAM";
+  }
+  // Reject extra non-empty tokens beyond the supported arity
+  if (parts.size() > 4) {
+    for (size_t i = 4; i < parts.size(); ++i) {
+      if (!trim(parts[i]).empty()) return "CTRL:ERR E03 BAD_PARAM";
+    }
+  }
+#endif
   // Shared-STEP global busy rule: block new MOVE while any motor is moving,
   // but allow multi-command batches to start multiple MOVEs together when the
   // batch begins idle.
@@ -468,9 +489,38 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
   }
   if (parts.size() >= 4 && !parts[3].empty())
   {
+    // Backward-compatible handling:
+    // - If only 4 tokens: interpret 4th as full_range (legacy form)
+    // - If >=5 tokens (dedicated-step only): parse speed/accel at 4th/5th, and optional full_range at 6th
+#if (USE_SHARED_STEP)
     if (!parseInt(parts[3], full_range))
       return "CTRL:ERR E03 BAD_PARAM";
+#else
+    if (parts.size() == 4) {
+      if (!parseInt(parts[3], full_range))
+        return "CTRL:ERR E03 BAD_PARAM";
+    }
+#endif
   }
+#if !(USE_SHARED_STEP)
+  // Dedicated-step builds: accept optional per-home speed/accel
+  if (parts.size() >= 5 && !parts[4].empty()) {
+    if (!parseInt(parts[4], speed) || speed <= 0) return "CTRL:ERR E03 BAD_PARAM";
+  }
+  if (parts.size() >= 6 && !parts[5].empty()) {
+    if (!parseInt(parts[5], accel) || accel <= 0) return "CTRL:ERR E03 BAD_PARAM";
+  }
+  // Optional full_range at position 6 when speed/accel are present
+  if (parts.size() >= 7 && !parts[6].empty()) {
+    if (!parseInt(parts[6], full_range)) return "CTRL:ERR E03 BAD_PARAM";
+  }
+  // Reject extra non-empty tokens beyond supported arity
+  if (parts.size() > 7) {
+    for (size_t i = 7; i < parts.size(); ++i) {
+      if (!trim(parts[i]).empty()) return "CTRL:ERR E03 BAD_PARAM";
+    }
+  }
+#endif
   // Thermal pre-flight: tick and check required time vs limits
   controller_->tick(now_ms);
   if (full_range <= 0) {
