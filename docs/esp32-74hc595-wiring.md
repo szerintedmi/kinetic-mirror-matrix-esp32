@@ -14,7 +14,7 @@ This project drives eight DRV8825 stepper drivers using FastAccelStepper for STE
     - `SHIFT595_RCLK = 5` (74HC595 RCLK / ST_CP)
     - `SHIFT595_OE   = 22` (OE, active‑low, shared by both 595s)
   - STEP pins for motors `0..7`
-    - `STEP_PINS[8] = {4, 16, 17, 25, 26, 27, 32, 33}`
+    - `STEP_PINS[8] = {32, 25, 27, 13, 4, 17, 19, 21}`
 
 ## 74HC595 Integration (SPI + Latch)
 
