@@ -34,24 +34,33 @@ SETUP_COMMANDS: Sequence[str] = ["SET SPEED=4000;SET ACCEL=16000;SET DECEL=0;HOM
 # Hard-coded sequence that emphasizes rhythm changes without per-run tweaking.
 PATTERN_COMMANDS: Sequence[str] = [
     # Small Steps forward then back to 0 to surface if small steps are accurate. running 10 repetitions of these moves
-    # sharedstep: big drift. Fas: tiny drift
+    # sharedstep: total chaos drift, all motors have different drift. Fas: no noticable drift
     # "MOVE:ALL,-300",
     # "MOVE:ALL,0",
     # "MOVE:ALL,300",
     # "MOVE:ALL,600",
     # "MOVE:ALL,900",
-    ## sharedStep: huge drifting with 100 steps. Fas: small drift
+    # "MOVE:ALL,0",
+    # sharedStep: huge drifting, all motors have different drift. Fas: no noticable drift
     "MOVE:ALL,100",
     "MOVE:ALL,200",
     "MOVE:ALL,300",
     "MOVE:ALL,400",
     "MOVE:ALL,500",
-    # sharedStep: huge  drift. Fas: small drift
+    "MOVE:ALL,0",
+    # sharedStep: huge  drift. Fas: no noticable drift
     # "MOVE:ALL,50",
     # "MOVE:ALL,100",
     # "MOVE:ALL,150",
     # "MOVE:ALL,200",
     # "MOVE:ALL,250",
+    # "MOVE:ALL,0",
+    # "MOVE:4,50",
+    # "MOVE:4,100",
+    # "MOVE:4,150",
+    # "MOVE:4,200",
+    # "MOVE:4,250",
+    # "MOVE:4,0",
     # sharedStep: hardly moving with 10 steps, Fas: small drift
     # "MOVE:ALL,30",
     # "MOVE:ALL,40",
@@ -61,6 +70,16 @@ PATTERN_COMMANDS: Sequence[str] = [
     # "MOVE:ALL,80",
     # "MOVE:ALL,90",
     # "MOVE:ALL,100",
+    # "MOVE:ALL,110",
+    # "MOVE:ALL,120",
+    # "MOVE:ALL,130",
+    # "MOVE:ALL,140",
+    # "MOVE:ALL,150",
+    # "MOVE:ALL,160",
+    # "MOVE:ALL,170",
+    # "MOVE:ALL,180",
+    # "MOVE:ALL,190",
+    # "MOVE:ALL,200",
     # "MOVE:ALL,0",
 ]
 
@@ -153,9 +172,7 @@ def _read_response_fast(
     return text, meta
 
 
-def _send_and_log(
-    ser, cmd: str, timeout: float
-) -> str:
+def _send_and_log(ser, cmd: str, timeout: float) -> str:
     """Send a single command (or multicommand) and print the device response.
 
     For STATUS polls, callers may pass a shorter idle_grace via idle_grace_override
@@ -266,7 +283,9 @@ def _build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--baud", "-b", type=int, default=115200, help="Baud rate (default: 115200)"
     )
-    p.add_argument("--timeout", "-t", type=float, default=2.0, help="Serial read timeout (seconds)")
+    p.add_argument(
+        "--timeout", "-t", type=float, default=2.0, help="Serial read timeout (seconds)"
+    )
     p.add_argument(
         "--repetitions",
         "-r",
