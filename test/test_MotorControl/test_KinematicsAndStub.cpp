@@ -31,11 +31,11 @@ void test_stub_move_uses_estimator_duration() {
   int d = 500, v = 1200, a = 8000;
   uint32_t t = MotionKinematics::estimateMoveTimeMs(d, v, a);
   // Set globals then issue simplified MOVE
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine(std::string("SET SPEED=") + std::to_string(v), 0).c_str());
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", p.processLine(std::string("SET ACCEL=") + std::to_string(a), 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", p.processLine(std::string("SET SPEED=") + std::to_string(v), 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", p.processLine(std::string("SET ACCEL=") + std::to_string(a), 0).c_str());
   std::string cmd = std::string("MOVE:0,") + std::to_string(d);
   auto r1 = p.processLine(cmd, 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st_pre = status_for(p, (t > 0) ? (t - 1) : 0);
   TEST_ASSERT_TRUE(st_pre.find("id=0") != std::string::npos);
   TEST_ASSERT_TRUE(st_pre.find(" moving=1") != std::string::npos);
@@ -51,7 +51,7 @@ void test_stub_home_uses_estimator_duration() {
       MotorControlConstants::DEFAULT_SPEED_SPS,
       MotorControlConstants::DEFAULT_ACCEL_SPS2);
   auto r1 = p.processLine("HOME:0", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st_pre = status_for(p, (t > 0) ? (t - 1) : 0);
   TEST_ASSERT_TRUE(st_pre.find(" moving=1") != std::string::npos);
   auto st_post = status_for(p, t + 1);

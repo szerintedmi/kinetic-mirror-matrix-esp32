@@ -62,6 +62,10 @@ private:
 std::unique_ptr<IWifi> MakeWifi() { return std::unique_ptr<IWifi>(new StubWifi()); }
 std::unique_ptr<INvs> MakeNvs() { return std::unique_ptr<INvs>(new StubNvs()); }
 
+// Optional test hook used by NetOnboarding::setTestSimulation; no-op here as
+// NetOnboarding drives the CONNECTED transition in native tests.
+void ConfigureStubWifi(bool, uint32_t) {}
+
 } // namespace net_onboarding
 
 #endif // !ARDUINO || UNIT_TEST

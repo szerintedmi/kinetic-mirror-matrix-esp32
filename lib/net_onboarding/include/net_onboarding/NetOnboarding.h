@@ -27,8 +27,9 @@ enum class State : uint8_t {
 struct Status {
   State state;
   int rssi_dbm; // valid when CONNECTED, else 0
-  // IPv4 dotted-quad as a small fixed buffer; "0.0.0.0" when not connected
-  std::array<char, 16> ip; // enough for xxx.xxx.xxx.xxx + NUL
+  // IPv4 dotted-quad
+  std::array<char, 16> ip;    // xxx.xxx.xxx.xxx + NUL
+  std::array<char, 33> ssid;  // up to 32 chars + NUL
 };
 
 class NetOnboarding {
@@ -49,6 +50,7 @@ public:
 
   // Snapshot of current state, RSSI, and IP (connected only).
   Status status() const;
+  void apPassword(std::array<char,65>& out) const;
 
   // NVS helpers (exposed primarily for tests/tools)
   bool saveCredentials(const char* ssid, const char* pass);
@@ -86,6 +88,7 @@ private:
   // Platform adapters (ESP32 or stub)
   std::unique_ptr<IWifi> wifi_;
   std::unique_ptr<INvs> nvs_;
+  std::string last_ssid_;
 
 #if defined(USE_STUB_BACKEND)
   // Simulation (native/unit-test) only

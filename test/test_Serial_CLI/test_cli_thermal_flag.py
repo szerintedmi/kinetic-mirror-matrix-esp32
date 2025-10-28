@@ -6,7 +6,7 @@ from serial_cli import parse_thermal_get_response, extract_est_ms_from_ctrl_ok
 
 
 def test_parse_thermal_on():
-    s = "CTRL:OK THERMAL_LIMITING=ON max_budget_s=90"
+    s = "CTRL:ACK THERMAL_LIMITING=ON max_budget_s=90"
     parsed = parse_thermal_get_response(s)
     assert parsed is not None
     enabled, max_budget = parsed
@@ -15,7 +15,7 @@ def test_parse_thermal_on():
 
 
 def test_parse_thermal_off_missing_budget():
-    s = "CTRL:OK THERMAL_LIMITING=OFF"
+    s = "CTRL:ACK THERMAL_LIMITING=OFF"
     parsed = parse_thermal_get_response(s)
     assert parsed is not None
     enabled, max_budget = parsed
@@ -26,7 +26,7 @@ def test_parse_thermal_off_missing_budget():
 def test_extract_est_ms_with_warn():
     s = "\n".join([
         "CTRL:WARN THERMAL_NO_BUDGET id=0 budget_s=0 ttfc_s=10",
-        "CTRL:OK est_ms=1234",
+        "CTRL:ACK est_ms=1234",
     ])
     est = extract_est_ms_from_ctrl_ok(s)
     assert est == 1234

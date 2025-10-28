@@ -94,6 +94,13 @@ void NetOnboarding::resetCredentials() {
 
 Status NetOnboarding::status() const { return st_; }
 
+void NetOnboarding::apPassword(std::array<char,65>& out) const {
+  const char* p = nullptr;
+  if (wifi_) p = wifi_->apDefaultPassword();
+  if (!p) p = "";
+  std::snprintf(out.data(), out.size(), "%s", p);
+}
+
 // NVS persistence ----------------------------------------------------------
 
 bool NetOnboarding::saveCredentials(const char* ssid, const char* pass) {
@@ -102,6 +109,7 @@ bool NetOnboarding::saveCredentials(const char* ssid, const char* pass) {
   bool ok1 = nvs_->putString("ssid", ssid ? ssid : "");
   bool ok2 = nvs_->putString("psk", pass ? pass : "");
   nvs_->end();
+  if (ok1) { last_ssid_ = ssid ? ssid : ""; }
   return ok1 && ok2;
 }
 
@@ -111,6 +119,7 @@ bool NetOnboarding::loadCredentials(std::string& out_ssid, std::string& out_pass
   out_ssid = nvs_->getString("ssid", "");
   out_pass = nvs_->getString("psk", "");
   nvs_->end();
+  last_ssid_ = out_ssid;
   return !out_ssid.empty();
 }
 
@@ -121,6 +130,7 @@ void NetOnboarding::clearCredentials() {
     nvs_->remove("psk");
     nvs_->end();
   }
+  last_ssid_.clear();
 }
 
 // Transitions --------------------------------------------------------------
@@ -129,11 +139,19 @@ void NetOnboarding::enterApMode_() {
   st_.state = State::AP_ACTIVE;
   st_.rssi_dbm = 0;
   std::snprintf(st_.ip.data(), st_.ip.size(), "0.0.0.0");
+  st_.ssid[0] = '\0';
 
-  // Start AP with SSID derived from MAC
-  std::array<char, 32> ap;
-  buildApSsid_(ap);
-  if (wifi_) { wifi_->setModeAp(); wifi_->softApStart(ap.data(), wifi_->apDefaultPassword()); }
+  if (wifi_) {
+    // Ensure clean re-init path to avoid ESP errors when switching modes rapidly
+    wifi_->setModeOff();
+    wifi_->setModeAp();
+    // Build SSID after AP mode is active (ensures MAC available)
+    std::array<char, 32> ap;
+    buildApSsid_(ap);
+    std::snprintf(st_.ssid.data(), st_.ssid.size(), "%s", ap.data());
+    wifi_->softApStart(ap.data(), wifi_->apDefaultPassword());
+    wifi_->softApIp(st_.ip);
+  }
 }
 
 void NetOnboarding::enterConnecting_(const char* ssid, const char* pass) {
@@ -141,6 +159,9 @@ void NetOnboarding::enterConnecting_(const char* ssid, const char* pass) {
   st_.state = State::CONNECTING;
   st_.rssi_dbm = 0;
   std::snprintf(st_.ip.data(), st_.ip.size(), "0.0.0.0");
+  // Track requested SSID
+  if (ssid) last_ssid_ = ssid; else last_ssid_.clear();
+  std::snprintf(st_.ssid.data(), st_.ssid.size(), "%s", last_ssid_.c_str());
   connecting_since_ms_ = nowMs_();
 
 #if defined(UNIT_TEST) || !defined(ARDUINO)
@@ -148,6 +169,7 @@ void NetOnboarding::enterConnecting_(const char* ssid, const char* pass) {
 #endif
 
   if (wifi_) {
+    wifi_->setModeOff();
     wifi_->setModeSta();
     wifi_->disconnect(true);
 #if defined(ARDUINO)
@@ -161,6 +183,7 @@ void NetOnboarding::enterConnected_() {
   st_.state = State::CONNECTED;
   st_.rssi_dbm = 0;
   std::snprintf(st_.ip.data(), st_.ip.size(), "0.0.0.0");
+  std::snprintf(st_.ssid.data(), st_.ssid.size(), "%s", last_ssid_.c_str());
   if (wifi_) {
     st_.rssi_dbm = wifi_->staRssi();
     wifi_->staLocalIp(st_.ip);

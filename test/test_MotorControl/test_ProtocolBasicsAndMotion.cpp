@@ -65,7 +65,7 @@ void test_help_format() {
 
 void test_get_all_settings_single_line() {
   std::string r = proto.processLine("GET", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:OK ", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK ", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
@@ -102,26 +102,26 @@ void test_move_out_of_range() {
 
 void test_all_addressing_and_status_awake() {
   auto r1 = proto.processLine("WAKE:ALL", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
   auto st = proto.processLine("STATUS", 0);
   TEST_ASSERT_TRUE_MESSAGE(st.find("awake=1") != std::string::npos, "Expected awake=1 in STATUS");
 }
 
 void test_busy_rule_and_completion() {
   auto r1 = proto.processLine("MOVE:0,100", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("MOVE:0,200", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
   auto r3 = proto.processLine("MOVE:ALL,50", 20);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r3.c_str());
   proto.tick(1100);
   auto r4 = proto.processLine("MOVE:0,200", 1101);
-  TEST_ASSERT_TRUE(r4.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r4.rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_home_defaults() {
   auto r1 = proto.processLine("HOME:0", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("MOVE:0,10", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
   uint32_t th = MotionKinematics::estimateHomeTimeMs(
@@ -131,17 +131,17 @@ void test_home_defaults() {
       MotorControlConstants::DEFAULT_ACCEL_SPS2);
   proto.tick(th);
   auto r3 = proto.processLine("MOVE:0,10", th + 10);
-  TEST_ASSERT_TRUE(r3.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_sleep_busy_then_ok() {
   auto r1 = proto.processLine("MOVE:0,100", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("SLEEP:0", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
   proto.tick(1100);
   auto r3 = proto.processLine("SLEEP:0", 1200);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r3.c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r3.c_str());
 }
 
 void test_move_all_out_of_range() {
@@ -152,7 +152,7 @@ void test_move_all_out_of_range() {
 
 void test_wake_sleep_single_and_status() {
   auto r1 = proto.processLine("WAKE:1", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r1.c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
   auto st1 = proto.processLine("STATUS", 1);
   auto lines1 = split_lines(st1);
   bool found_awake = false;
@@ -164,7 +164,7 @@ void test_wake_sleep_single_and_status() {
   }
   TEST_ASSERT_TRUE(found_awake);
   auto r2 = proto.processLine("SLEEP:1", 2);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", r2.c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r2.c_str());
   auto st2 = proto.processLine("STATUS", 3);
   auto lines2 = split_lines(st2);
   bool found_asleep = false;
@@ -179,15 +179,15 @@ void test_wake_sleep_single_and_status() {
 
 void test_home_with_params_acceptance() {
   auto r = proto.processLine("HOME:0,900,150,2400", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_move_sets_speed_accel_in_status() {
   // Set globals then move, and verify status reflects them
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", proto.processLine("SET SPEED=5000", 0).c_str());
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", proto.processLine("SET ACCEL=12000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", proto.processLine("SET SPEED=5000", 0).c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", proto.processLine("SET ACCEL=12000", 0).c_str());
   auto r1 = proto.processLine("MOVE:0,10", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st = proto.processLine("STATUS", 1);
   auto lines = split_lines(st);
   bool ok = false;
@@ -205,8 +205,8 @@ void test_multi_cmd_accept_disjoint() {
   auto r = proto.processLine("WAKE:0;WAKE:1", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_EQUAL_INT(2, (int)lines.size());
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[0].c_str());
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[1].c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[0].c_str());
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[1].c_str());
 }
 
 void test_multi_cmd_reject_overlap_simple() {
@@ -223,8 +223,8 @@ void test_multi_cmd_sequence_responses() {
   auto r = proto.processLine("WAKE:0;MOVE:1,10", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_TRUE(lines.size() >= 2);
-  TEST_ASSERT_EQUAL_STRING("CTRL:OK", lines[0].c_str());
-  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[0].c_str());
+  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_multi_cmd_whitespace_and_case() {
@@ -232,7 +232,7 @@ void test_multi_cmd_whitespace_and_case() {
   auto lines = split_lines(r);
   // With aggregation, MOVE/HOME batch returns single consolidated OK with est_ms
   TEST_ASSERT_EQUAL_INT(1, (int)lines.size());
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:OK est_ms=", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK est_ms=", 0) == 0);
 }
 
 // HOME sequencing (from previous dedicated file)
@@ -249,7 +249,7 @@ void test_home_parsing_comma_skips() {
   // Comma-skip overshoot, set backoff to DEFAULT_BACKOFF
   std::string cmd = std::string("HOME:2,,") + std::to_string(MotorControlConstants::DEFAULT_BACKOFF);
   auto r = proto.processLine(cmd, 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
   auto st0 = proto.processLine("STATUS", 1);
   auto lines0 = split_lines(st0);
   TEST_ASSERT_TRUE(line_for_id_has(lines0, 2, " moving=1"));
@@ -265,18 +265,18 @@ void test_home_parsing_comma_skips() {
 void test_home_busy_rule_reject_when_moving() {
   // Longer distance to ensure still moving at 10ms under default speed
   auto r1 = proto.processLine("MOVE:2,1000", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("HOME:2", 10);
   TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
   // After completion, HOME should be accepted
   proto.tick(1200);
   auto r3 = proto.processLine("HOME:2", 1201);
-  TEST_ASSERT_TRUE(r3.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_home_all_concurrency_and_post_state() {
   auto r = proto.processLine("HOME:ALL", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:OK", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
   auto st0 = proto.processLine("STATUS", 1);
   auto lines0 = split_lines(st0);
   int moving_cnt = 0;

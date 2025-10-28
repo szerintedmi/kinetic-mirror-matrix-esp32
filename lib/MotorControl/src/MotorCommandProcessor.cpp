@@ -11,6 +11,14 @@
 #include <cctype>
 #include <cstdlib>
 #include <vector>
+#include <chrono>
+#if defined(ARDUINO)
+#include <Arduino.h>
+#else
+#include <thread>
+#endif
+#include "net_onboarding/NetOnboarding.h"
+#include "net_onboarding/NetSingleton.h"
 
 constexpr long kMinPos = MotorControlConstants::MIN_POS_STEPS;
 constexpr long kMaxPos = MotorControlConstants::MAX_POS_STEPS;
@@ -37,6 +45,58 @@ static std::vector<std::string> split(const std::string &s, char delim)
   std::stringstream ss(s);
   while (std::getline(ss, cur, delim))
     out.push_back(cur);
+  return out;
+}
+
+// Parse CSV with optional quoted fields. Supports escaping of \" and \\
+// Returns empty vector on malformed input (e.g., unclosed quote)
+static std::vector<std::string> parseCsvQuoted(const std::string &s)
+{
+  std::vector<std::string> out;
+  std::string cur;
+  bool in_quotes = false;
+  bool escape = false;
+  for (size_t i = 0; i < s.size(); ++i) {
+    char c = s[i];
+    if (in_quotes) {
+      if (escape) {
+        if (c == '"' || c == '\\') cur.push_back(c);
+        else {
+          // Unknown escape: keep char as-is
+          cur.push_back(c);
+        }
+        escape = false;
+      } else if (c == '\\') {
+        escape = true;
+      } else if (c == '"') {
+        in_quotes = false;
+      } else {
+        cur.push_back(c);
+      }
+    } else {
+      if (c == ',') {
+        // trim whitespace for unquoted tokens
+        out.push_back(trim(cur));
+        cur.clear();
+      } else if (c == '"') {
+        // entering quotes: keep existing trimmed prefix if empty
+        if (!trim(cur).empty()) {
+          // Unexpected quote inside unquoted token -> treat as literal
+          cur.push_back(c);
+        } else {
+          cur.clear();
+          in_quotes = true;
+        }
+      } else {
+        cur.push_back(c);
+      }
+    }
+  }
+  if (in_quotes) {
+    // unclosed quote -> invalid
+    return std::vector<std::string>();
+  }
+  out.push_back(trim(cur));
   return out;
 }
 
@@ -100,6 +160,16 @@ std::string MotorCommandProcessor::handleHELP()
   // Always include the minimal canonical forms so help remains stable across builds
   os << "MOVE:<id|ALL>,<abs_steps>\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
+#ifdef ARDUINO
+  os << "NET:RESET\n";
+  os << "NET:STATUS\n";
+  os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
+#else
+  // NET verbs available in both native and Arduino builds; HELP remains consistent
+  os << "NET:RESET\n";
+  os << "NET:STATUS\n";
+  os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
+#endif
 #if !(USE_SHARED_STEP)
   // Dedicated-step builds: also advertise the extended HOME/MOVE forms
   os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
@@ -142,7 +212,7 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
   // No-arg or ALL -> return all core settings in a single OK line
   if (key.empty() || key == "ALL") {
     std::ostringstream os;
-    os << "CTRL:OK "
+    os << "CTRL:ACK "
        << "SPEED=" << default_speed_sps_ << ' '
        << "ACCEL=" << default_accel_sps2_ << ' '
        << "DECEL=" << default_decel_sps2_ << ' '
@@ -151,20 +221,20 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
     return os.str();
   }
   if (key == "SPEED") {
-    std::ostringstream os; os << "CTRL:OK SPEED=" << default_speed_sps_;
+    std::ostringstream os; os << "CTRL:ACK SPEED=" << default_speed_sps_;
     return os.str();
   }
   if (key == "ACCEL") {
-    std::ostringstream os; os << "CTRL:OK ACCEL=" << default_accel_sps2_;
+    std::ostringstream os; os << "CTRL:ACK ACCEL=" << default_accel_sps2_;
     return os.str();
   }
   if (key == "DECEL") {
-    std::ostringstream os; os << "CTRL:OK DECEL=" << default_decel_sps2_;
+    std::ostringstream os; os << "CTRL:ACK DECEL=" << default_decel_sps2_;
     return os.str();
   }
   if (key == "THERMAL_LIMITING") {
     std::ostringstream os;
-    os << "CTRL:OK THERMAL_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
+    os << "CTRL:ACK THERMAL_LIMITING=" << (thermal_limits_enabled_ ? "ON" : "OFF")
        << " max_budget_s=" << (int)MotorControlConstants::MAX_RUNNING_TIME_S;
     return os.str();
   }
@@ -196,7 +266,7 @@ std::string MotorCommandProcessor::handleGET(const std::string &args)
     if (id >= controller_->motorCount()) return "CTRL:ERR E02 BAD_ID";
     const MotorState &s = controller_->state(id);
     std::ostringstream os;
-    os << "CTRL:OK LAST_OP_TIMING ongoing=" << (s.last_op_ongoing ? 1 : 0)
+    os << "CTRL:ACK LAST_OP_TIMING ongoing=" << (s.last_op_ongoing ? 1 : 0)
        << " id=" << (int)id
        << " est_ms=" << s.last_op_est_ms
        << " started_ms=" << s.last_op_started_ms;
@@ -222,11 +292,11 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
     if (val == "ON") {
       thermal_limits_enabled_ = true;
       controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
-      return "CTRL:OK";
+      return "CTRL:ACK";
     } else if (val == "OFF") {
       thermal_limits_enabled_ = false;
       controller_->setThermalLimitsEnabled(thermal_limits_enabled_);
-      return "CTRL:OK";
+      return "CTRL:ACK";
     }
     return "CTRL:ERR E03 BAD_PARAM";
   }
@@ -237,7 +307,7 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
       if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
     }
     default_speed_sps_ = (int)v;
-    return "CTRL:OK";
+    return "CTRL:ACK";
   }
   if (key == "ACCEL") {
     long v; if (!parseInt(val, v) || v <= 0) return "CTRL:ERR E03 BAD_PARAM";
@@ -245,7 +315,7 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
       if (controller_->state(id).moving) return "CTRL:ERR E04 BUSY";
     }
     default_accel_sps2_ = (int)v;
-    return "CTRL:OK";
+    return "CTRL:ACK";
   }
   if (key == "DECEL") {
     long v; if (!parseInt(val, v) || v < 0) return "CTRL:ERR E03 BAD_PARAM";
@@ -254,7 +324,7 @@ std::string MotorCommandProcessor::handleSET(const std::string &args)
     }
     default_decel_sps2_ = (int)v;
     controller_->setDeceleration(default_decel_sps2_);
-    return "CTRL:OK";
+    return "CTRL:ACK";
   }
   return "CTRL:ERR E03 BAD_PARAM";
 }
@@ -315,12 +385,12 @@ std::string MotorCommandProcessor::handleWAKE(const std::string &args)
         return std::string("CTRL:ERR E12 THERMAL_NO_BUDGET_WAKE");
       } else {
         controller_->wakeMask(mask);
-        return std::string("CTRL:WARN THERMAL_NO_BUDGET_WAKE\nCTRL:OK");
+        return std::string("CTRL:WARN THERMAL_NO_BUDGET_WAKE\nCTRL:ACK");
       }
     }
   }
   controller_->wakeMask(mask);
-  return "CTRL:OK";
+  return "CTRL:ACK";
 }
 
 std::string MotorCommandProcessor::handleSLEEP(const std::string &args)
@@ -330,7 +400,7 @@ std::string MotorCommandProcessor::handleSLEEP(const std::string &args)
     return "CTRL:ERR E02 BAD_ID";
   if (!controller_->sleepMask(mask))
     return "CTRL:ERR E04 BUSY";
-  return "CTRL:OK";
+  return "CTRL:ACK";
 }
 
 // Batch context for multi-command processing
@@ -419,7 +489,7 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
         if (!controller_->moveAbsMask(mask, target, speed, accel, now_ms))
           return "CTRL:ERR E04 BUSY";
         std::ostringstream out; out << wo.str() << "\n"
-                                    << "CTRL:OK est_ms=" << max_req_ms;
+                                    << "CTRL:ACK est_ms=" << max_req_ms;
         return out.str();
       }
     }
@@ -453,7 +523,7 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
         if (!controller_->moveAbsMask(mask, target, speed, accel, now_ms))
           return "CTRL:ERR E04 BUSY";
         std::ostringstream out; out << wo.str() << "\n"
-                                    << "CTRL:OK est_ms=" << max_req_ms;
+                                    << "CTRL:ACK est_ms=" << max_req_ms;
         return out.str();
       }
     }
@@ -462,7 +532,7 @@ std::string MotorCommandProcessor::handleMOVE(const std::string &args, uint32_t 
     return "CTRL:ERR E04 BUSY";
   {
     std::ostringstream ok;
-    ok << "CTRL:OK est_ms=" << max_req_ms;
+    ok << "CTRL:ACK est_ms=" << max_req_ms;
     return ok.str();
   }
 }
@@ -553,7 +623,7 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
       if (!controller_->homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms))
         return "CTRL:ERR E04 BUSY";
       std::ostringstream out; out << wo.str() << "\n"
-                                  << "CTRL:OK est_ms=" << req_ms_total;
+                                  << "CTRL:ACK est_ms=" << req_ms_total;
       return out.str();
     }
   }
@@ -589,7 +659,7 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
         if (!controller_->homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms))
           return "CTRL:ERR E04 BUSY";
         std::ostringstream out; out << wo.str() << "\n"
-                                    << "CTRL:OK est_ms=" << req_ms_total;
+                                    << "CTRL:ACK est_ms=" << req_ms_total;
         return out.str();
       }
     }
@@ -598,7 +668,7 @@ std::string MotorCommandProcessor::handleHOME(const std::string &args, uint32_t 
     return "CTRL:ERR E04 BUSY";
   {
     std::ostringstream ok;
-    ok << "CTRL:OK est_ms=" << req_ms_total;
+    ok << "CTRL:ACK est_ms=" << req_ms_total;
     return ok.str();
   }
 }
@@ -683,8 +753,8 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
           size_t pos = r.find('\n', start);
           std::string ln = (pos == std::string::npos) ? r.substr(start) : r.substr(start, pos - start);
           if (!ln.empty()) {
-            // Look for CTRL:OK est_ms=...
-            if (ln.rfind("CTRL:OK", 0) == 0 && ln.find("est_ms=") != std::string::npos) {
+            // Look for CTRL:ACK est_ms=...
+            if (ln.rfind("CTRL:ACK", 0) == 0 && ln.find("est_ms=") != std::string::npos) {
               // parse est_ms value
               size_t p = ln.find("est_ms=");
               if (p != std::string::npos) {
@@ -712,7 +782,7 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
     s_batch_initially_idle = prev_idle;
     if (saw_est) {
       if (!combined.empty()) combined.push_back('\n');
-      std::ostringstream ok; ok << "CTRL:OK est_ms=" << agg_est_ms; combined += ok.str();
+      std::ostringstream ok; ok << "CTRL:ACK est_ms=" << agg_est_ms; combined += ok.str();
     }
     return combined;
   }
@@ -746,6 +816,83 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
   {
     controller_->tick(now_ms);
     return handleSET(args);
+  }
+  if (verb == "NET")
+  {
+    // Delegate to NET sub-commands; do not advance motor controller time here
+    // NET commands are independent of motor state
+    using net_onboarding::Net;
+    using net_onboarding::State;
+    // args can be "RESET", "STATUS" or "SET,<ssid>,<pass>"
+    std::string a = trim(args);
+    // Normalize sub-verb for comparisons
+    std::string up = to_upper_copy(a);
+    // Extract first token before ',' if present for sub-verb
+    std::string sub = up;
+    size_t comma = up.find(',');
+    if (comma != std::string::npos) sub = trim_copy(up.substr(0, comma));
+
+    if (sub == "RESET")
+    {
+      auto before = Net().status().state;
+      // Reject RESET while connecting
+      if (before == State::CONNECTING) return "CTRL:ERR NET_BUSY_CONNECTING";
+      Net().resetCredentials();
+      // If we were already in AP mode prior to RESET, emit an explicit event line
+      // to confirm AP is active (the main loop will emit on transitions otherwise).
+      auto after = Net().status();
+      if (before == State::AP_ACTIVE)
+      {
+        std::ostringstream os;
+        os << "CTRL:ACK\n";
+        os << "CTRL: NET:AP_ACTIVE ssid=" << after.ssid.data()
+           << " ip=" << after.ip.data();
+        return os.str();
+      }
+      return "CTRL:ACK";
+    }
+    if (sub == "STATUS")
+    {
+      auto s = Net().status();
+      std::ostringstream os;
+      os << "CTRL:ACK state=";
+      if (s.state == State::AP_ACTIVE) os << "AP_ACTIVE";
+      else if (s.state == State::CONNECTING) os << "CONNECTING";
+      else if (s.state == State::CONNECTED) os << "CONNECTED";
+      os << " rssi=";
+      if (s.state == State::CONNECTED) os << s.rssi_dbm; else os << "NA";
+      os << " ip=" << s.ip.data();
+      os << " ssid=" << s.ssid.data();
+      // Password exposure rules: show AP password; mask otherwise
+      if (s.state == State::AP_ACTIVE) {
+        std::array<char,65> pass; Net().apPassword(pass);
+        os << " pass=" << pass.data();
+      } else {
+        os << " pass=********";
+      }
+      return os.str();
+    }
+    if (sub == "SET")
+    {
+      // Reject SET while connecting
+      if (Net().status().state == State::CONNECTING) return "CTRL:ERR NET_BUSY_CONNECTING";
+      // Parse CSV with quoted fields; expect 3 tokens: SET, ssid, pass
+      auto toks = parseCsvQuoted(a);
+      if (toks.size() != 3) return "CTRL:ERR NET_BAD_PARAM";
+      // Validate ssid/pass
+      const std::string &ssid = toks[1];
+      const std::string &pass = toks[2];
+      if (ssid.empty() || ssid.size() > 32) return "CTRL:ERR NET_BAD_PARAM";
+      if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
+        if (pass.size() > 0 && pass.size() < 8) return "CTRL:ERR NET_BAD_PARAM PASS_TOO_SHORT";
+        return "CTRL:ERR NET_BAD_PARAM";
+      }
+      // Save + attempt connect
+      bool ok = Net().setCredentials(ssid.c_str(), pass.c_str());
+      if (!ok) return "CTRL:ERR NET_SAVE_FAILED";
+      return "CTRL:ACK";
+    }
+    return "CTRL:ERR E03 BAD_PARAM";
   }
   if (verb == "WAKE")
   {

@@ -107,15 +107,15 @@ def parse_thermal_get_response(text: str) -> Optional[Tuple[bool, Optional[int]]
 
 
 def extract_est_ms_from_ctrl_ok(text: str) -> Optional[int]:
-    """Extract est_ms=N from the final CTRL:OK line in a response.
-    Safe when WARN lines precede OK; returns None if not present.
+    """Extract est_ms=N from the final CTRL:ACK (or legacy CTRL:OK) line in a response.
+    Safe when WARN lines precede ACK; returns None if not present.
     """
     if not text:
         return None
     lines = text.splitlines()
     for ln in reversed(lines):
         ln = ln.strip()
-        if ln.startswith("CTRL:OK"):
+        if ln.startswith("CTRL:ACK") or ln.startswith("CTRL:OK"):
             for part in ln.split():
                 if part.startswith("est_ms="):
                     try:
@@ -213,6 +213,23 @@ def parse_status_lines(text: str) -> List[Dict[str, str]]:
             out.append(row)
     return out
 
+def parse_kv_line(text: str) -> Dict[str, str]:
+    out: Dict[str, str] = {}
+    if not text:
+        return out
+    # take last line beginning with CTRL:ACK (or legacy CTRL:OK) if present
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    if not lines:
+        return out
+    ln = lines[-1]
+    if ln.upper().startswith("CTRL:ACK") or ln.upper().startswith("CTRL:OK"):
+        parts = ln.split()
+        for tok in parts[1:]:
+            if "=" in tok:
+                k, v = tok.split("=", 1)
+                out[k] = v
+    return out
+
 
 def render_table(rows: List[Dict[str, str]]) -> str:
     cols = [
@@ -266,6 +283,8 @@ class _SerialWorker(threading.Thread):
         # Thermal flag state
         self._thermal_state: Optional[Tuple[bool, Optional[int]]] = None
         self._need_thermal_refresh: bool = True
+        # NET status cache
+        self._net_info: Dict[str, str] = {}
 
     def get_state(self) -> Tuple[List[Dict[str, str]], List[str], Optional[str], float, str]:
         with self._lock:
@@ -276,6 +295,10 @@ class _SerialWorker(threading.Thread):
                 self._last_update_ts,
                 self._last_help_text,
             )
+
+    def get_net_info(self) -> Dict[str, str]:
+        with self._lock:
+            return dict(self._net_info)
 
     def get_thermal_status_text(self) -> str:
         st = self._thermal_state
@@ -293,7 +316,10 @@ class _SerialWorker(threading.Thread):
 
     def queue_cmd(self, cmd: str) -> None:
         with self._lock:
-            self._cmdq.append(cmd if cmd.endswith("\n") else cmd + "\n")
+            full = cmd if cmd.endswith("\n") else cmd + "\n"
+            # Echo the command into the log immediately so users always see it
+            self._log.append("> " + cmd.strip())
+            self._cmdq.append(full)
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -355,8 +381,15 @@ class _SerialWorker(threading.Thread):
                         complete = True
                     if complete:
                         resp_text = self._pending_buf.strip()
-                        raw_lines = resp_text.splitlines()
-                        lines = (["> " + raw_lines[0]] + raw_lines[1:]) if raw_lines else ["> (no response)"]
+                        raw_lines = [ln for ln in resp_text.splitlines() if ln.strip()]
+                        # Suppress device echo of the command itself (firmware echoes typed chars)
+                        try:
+                            sent = (self._pending_cmd or "").strip()
+                            if raw_lines and raw_lines[0].strip() == sent:
+                                raw_lines = raw_lines[1:]
+                        except Exception:
+                            pass
+                        lines = (raw_lines if raw_lines else ["> (no response)"])
                         with self._lock:
                             self._log.extend(lines)
                             try:
@@ -382,6 +415,7 @@ class _SerialWorker(threading.Thread):
                         time.sleep(0.01)
                         continue
 
+                # Prioritize sending queued commands before draining unsolicited output
                 cmd = None
                 with self._lock:
                     if self._cmdq:
@@ -395,6 +429,24 @@ class _SerialWorker(threading.Thread):
                     time.sleep(0.01)
                     continue
 
+                # Drain any unsolicited output (async CTRL: NET:* etc.) after giving
+                # queued commands a chance to go out.
+                if self._pending_cmd is None:
+                    try:
+                        available = int(getattr(self._ser, "in_waiting", 0))
+                    except Exception:
+                        available = 0
+                    if available and available > 0:
+                        data = self._ser.read(available)
+                        if data:
+                            text = data.decode(errors="replace").strip()
+                            if text:
+                                with self._lock:
+                                    for ln in text.splitlines():
+                                        self._log.append(ln)
+                        time.sleep(0.01)
+                        continue
+
                 if now >= next_tick:
                     # Fetch thermal flag periodically on demand
                     if self._need_thermal_refresh and self._pending_cmd is None:
@@ -407,11 +459,47 @@ class _SerialWorker(threading.Thread):
                         continue
                     self._ser.write(b"STATUS\n")
                     status_text = read_response(self._ser, min(self.timeout, self.period * 0.8))
-                    rows = parse_status_lines(status_text)
+                    # Separate any asynchronous CTRL NET events that might have arrived concurrently
+                    raw_lines = [ln.strip() for ln in status_text.splitlines() if ln.strip()]
+                    ctrl_async = []
+                    for ln in raw_lines:
+                        up = ln.upper()
+                        if up.startswith("CTRL: NET:") or up.startswith("CTRL:ERR NET_"):
+                            ctrl_async.append(ln)
+                        # Forward ACK lines that are not NET:STATUS acks (avoid spam)
+                        elif up.startswith("CTRL:ACK") and (" STATE=" not in up):
+                            ctrl_async.append(ln)
+                    status_only_text = "\n".join([
+                        ln for ln in raw_lines
+                        if not (ln.upper().startswith("CTRL: NET:") or ln.upper().startswith("CTRL:ERR NET_"))
+                    ])
+                    rows = parse_status_lines(status_only_text)
                     with self._lock:
-                        self._last_status_text = status_text
+                        self._last_status_text = status_only_text
                         self._last_status_rows = rows
                         self._last_update_ts = time.time()
+                        if ctrl_async:
+                            self._log.extend(ctrl_async)
+                    # Fetch NET:STATUS and cache key info for UI
+                    try:
+                        self._ser.write(b"NET:STATUS\n")
+                        net_text = read_response(self._ser, min(self.timeout, self.period * 0.8))
+                        # Capture any async NET events, but do not log the polled CTRL:OK line
+                        nl = [ln.strip() for ln in net_text.splitlines() if ln.strip()]
+                        ctrl_async = []
+                        for ln in nl:
+                            up = ln.upper()
+                            if up.startswith("CTRL: NET:") or up.startswith("CTRL:ERR NET_"):
+                                ctrl_async.append(ln)
+                            elif up.startswith("CTRL:ACK") and (" STATE=" not in up):
+                                ctrl_async.append(ln)
+                        net = parse_kv_line(net_text)
+                        with self._lock:
+                            self._net_info = net
+                            if ctrl_async:
+                                self._log.extend(ctrl_async)
+                    except Exception:
+                        pass
                     next_tick = now + self.period
                 else:
                     time.sleep(min(0.02, max(0.0, next_tick - now)))

@@ -364,7 +364,23 @@ class TextualUI(BaseUI):
                             thermal_text += f" (max={max_budget}s)"
                 except Exception:
                     thermal_text = ""
-                status = f"port={worker.port} baud={worker.baud} last status={age:.1f}s  {thermal_text}"
+                # Wi‑Fi banner (NET:STATUS)
+                wifi_banner = ""
+                try:
+                    if hasattr(worker, "get_net_info"):
+                        net = worker.get_net_info() or {}
+                        state = (net.get("state") or "").upper()
+                        ssid = net.get("ssid") or ""
+                        ip = net.get("ip") or ""
+                        if state == "CONNECTED":
+                            wifi_banner = f"SSID: [green]{ssid}[/] connected [green]({ip})[/]"
+                        elif state == "AP_ACTIVE":
+                            wifi_banner = f"SSID: [yellow]{ssid}[/] AP mode [yellow]({ip})[/]"
+                        elif state:
+                            wifi_banner = f"SSID: [red]{ssid or 'N/A'}[/] disconnected"
+                except Exception:
+                    wifi_banner = ""
+                status = f"port={worker.port} baud={worker.baud} last status={age:.1f}s  {thermal_text}  {wifi_banner}"
                 self.query_one("#status_bar", Static).update(status)
 
                 # Update table - simple replace for now

@@ -56,17 +56,31 @@ Manual tests
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 2.0 Extend `MotorCommandProcessor` HELP with NET verbs
-- [ ] 2.1 Implement `NET:RESET` (clear creds + reboot into AP)
-- [ ] 2.2 Implement `NET:STATUS` (state/RSSI/IP)
-- [ ] 2.3 Implement `NET:SET,<ssid>,<pass>` with quoted fields and validation
-- [ ] 2.4 Suspend `NET:*` while connecting → `CTRL:ERR NET_BUSY_CONNECTING`
-- [ ] 2.5 2–6 focused tests (native) for parsing/formatting and busy path
+- [x] 2.0 Extend `MotorCommandProcessor` HELP with NET verbs
+- [x] 2.1 Implement `NET:RESET` (clear creds + reboot into AP)
+- [x] 2.2 Implement `NET:STATUS` (state/RSSI/IP)
+- [x] 2.3 Implement `NET:SET,<ssid>,<pass>` with quoted fields and validation
+- [x] 2.4 Suspend `NET:*` while connecting → `CTRL:ERR NET_BUSY_CONNECTING`
+- [x] 2.5 2–6 focused tests (native) for parsing/formatting and busy path
+  
+  Extensions (prep for MQTT / UI):
+  - [ ] 2.6 Add Command Correlation IDs (CID)
+    - Device generates CID (monotonic `u32`, wrap allowed) per accepted command
+    - Device replies `CTRL:ACK CID=<id>` and includes `CID=<id>` in all related async lines
+    - TUI uses CID only to attribute async responses to the current user command and suppress background‑poll responses while the command is active
+  - [ ] 2.7 Add `NET:LIST` (scan SSIDs ordered by RSSI)
+    - Response: multi‑line list (e.g., `SSID=<name> rssi=<dbm> secure=<0|1> channel=<n>`), strongest first
+    - TIME/heap bounded; acceptable to return top N (e.g., 10–16)
 
 Acceptance
 
-- HELP output lists NET verbs (`NET:RESET`, `NET:STATUS`, `NET:SET`) with payload syntax (including quoting rules) and documents busy error `NET_BUSY_CONNECTING`.
-- Manual serial session exercises all NET verbs; responses match spec
+- Success token is `CTRL:ACK` (was `CTRL:OK`) across commands; tests updated
+- HELP lists NET verbs with quoted `NET:SET` grammar; busy error documented (`NET_BUSY_CONNECTING`)
+- `NET:SET` immediate `CTRL:ACK`, then async: `CTRL: NET:CONNECTING` → (`CTRL: NET:CONNECTED …` OR `CTRL:ERR NET_CONNECT_FAILED` then `CTRL: NET:AP_ACTIVE …`)
+- `NET:SET` with short pass (1–7) → `CTRL:ERR NET_BAD_PARAM PASS_TOO_SHORT`
+- `NET:RESET` immediate `CTRL:ACK`; exactly one `CTRL: NET:AP_ACTIVE …` follows
+- `NET:STATUS` always allowed; never returns `NET_BUSY_CONNECTING`; includes `state`, `ip`, `ssid`, and masked pass (AP shows pass)
+- Interactive TUI: shows `> command`, shows `CTRL:ACK` and async NET events; suppresses polled `NET:STATUS` ACK lines
 
 Manual test
 
