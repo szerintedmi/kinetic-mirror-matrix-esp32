@@ -8,6 +8,7 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Build System: PlatformIO (`platform = espressif32`, `board = esp32dev`)
 - RTOS: FreeRTOS (via Arduino-ESP32)
 - Filesystem: LittleFS for on-device assets and presets
+- Wi‑Fi onboarding: SoftAP portal with credentials persisted in NVS (Preferences)
 - Pre-build assets: `tools/gzip_fs.py` to gzip files from `data_src/` into `data/`
 - Serial console: 115200 baud (see `platformio.ini`)
 - Reference: `@agent-os/standards/global/platformio-project-setup.md`, `@agent-os/standards/global/conventions.md`, `@agent-os/standards/global/resource-management.md`
@@ -30,9 +31,17 @@ High-level choices for firmware, hardware control, host tooling, and validation 
   - Thermal toggles: `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
   - Shortcuts supported: `ST` (STATUS), `M` (MOVE), `H` (HOME)
   - Responses prefixed with `CTRL:`; success carries `CTRL:OK` (MOVE/HOME include `est_ms=<ms>`), errors use `CTRL:ERR <code> ...`; warnings may precede `CTRL:OK` when enforcement is OFF
-- Wireless (planned): ESP‑Now broadcast for master→nodes (no acks/retries initially)
-- Node addressing and grouping introduced with wireless phase
-- Reference: `agent-os/product/roadmap.md` (items 1, 4–5, 7–8)
+- MQTT (primary from roadmap item 9):
+  - Transport: MQTT over TCP; username/password on trusted LAN for MVP; optional TLS later
+  - Client (firmware): AsyncMqttClient (Arduino) for MVP
+  - Client abstraction: thin `IMqttClient` adapter so we can swap to ESP‑IDF `esp-mqtt` later if TLS/mTLS or deeper tuning is needed
+  - Topics/QoS (summary):
+    - Presence: `devices/<id>/state` retained QoS1 with LWT
+    - Status: `devices/<id>/status/<motor_id>` QoS0 on change + periodic (2–5 Hz)
+    - Commands: `devices/<id>/cmd` QoS1 with strict `cmd_id` correlation; responses on `devices/<id>/cmd/resp` QoS1
+  - Node policy: no command queuing; reject with `BUSY` while executing; master schedules
+  - Broker: Mosquitto on developer machine for MVP; packaging for site gateway later
+  - Reference: `agent-os/product/roadmap.md` (items 8–11, 14–15)
 
 ## Storage & Presets
 - On-device preset storage in LittleFS (JSON or compact text)
@@ -40,11 +49,12 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Reference: `@agent-os/standards/backend/data-persistence.md`, `@agent-os/standards/frontend/embedded-web-ui.md`
 
 ## Host Tooling
-- Language: Python 3 (CLI for serial tests, diagnostics, and later presets)
-- Packaging: `python -m serial_cli` (module in `tools/serial_cli/`)
-- Libraries: `pyserial`, `argparse`
-- Deliverables: cross‑platform CLI with one‑shot commands and an interactive TUI (`interactive`) that polls STATUS and surfaces warnings alongside `CTRL:OK`
-- Reference: `agent-os/product/roadmap.md` (items 1, 4–5), `@agent-os/standards/testing/build-validation.md`
+- Language: Python 3 (CLI/TUI for MQTT and serial)
+- Packaging: CLI module in repo (keeps serial and MQTT transports)
+- Libraries: `paho-mqtt` (MQTT), `pyserial` (serial), `argparse`
+- Transport default: MQTT from roadmap item 9; serial selectable as debug/backdoor
+- Deliverables: cross‑platform CLI with one‑shot verbs and an interactive TUI that subscribes to MQTT status/events and mirrors serial behavior
+- Reference: `agent-os/product/roadmap.md` (items 8–11, 13–15), `@agent-os/standards/testing/build-validation.md`
 
 ## Testing & Validation
 - Unit tests via PlatformIO Unity where applicable
@@ -54,7 +64,7 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 
 ## Frontend Surfaces (Optional)
 - Embedded Web UI (if enabled): minimal static HTML/CSS/JS, gzipped and served from LittleFS
-- Serial interface remains the primary control surface in v1
+- Primary control surface becomes MQTT from roadmap item 9; serial remains a low‑priority debug path
 - Reference: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standards/frontend/embedded-web-ui.md`
 
 ## Versioning & Pins
