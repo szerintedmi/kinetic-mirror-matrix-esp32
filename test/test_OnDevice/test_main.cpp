@@ -10,6 +10,10 @@ void test_device_move_short_and_complete();
 void test_device_home_sequence_sets_zero();
 void test_device_move_estimate_vs_actual();
 void test_device_home_estimate_vs_actual();
+// NetOnboarding tests
+void test_net_ap_after_reset_no_creds();
+void test_net_connect_timeout_to_ap();
+void test_net_happy_path_if_seeded();
 
 void setup() {
   delay(300);
@@ -23,6 +27,10 @@ void setup() {
   RUN_TEST(test_device_home_sequence_sets_zero);
   RUN_TEST(test_device_move_estimate_vs_actual);
   RUN_TEST(test_device_home_estimate_vs_actual);
+  // Net onboarding smoke tests
+  RUN_TEST(test_net_ap_after_reset_no_creds);
+  RUN_TEST(test_net_connect_timeout_to_ap);
+  RUN_TEST(test_net_happy_path_if_seeded);
   UNITY_END();
   // Avoid re-running tests
   while (true) { delay(1000); }
@@ -30,4 +38,3 @@ void setup() {
 
 void loop() {}
 #endif
-

@@ -14,23 +14,23 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** api-engineer
 **Dependencies:** None
 
-- [ ] 1.0 Create library skeleton `lib/net_onboarding/`
+- [x] 1.0 Create library skeleton `lib/net_onboarding/`
   - Public header: `include/net_onboarding/NetOnboarding.h`
   - Source: `src/NetOnboarding.cpp`
   - API: `begin()`, `loop()`, `setCredentials(ssid,pass)`, `resetCredentials()`, `status()`; enums for `AP_ACTIVE|CONNECTING|CONNECTED`
-- [ ] 1.1 NVS persistence using `Preferences`
+- [x] 1.1 NVS persistence using `Preferences`
   - Namespace `net`; keys `ssid`, `psk`
   - Functions: `saveCredentials`, `loadCredentials`, `clearCredentials`
-- [ ] 1.2 STA connect with configurable timeout; fallback/hand‑over to SoftAP
+- [x] 1.2 STA connect with configurable timeout; fallback/hand‑over to SoftAP
   - On timeout → start AP; on success → stop AP
   - `status()` exposes state, RSSI, IP (when connected)
-- [ ] 1.3 SoftAP identity & password
+- [x] 1.3 SoftAP identity & password
   - SSID `SOFT_AP_SSID_PREFIX + last-3-bytes(MAC)`; PSK from `SOFT_AP_PASS`
   - Verify DHCP defaults
-- [ ] 1.4 Tests (focused)
+- [x] 1.4 Tests (focused)
   - 2–4 native tests for basic state transitions and status enum
   - 2–4 on‑device checks for timeout → AP and happy‑path connect
-- [ ] 1.5 Motor timing isolation checks
+- [x] 1.5 Motor timing isolation checks
   - Script a simple motion loop; compare baseline vs AP active vs CONNECTED steady‑state
   - Document acceptable jitter during CONNECTING
 

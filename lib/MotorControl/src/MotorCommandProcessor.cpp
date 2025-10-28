@@ -97,10 +97,11 @@ std::string MotorCommandProcessor::handleHELP()
 {
   std::ostringstream os;
   os << "HELP\n";
-#if (USE_SHARED_STEP)
+  // Always include the minimal canonical forms so help remains stable across builds
   os << "MOVE:<id|ALL>,<abs_steps>\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
-#else
+#if !(USE_SHARED_STEP)
+  // Dedicated-step builds: also advertise the extended HOME/MOVE forms
   os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
   os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
 #endif
