@@ -26,7 +26,7 @@ def test_parse_thermal_off_missing_budget():
 def test_extract_est_ms_with_warn():
     s = "\n".join([
         "CTRL:WARN THERMAL_NO_BUDGET id=0 budget_s=0 ttfc_s=10",
-        "CTRL:ACK est_ms=1234",
+        "CTRL:ACK CID=7 est_ms=1234",
     ])
     est = extract_est_ms_from_ctrl_ok(s)
     assert est == 1234

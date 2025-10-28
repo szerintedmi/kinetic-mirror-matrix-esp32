@@ -101,6 +101,17 @@ void NetOnboarding::apPassword(std::array<char,65>& out) const {
   std::snprintf(out.data(), out.size(), "%s", p);
 }
 
+int NetOnboarding::scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) {
+  if (!wifi_) wifi_ = MakeWifi();
+  // Prefer AP+STA when AP is active so we don't drop the portal
+  if (st_.state == State::AP_ACTIVE) {
+    wifi_->setModeApSta();
+  } else {
+    wifi_->setModeSta();
+  }
+  return wifi_->scanNetworks(out, max_results, include_hidden);
+}
+
 // NVS persistence ----------------------------------------------------------
 
 bool NetOnboarding::saveCredentials(const char* ssid, const char* pass) {

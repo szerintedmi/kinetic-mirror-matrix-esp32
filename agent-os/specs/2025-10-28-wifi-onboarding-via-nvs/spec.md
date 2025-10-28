@@ -17,8 +17,8 @@ Enable reliable Wi‑Fi onboarding for ESP32 nodes with a simple SoftAP portal a
 - Commands:
   - `NET:RESET` clears Wi‑Fi creds and reboots into SoftAP.
   - `NET:SET,<ssid>,<pass>` writes creds and attempts STA connect; accepted in AP or connected states; while connecting return `CTRL:ERR NET_BUSY_CONNECTING`. Support quoted fields for commas/spaces.
-  - `NET:STATUS` → `CTRL:ACK state=<AP_ACTIVE|CONNECTING|CONNECTED> rssi=<dBm|NA> ip=<x.x.x.x>`.
-  - (Extension) `NET:LIST` → list nearby SSIDs ordered by RSSI (strongest first) for onboarding UI.
+- `NET:STATUS` → `CTRL:ACK CID=<id> state=<AP_ACTIVE|CONNECTING|CONNECTED> rssi=<dBm|NA> ip=<x.x.x.x>`.
+- (Extension) `NET:LIST` → list nearby SSIDs ordered by RSSI (strongest first) for onboarding UI. Device emits `CTRL:ACK CID=<id> scanning=1` immediately, then streams `NET:LIST CID=<id>` followed by `SSID="…" …` payload lines once the scan completes.
 - Feedback: LED patterns — fast blink = AP active, slow blink = connecting, solid = connected. Also print serial logs for state changes.
 - Identity: Print MAC‑derived device ID at boot; SoftAP suffix uses last 3 MAC bytes.
 - Single network only; DHCP; reconnect/backoff on disconnect.

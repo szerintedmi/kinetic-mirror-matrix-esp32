@@ -11,6 +11,7 @@ public:
   void setModeOff() override { mode_ = 0; }
   void setModeSta() override { mode_ = 1; }
   void setModeAp() override { mode_ = 2; }
+  void setModeApSta() override { mode_ = 3; }
   void disconnect(bool) override { connected_ = false; }
   void beginSta(const char*, const char*) override { /* connection simulated by NetOnboarding */ }
   bool staConnected() const override { return connected_; }
@@ -24,6 +25,19 @@ public:
   std::string softApSsid() const override { return ssid_; }
   const char* apDefaultPassword() const override { return "stub-pass"; }
   const char* apSsidPrefix() const override { return "Mirror-"; }
+  int scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool /*include_hidden*/) override {
+    out.clear();
+    std::vector<WifiScanResult> tmp = {
+      {"Home-2G", -42, 1, true},
+      {"Cafe-WiFi", -70, 6, false},
+      {"Office-IoT", -55, 11, true},
+      {"Printer-Setup", -80, 3, false},
+    };
+    std::sort(tmp.begin(), tmp.end(), [](const WifiScanResult& a, const WifiScanResult& b){ return a.rssi > b.rssi; });
+    if (max_results > 0 && (int)tmp.size() > max_results) tmp.resize((size_t)max_results);
+    out = std::move(tmp);
+    return (int)out.size();
+  }
 
   // Test hook
   void setConnected(bool c) { connected_ = c; }

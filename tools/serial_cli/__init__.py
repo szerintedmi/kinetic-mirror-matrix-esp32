@@ -9,6 +9,8 @@ try:
 except Exception:
     serial = None
 
+from .runtime import SerialWorker
+
 
 def _join_home_with_placeholders(id_token: str, overshoot, backoff, full_range) -> str:
     # Build HOME payload supporting optional fields without legacy speed/accel.
@@ -214,6 +216,7 @@ def parse_status_lines(text: str) -> List[Dict[str, str]]:
     return out
 
 def parse_kv_line(text: str) -> Dict[str, str]:
+
     out: Dict[str, str] = {}
     if not text:
         return out
@@ -256,271 +259,6 @@ def render_table(rows: List[Dict[str, str]]) -> str:
         lines.append(" ".join(line))
     return "\n".join(lines)
 
-
-class _SerialWorker(threading.Thread):
-    def __init__(self, port: str, baud: int, timeout: float, rate_hz: float):
-        super().__init__(daemon=True)
-        self.port = port
-        self.baud = baud
-        self.timeout = timeout
-        self.period = 1.0 / max(0.1, rate_hz)
-        self._lock = threading.Lock()
-        self._stop_event = threading.Event()
-        self._last_status_rows: List[Dict[str, str]] = []
-        self._last_status_text: str = ""
-        self._log: List[str] = []
-        self._cmdq: List[str] = []
-        self._connected_err: Optional[str] = None
-        self._ser = None
-        self._last_update_ts: float = 0.0
-        self._pending_cmd: Optional[str] = None
-        self._pending_buf: str = ""
-        self._pending_deadline: float = 0.0
-        self._pending_last_rx: float = 0.0
-        self._last_help_text: str = ""
-        self._had_disconnect: bool = False
-        self._reconnect_dots: int = 0
-        # Thermal flag state
-        self._thermal_state: Optional[Tuple[bool, Optional[int]]] = None
-        self._need_thermal_refresh: bool = True
-        # NET status cache
-        self._net_info: Dict[str, str] = {}
-
-    def get_state(self) -> Tuple[List[Dict[str, str]], List[str], Optional[str], float, str]:
-        with self._lock:
-            return (
-                list(self._last_status_rows),
-                list(self._log[-800:]),
-                self._connected_err,
-                self._last_update_ts,
-                self._last_help_text,
-            )
-
-    def get_net_info(self) -> Dict[str, str]:
-        with self._lock:
-            return dict(self._net_info)
-
-    def get_thermal_status_text(self) -> str:
-        st = self._thermal_state
-        if not st:
-            return ""
-        enabled, max_budget = st
-        prefix = "thermal limiting=ON" if enabled else "thermal limiting=OFF"
-        if isinstance(max_budget, int):
-            return f"{prefix} (max={max_budget}s)"
-        return prefix
-
-    def get_thermal_state(self) -> Optional[Tuple[bool, Optional[int]]]:
-        with self._lock:
-            return self._thermal_state
-
-    def queue_cmd(self, cmd: str) -> None:
-        with self._lock:
-            full = cmd if cmd.endswith("\n") else cmd + "\n"
-            # Echo the command into the log immediately so users always see it
-            self._log.append("> " + cmd.strip())
-            self._cmdq.append(full)
-
-    def stop(self) -> None:
-        self._stop_event.set()
-
-    def _open(self):
-        if serial is None:
-            raise RuntimeError("pyserial not installed")
-        self._ser = serial.Serial(self.port, self.baud, timeout=self.timeout)
-        try:
-            self._ser.reset_input_buffer()
-            self._ser.reset_output_buffer()
-            self._ser.inter_byte_timeout = 0.02
-            self._ser.write_timeout = 0
-        except Exception:
-            pass
-        self._connected_err = None
-        with self._lock:
-            if self._had_disconnect:
-                self._log.append("[reconnected]")
-            self._had_disconnect = False
-            self._reconnect_dots = 0
-
-    def _close(self):
-        try:
-            if self._ser:
-                self._ser.close()
-        except Exception:
-            pass
-        self._ser = None
-
-    def run(self):
-        next_tick = time.time()
-        while not self._stop_event.is_set():
-            now = time.time()
-            try:
-                if self._ser is None:
-                    self._open()
-
-                if self._pending_cmd is not None:
-                    self._ser.timeout = 0
-                    available = 0
-                    try:
-                        available = int(getattr(self._ser, "in_waiting", 0))
-                    except Exception:
-                        available = 0
-                    if available > 0:
-                        data = self._ser.read(available)
-                        if data:
-                            self._pending_buf += data.decode(errors="replace")
-                            self._pending_last_rx = time.time()
-                    # Consider complete when input has been quiet for a short
-                    # grace period, or when we hit our overall deadline.
-                    idle_grace = 0.10
-                    now_t = time.time()
-                    complete = False
-                    if self._pending_buf and (now_t - self._pending_last_rx) >= idle_grace:
-                        complete = True
-                    elif now_t >= self._pending_deadline:
-                        complete = True
-                    if complete:
-                        resp_text = self._pending_buf.strip()
-                        raw_lines = [ln for ln in resp_text.splitlines() if ln.strip()]
-                        # Suppress device echo of the command itself (firmware echoes typed chars)
-                        try:
-                            sent = (self._pending_cmd or "").strip()
-                            if raw_lines and raw_lines[0].strip() == sent:
-                                raw_lines = raw_lines[1:]
-                        except Exception:
-                            pass
-                        lines = (raw_lines if raw_lines else ["> (no response)"])
-                        with self._lock:
-                            self._log.extend(lines)
-                            try:
-                                if self._pending_cmd and self._pending_cmd.strip().upper().startswith("HELP"):
-                                    self._last_help_text = resp_text
-                                # Track thermal flag updates
-                                if self._pending_cmd and "THERMAL_LIMITING" in self._pending_cmd.upper():
-                                    if self._pending_cmd.strip().upper().startswith("GET"):
-                                        parsed = parse_thermal_get_response(resp_text)
-                                        if parsed:
-                                            self._thermal_state = parsed
-                                            self._need_thermal_refresh = False
-                                    elif self._pending_cmd.strip().upper().startswith("SET"):
-                                        # After SET, request GET to refresh view
-                                        self._need_thermal_refresh = True
-                            except Exception:
-                                pass
-                        self._pending_cmd = None
-                        self._pending_buf = ""
-                        self._pending_deadline = 0.0
-                        self._pending_last_rx = 0.0
-                    else:
-                        time.sleep(0.01)
-                        continue
-
-                # Prioritize sending queued commands before draining unsolicited output
-                cmd = None
-                with self._lock:
-                    if self._cmdq:
-                        cmd = self._cmdq.pop(0)
-                if cmd is not None:
-                    self._ser.write(cmd.encode())
-                    self._pending_cmd = cmd
-                    self._pending_buf = ""
-                    self._pending_deadline = time.time() + max(0.25, min(self.timeout, 2.0))
-                    self._pending_last_rx = 0.0
-                    time.sleep(0.01)
-                    continue
-
-                # Drain any unsolicited output (async CTRL: NET:* etc.) after giving
-                # queued commands a chance to go out.
-                if self._pending_cmd is None:
-                    try:
-                        available = int(getattr(self._ser, "in_waiting", 0))
-                    except Exception:
-                        available = 0
-                    if available and available > 0:
-                        data = self._ser.read(available)
-                        if data:
-                            text = data.decode(errors="replace").strip()
-                            if text:
-                                with self._lock:
-                                    for ln in text.splitlines():
-                                        self._log.append(ln)
-                        time.sleep(0.01)
-                        continue
-
-                if now >= next_tick:
-                    # Fetch thermal flag periodically on demand
-                    if self._need_thermal_refresh and self._pending_cmd is None:
-                        self._ser.write(b"GET THERMAL_LIMITING\n")
-                        self._pending_cmd = "GET THERMAL_LIMITING\n"
-                        self._pending_buf = ""
-                        self._pending_deadline = time.time() + max(0.25, min(self.timeout, 2.0))
-                        self._pending_last_rx = 0.0
-                        time.sleep(0.01)
-                        continue
-                    self._ser.write(b"STATUS\n")
-                    status_text = read_response(self._ser, min(self.timeout, self.period * 0.8))
-                    # Separate any asynchronous CTRL NET events that might have arrived concurrently
-                    raw_lines = [ln.strip() for ln in status_text.splitlines() if ln.strip()]
-                    ctrl_async = []
-                    for ln in raw_lines:
-                        up = ln.upper()
-                        if up.startswith("CTRL: NET:") or up.startswith("CTRL:ERR NET_"):
-                            ctrl_async.append(ln)
-                        # Forward ACK lines that are not NET:STATUS acks (avoid spam)
-                        elif up.startswith("CTRL:ACK") and (" STATE=" not in up):
-                            ctrl_async.append(ln)
-                    status_only_text = "\n".join([
-                        ln for ln in raw_lines
-                        if not (ln.upper().startswith("CTRL: NET:") or ln.upper().startswith("CTRL:ERR NET_"))
-                    ])
-                    rows = parse_status_lines(status_only_text)
-                    with self._lock:
-                        self._last_status_text = status_only_text
-                        self._last_status_rows = rows
-                        self._last_update_ts = time.time()
-                        if ctrl_async:
-                            self._log.extend(ctrl_async)
-                    # Fetch NET:STATUS and cache key info for UI
-                    try:
-                        self._ser.write(b"NET:STATUS\n")
-                        net_text = read_response(self._ser, min(self.timeout, self.period * 0.8))
-                        # Capture any async NET events, but do not log the polled CTRL:OK line
-                        nl = [ln.strip() for ln in net_text.splitlines() if ln.strip()]
-                        ctrl_async = []
-                        for ln in nl:
-                            up = ln.upper()
-                            if up.startswith("CTRL: NET:") or up.startswith("CTRL:ERR NET_"):
-                                ctrl_async.append(ln)
-                            elif up.startswith("CTRL:ACK") and (" STATE=" not in up):
-                                ctrl_async.append(ln)
-                        net = parse_kv_line(net_text)
-                        with self._lock:
-                            self._net_info = net
-                            if ctrl_async:
-                                self._log.extend(ctrl_async)
-                    except Exception:
-                        pass
-                    next_tick = now + self.period
-                else:
-                    time.sleep(min(0.02, max(0.0, next_tick - now)))
-
-            except Exception as e:
-                with self._lock:
-                    self._connected_err = str(e)
-                    if not self._had_disconnect:
-                        self._log.append(f"[disconnect] {e}")
-                        self._had_disconnect = True
-                        self._reconnect_dots = 0
-                    recon_prefix = f"Reconnecting to {self.port} "
-                    dots = "." * (self._reconnect_dots + 1)
-                    if self._log and self._log[-1].startswith(recon_prefix):
-                        self._log[-1] = recon_prefix + dots
-                    else:
-                        self._log.append(recon_prefix + dots)
-                    self._reconnect_dots += 1
-                self._close()
-                time.sleep(0.5)
-                continue
 
 
 def main(argv=None) -> int:
@@ -668,7 +406,16 @@ def run_interactive(ns: argparse.Namespace) -> int:
         print(f"Import error: {e}", file=sys.stderr)
         return 2
 
-    worker = _SerialWorker(ns.port, ns.baud, ns.timeout, ns.rate)
+    worker = SerialWorker(
+        port=ns.port,
+        baud=ns.baud,
+        timeout=ns.timeout,
+        poll_rate_hz=ns.rate,
+        serial_module=serial,
+        parse_status=parse_status_lines,
+        parse_kv=parse_kv_line,
+        parse_thermal=parse_thermal_get_response,
+    )
     worker.start()
     try:
         ui = UIClass(worker, render_table)  # type: ignore[call-arg]

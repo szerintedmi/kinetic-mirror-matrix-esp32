@@ -34,21 +34,26 @@ static std::vector<std::string> split_lines(const std::string &s) {
 // Protocol basics
 void test_bad_cmd() {
   auto resp = proto.processLine("FOO", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E01 BAD_CMD", resp.c_str());
+  TEST_ASSERT_TRUE(resp.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(resp.find(" E01 BAD_CMD") != std::string::npos);
 }
 
 void test_bad_id() {
   auto r1 = proto.processLine("WAKE:9", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E02 BAD_ID", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.find(" E02 BAD_ID") != std::string::npos);
   auto r2 = proto.processLine("WAKE:-1", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E02 BAD_ID", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E02 BAD_ID") != std::string::npos);
 }
 
 void test_bad_param() {
   auto r1 = proto.processLine("MOVE:0,abc", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.find(" E03 BAD_PARAM") != std::string::npos);
   auto r2 = proto.processLine("HOME:0,foo", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E03 BAD_PARAM") != std::string::npos);
 }
 
 void test_help_format() {
@@ -65,7 +70,7 @@ void test_help_format() {
 
 void test_get_all_settings_single_line() {
   std::string r = proto.processLine("GET", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
@@ -76,8 +81,12 @@ void test_get_all_settings_single_line() {
 void test_status_format_lines() {
   std::string st = proto.processLine("STATUS", 0);
   auto lines = split_lines(st);
-  TEST_ASSERT_EQUAL_INT(8, (int)lines.size());
-  const std::string &L0 = lines[0];
+  TEST_ASSERT_TRUE((int)lines.size() >= 1);
+  // Skip any leading CTRL lines (ACK)
+  size_t idx = 0;
+  while (idx < lines.size() && lines[idx].rfind("CTRL:", 0) == 0) ++idx;
+  TEST_ASSERT_TRUE(idx < lines.size());
+  const std::string &L0 = lines[idx];
   TEST_ASSERT_TRUE(L0.find("id=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" pos=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" speed=") != std::string::npos);
@@ -94,15 +103,17 @@ void test_status_format_lines() {
 void test_move_out_of_range() {
   std::string cmd_hi = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 1);
   auto r1 = proto.processLine(cmd_hi, 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
   std::string cmd_lo = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MIN_POS_STEPS - 1);
   auto r2 = proto.processLine(cmd_lo, 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
 }
 
 void test_all_addressing_and_status_awake() {
   auto r1 = proto.processLine("WAKE:ALL", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st = proto.processLine("STATUS", 0);
   TEST_ASSERT_TRUE_MESSAGE(st.find("awake=1") != std::string::npos, "Expected awake=1 in STATUS");
 }
@@ -111,9 +122,11 @@ void test_busy_rule_and_completion() {
   auto r1 = proto.processLine("MOVE:0,100", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("MOVE:0,200", 10);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
   auto r3 = proto.processLine("MOVE:ALL,50", 20);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r3.c_str());
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r3.find(" E04 BUSY") != std::string::npos);
   proto.tick(1100);
   auto r4 = proto.processLine("MOVE:0,200", 1101);
   TEST_ASSERT_TRUE(r4.rfind("CTRL:ACK", 0) == 0);
@@ -123,7 +136,8 @@ void test_home_defaults() {
   auto r1 = proto.processLine("HOME:0", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("MOVE:0,10", 10);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
   uint32_t th = MotionKinematics::estimateHomeTimeMs(
       MotorControlConstants::DEFAULT_OVERSHOOT,
       MotorControlConstants::DEFAULT_BACKOFF,
@@ -138,21 +152,23 @@ void test_sleep_busy_then_ok() {
   auto r1 = proto.processLine("MOVE:0,100", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("SLEEP:0", 10);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
   proto.tick(1100);
   auto r3 = proto.processLine("SLEEP:0", 1200);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r3.c_str());
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_move_all_out_of_range() {
   std::string cmd = std::string("MOVE:ALL,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 100);
   auto r = proto.processLine(cmd, 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E07 POS_OUT_OF_RANGE", r.c_str());
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
 }
 
 void test_wake_sleep_single_and_status() {
   auto r1 = proto.processLine("WAKE:1", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st1 = proto.processLine("STATUS", 1);
   auto lines1 = split_lines(st1);
   bool found_awake = false;
@@ -164,7 +180,7 @@ void test_wake_sleep_single_and_status() {
   }
   TEST_ASSERT_TRUE(found_awake);
   auto r2 = proto.processLine("SLEEP:1", 2);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
   auto st2 = proto.processLine("STATUS", 3);
   auto lines2 = split_lines(st2);
   bool found_asleep = false;
@@ -184,8 +200,8 @@ void test_home_with_params_acceptance() {
 
 void test_move_sets_speed_accel_in_status() {
   // Set globals then move, and verify status reflects them
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", proto.processLine("SET SPEED=5000", 0).c_str());
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", proto.processLine("SET ACCEL=12000", 0).c_str());
+  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=5000", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=12000", 0).rfind("CTRL:ACK", 0) == 0);
   auto r1 = proto.processLine("MOVE:0,10", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st = proto.processLine("STATUS", 1);
@@ -205,25 +221,27 @@ void test_multi_cmd_accept_disjoint() {
   auto r = proto.processLine("WAKE:0;WAKE:1", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_EQUAL_INT(2, (int)lines.size());
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[0].c_str());
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[1].c_str());
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
 }
 
 void test_multi_cmd_reject_overlap_simple() {
   auto r = proto.processLine("WAKE:0;SLEEP:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM MULTI_CMD_CONFLICT", r.c_str());
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" E03 BAD_PARAM MULTI_CMD_CONFLICT") != std::string::npos);
 }
 
 void test_multi_cmd_reject_overlap_all() {
   auto r = proto.processLine("M:ALL,100;M:5,1200", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E03 BAD_PARAM MULTI_CMD_CONFLICT", r.c_str());
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" E03 BAD_PARAM MULTI_CMD_CONFLICT") != std::string::npos);
 }
 
 void test_multi_cmd_sequence_responses() {
   auto r = proto.processLine("WAKE:0;MOVE:1,10", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_TRUE(lines.size() >= 2);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", lines[0].c_str());
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK", 0) == 0);
   TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
 }
 
@@ -232,7 +250,8 @@ void test_multi_cmd_whitespace_and_case() {
   auto lines = split_lines(r);
   // With aggregation, MOVE/HOME batch returns single consolidated OK with est_ms
   TEST_ASSERT_EQUAL_INT(1, (int)lines.size());
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK est_ms=", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].find(" est_ms=") != std::string::npos);
 }
 
 // HOME sequencing (from previous dedicated file)
@@ -267,7 +286,8 @@ void test_home_busy_rule_reject_when_moving() {
   auto r1 = proto.processLine("MOVE:2,1000", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("HOME:2", 10);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ERR E04 BUSY", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
   // After completion, HOME should be accepted
   proto.tick(1200);
   auto r3 = proto.processLine("HOME:2", 1201);

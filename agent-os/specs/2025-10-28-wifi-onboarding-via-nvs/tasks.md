@@ -64,11 +64,11 @@ Manual tests
 - [x] 2.5 2–6 focused tests (native) for parsing/formatting and busy path
   
   Extensions (prep for MQTT / UI):
-  - [ ] 2.6 Add Command Correlation IDs (CID)
+  - [x] 2.6 Add Command Correlation IDs (CID)
     - Device generates CID (monotonic `u32`, wrap allowed) per accepted command
     - Device replies `CTRL:ACK CID=<id>` and includes `CID=<id>` in all related async lines
     - TUI uses CID only to attribute async responses to the current user command and suppress background‑poll responses while the command is active
-  - [ ] 2.7 Add `NET:LIST` (scan SSIDs ordered by RSSI)
+  - [x] 2.7 Add `NET:LIST` (scan SSIDs ordered by RSSI)
     - Response: multi‑line list (e.g., `SSID=<name> rssi=<dbm> secure=<0|1> channel=<n>`), strongest first
     - TIME/heap bounded; acceptable to return top N (e.g., 10–16)
 

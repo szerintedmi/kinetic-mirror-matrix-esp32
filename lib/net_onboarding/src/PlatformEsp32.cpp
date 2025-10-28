@@ -14,6 +14,7 @@ public:
   void setModeOff() override { WiFi.mode(WIFI_OFF); }
   void setModeSta() override { WiFi.mode(WIFI_STA); }
   void setModeAp() override { WiFi.mode(WIFI_AP); }
+  void setModeApSta() override { WiFi.mode(WIFI_AP_STA); }
   void disconnect(bool erase) override { WiFi.disconnect(erase); }
   void beginSta(const char* ssid, const char* pass) override { WiFi.begin(ssid, pass); }
   bool staConnected() const override { return WiFi.status() == WL_CONNECTED; }
@@ -31,6 +32,34 @@ public:
   std::string softApSsid() const override { return WiFi.softAPSSID().c_str(); }
   const char* apDefaultPassword() const override { return SOFT_AP_PASS; }
   const char* apSsidPrefix() const override { return SOFT_AP_SSID_PREFIX; }
+
+  int scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) override {
+    out.clear();
+    int n = WiFi.scanNetworks(/*async=*/false, /*hidden=*/include_hidden);
+    if (n <= 0) return 0;
+    // Collect all then sort by RSSI desc
+    std::vector<WifiScanResult> tmp;
+    tmp.reserve((size_t)n);
+    for (int i = 0; i < n; ++i) {
+      WifiScanResult r;
+      r.ssid = WiFi.SSID(i).c_str();
+      r.rssi = WiFi.RSSI(i);
+      // ESP32 Arduino: WIFI_AUTH_OPEN means open
+      int enc = (int)WiFi.encryptionType(i);
+      r.secure = (enc != (int)WIFI_AUTH_OPEN);
+#if defined(ESP_ARDUINO_VERSION_MAJOR) || defined(ESP32)
+      // channel(i) is available on ESP32 Arduino
+      r.channel = WiFi.channel(i);
+#else
+      r.channel = 0;
+#endif
+      tmp.push_back(r);
+    }
+    std::sort(tmp.begin(), tmp.end(), [](const WifiScanResult& a, const WifiScanResult& b){ return a.rssi > b.rssi; });
+    if (max_results > 0 && (int)tmp.size() > max_results) tmp.resize((size_t)max_results);
+    out = std::move(tmp);
+    return (int)out.size();
+  }
 };
 
 class Esp32Nvs : public INvs {

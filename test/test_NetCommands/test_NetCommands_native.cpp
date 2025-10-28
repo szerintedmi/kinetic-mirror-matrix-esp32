@@ -34,11 +34,12 @@ void test_help_includes_net_verbs() {
   TEST_ASSERT_TRUE(help.find("NET:RESET") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("NET:STATUS") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("NET:SET,\"<ssid>\",\"<pass>\"") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("NET:LIST") != std::string::npos);
 }
 
 void test_net_status_in_ap_mode() {
   std::string r = proto.processLine("NET:STATUS", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
   TEST_ASSERT_TRUE(r.find("state=AP_ACTIVE") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" rssi=NA") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ip=") != std::string::npos);
@@ -47,16 +48,18 @@ void test_net_status_in_ap_mode() {
 
 void test_net_set_returns_status_after_wait() {
   std::string resp = proto.processLine("NET:SET,\"ssid,with,commas\",\"pa ssword\"", 0);
-  TEST_ASSERT_TRUE(resp.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(resp.rfind("CTRL:ACK CID=", 0) == 0);
 }
 
 void test_net_set_validation_bad_param() {
   // Empty SSID
   std::string r1 = proto.processLine("NET:SET,\"\",\"password\"", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR NET_BAD_PARAM", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.find(" NET_BAD_PARAM") != std::string::npos);
   // Short password (<8)
   std::string r2 = proto.processLine("NET:SET,myssid,short", 0);
-  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR NET_BAD_PARAM", 0) == 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find(" NET_BAD_PARAM") != std::string::npos);
 }
 
 void test_net_reset_from_connected_back_to_ap() {
@@ -68,6 +71,23 @@ void test_net_reset_from_connected_back_to_ap() {
   // Connected now; reset should return OK (status line emitted asynchronously)
   std::string rr = proto.processLine("NET:RESET", 0);
   TEST_ASSERT_TRUE(rr.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(rr.find(" CID=") != std::string::npos);
+}
+
+void test_net_list_returns_networks() {
+  // In native stub, scan returns canned results
+  std::string r = proto.processLine("NET:LIST", 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" scanning=1") != std::string::npos);
+  // ACK first; find the NET:LIST header line with CID
+  auto pos = r.find("\nNET:LIST");
+  TEST_ASSERT_TRUE(pos != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("NET:LIST CID=") != std::string::npos);
+  std::string items = r.substr(pos);
+  TEST_ASSERT_TRUE(items.find("SSID=") != std::string::npos);
+  TEST_ASSERT_TRUE(items.find(" rssi=") != std::string::npos);
+  // Result lines should not repeat CID tokens
+  TEST_ASSERT_TRUE(items.find("\nCID=") == std::string::npos);
 }
 
 int main(int, char**) {
@@ -77,5 +97,6 @@ int main(int, char**) {
   RUN_TEST(test_net_set_returns_status_after_wait);
   RUN_TEST(test_net_set_validation_bad_param);
   RUN_TEST(test_net_reset_from_connected_back_to_ap);
+  RUN_TEST(test_net_list_returns_networks);
   return UNITY_END();
 }

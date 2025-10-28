@@ -4,8 +4,16 @@
 #include <string>
 #include <array>
 #include <memory>
+#include <vector>
 
 namespace net_onboarding {
+
+struct WifiScanResult {
+  std::string ssid;
+  int rssi = -1000;
+  int channel = 0;
+  bool secure = false;
+};
 
 class IWifi {
 public:
@@ -14,6 +22,8 @@ public:
   virtual void setModeOff() = 0;
   virtual void setModeSta() = 0;
   virtual void setModeAp() = 0;
+  // Optional combined mode for AP+STA
+  virtual void setModeApSta() = 0;
   virtual void disconnect(bool erase) = 0;
   virtual void beginSta(const char* ssid, const char* pass) = 0;
   virtual bool staConnected() const = 0;
@@ -25,6 +35,8 @@ public:
   virtual std::string softApSsid() const = 0;
   virtual const char* apDefaultPassword() const = 0;
   virtual const char* apSsidPrefix() const = 0;
+  // Scan helper; returns number of results written to out (<= max_results)
+  virtual int scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) = 0;
 };
 
 class INvs {

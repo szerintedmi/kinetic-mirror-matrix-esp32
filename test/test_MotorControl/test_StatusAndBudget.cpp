@@ -35,8 +35,12 @@ void test_status_includes_new_keys() {
   MotorCommandProcessor p;
   auto st = p.processLine("STATUS", 0);
   auto lines = split_lines_sb(st);
+  // STATUS now starts with an ACK; find first data line
   TEST_ASSERT_TRUE((int)lines.size() >= 1);
-  const std::string &L0 = lines[0];
+  size_t idx = 0;
+  while (idx < lines.size() && lines[idx].rfind("CTRL:", 0) == 0) ++idx;
+  TEST_ASSERT_TRUE(idx < lines.size());
+  const std::string &L0 = lines[idx];
   TEST_ASSERT_TRUE(L0.find("homed=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find("steps_since_home=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find("budget_s=") != std::string::npos);
@@ -46,7 +50,7 @@ void test_status_includes_new_keys() {
 void test_budget_spend_and_refill_clamp() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("WAKE:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   // After 30s awake, expect ~60s remaining
   auto st1 = p.processLine("STATUS", 30000);
   auto lines1 = split_lines_sb(st1);
@@ -57,7 +61,7 @@ void test_budget_spend_and_refill_clamp() {
   TEST_ASSERT_TRUE(L0.find(exp1) != std::string::npos);
   // Sleep and allow refill beyond cap; expect clamp at 90
   auto r2 = p.processLine("SLEEP:0", 30000);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
   auto st2 = p.processLine("STATUS", 70000);
   auto lines2 = split_lines_sb(st2);
   TEST_ASSERT_TRUE(find_line_for_id(lines2, 0, L0));
@@ -96,7 +100,7 @@ void test_home_and_steps_since_home() {
 void test_budget_clamps_and_ttfc_non_negative() {
   MotorCommandProcessor p;
   auto r1 = p.processLine("WAKE:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   // After 100s awake, budget should be negative (no clamp)
   auto st = p.processLine("STATUS", 100000);
   auto lines = split_lines_sb(st);
@@ -112,7 +116,7 @@ void test_ttfc_clamp_and_recovery() {
   MotorCommandProcessor p;
   // Run long enough awake to exceed any reasonable deficit
   auto r1 = p.processLine("WAKE:0", 0);
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r1.c_str());
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   const int64_t big_s = (int64_t)MotorControlConstants::MAX_COOL_DOWN_TIME_S * 5 + 123;
   auto st0 = p.processLine("STATUS", (uint32_t)(big_s * 1000));
   auto lines0 = split_lines_sb(st0);
@@ -124,7 +128,7 @@ void test_ttfc_clamp_and_recovery() {
 
   // Go to sleep now and wait exactly MAX_COOL_DOWN_TIME_S seconds
   auto r2 = p.processLine("SLEEP:0", (uint32_t)(big_s * 1000));
-  TEST_ASSERT_EQUAL_STRING("CTRL:ACK", r2.c_str());
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
   auto st1 = p.processLine("STATUS", (uint32_t)((big_s + MotorControlConstants::MAX_COOL_DOWN_TIME_S) * 1000));
   auto lines1 = split_lines_sb(st1);
   TEST_ASSERT_TRUE(find_line_for_id(lines1, 0, L0));

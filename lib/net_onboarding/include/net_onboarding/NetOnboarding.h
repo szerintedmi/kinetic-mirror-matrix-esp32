@@ -51,6 +51,8 @@ public:
   // Snapshot of current state, RSSI, and IP (connected only).
   Status status() const;
   void apPassword(std::array<char,65>& out) const;
+  // Scan nearby Wi‑Fi networks, strongest first. Returns count (<= max_results).
+  int scanNetworks(std::vector<WifiScanResult>& out, int max_results = 12, bool include_hidden = true);
 
   // NVS helpers (exposed primarily for tests/tools)
   bool saveCredentials(const char* ssid, const char* pass);
