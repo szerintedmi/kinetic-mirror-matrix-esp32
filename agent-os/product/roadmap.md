@@ -7,16 +7,19 @@
 5. [x] Thermal Limits Enforcement — Enforce per‑motor runtime/cooldown budgets (derived from STATUS metrics) to cap continuous motion and require cooldown before resuming. Thresholds are compile‑time constants for now; enforcement can be toggled at runtime via `SET THERMAL_LIMITING=OFF|ON` and queried with `GET THERMAL_LIMITING`. MOVE/HOME return `est_ms` in `CTRL:OK`, and pre‑flight checks reject or warn when budgets are exceeded. Depends on: 4. `S`
 6. [x] Shared-STEP spike for 8 motors on one ESP32 to prep scaling beyond with a single MCU. backend with a hardware-timed shared STEP generator,  DIR/SLEEP on 74HC595, and layered per-motor gating/guard windows so eight motors run in lockstep while we validate patterns for future >8 builds.  Depends on: 2, 4. `S`
    - Status: Parked (2025-10-25). See shared-step status note: [docs/sharedstep-status.md](./docs/sharedstep-status.md)
-7. [ ] Preset Replay (MVP) — Add a minimal host‑side preset format and CLI to script, store, and replay sequences using the serial protocol (absolute positions with optional speed/accel), enabling sharable demos. Depends on: 1, 4. `S`
-8. [ ] ESP‑Now Master/Node Broadcast — Add a master ESP32 that broadcasts protocol‑compatible commands (no acks/retries, no encryption initially). Support node IDs and group addressing. Depends on: 1, 2. `L`
-9. [ ] Master‑Side Scheduler (Thermal/Current Batching) — Implement a master scheduler that batches `MOVE` commands to respect current limits and thermal budgets, using node‑reported telemetry and configurable policies. Provides dry‑run checks and staggered dispatch. Depends on: 4, 8. `M`
-10. [ ] Multi‑Cluster Dispatch — Batch and sequence broadcasts to multiple nodes without a shared timebase, focusing on dependable arrival and master‑side scheduling rather than exact frame sync. Validate latency/jitter under load. Depends on: 8, 9. `M`
-11. [ ] Targeting Geometry Core — Provide a shared math library and CLI to convert wall coordinates into mirror angles with reachability checks; feeds presets and live play. Depends on: 7. `M`
-12. [ ] Creative Tooling: Live Play & Sandbox — Expose minimal live‑play hooks (controllers/sensors/OSC) while honoring scheduler limits, and add a desktop/browser sandbox to preview reachability and timing before hardware runs. Depends on: 9, 11. `M`
+7. [ ] Wi‑Fi Onboarding via NVS — Provide SoftAP onboarding for SSID/PSK, persist credentials in NVS Preferences, and auto‑connect on boot. Add resets via serial `NET:RESET` and long‑press boot button. Acceptance: cold boot → AP provision → joins LAN; reset paths verified. Depends on: none. `S`
+8. [ ] MQTT Steel Thread: Presence — Connect to a local broker with username/password; publish retained birth message and LWT on `devices/<id>/state`. Acceptance: node publishes “ready” immediately after connect; CLI shows online/offline flips within a few milliseconds on a local broker (target <25 ms median, <100 ms p95). Depends on: 7. `S`
+9. [ ] Telemetry via MQTT (STATUS Parity) — Publish per‑motor STATUS over MQTT with parity to the current serial fields. Topic: `devices/<id>/status/<motor_id>` (QoS0) on change and at 2–5 Hz. CLI/TUI defaults to MQTT transport for live status views from this step onward; serial remains selectable as a debug backdoor. Acceptance: serial `STATUS` and MQTT status match during motion across ≥2 motors; TUI reflects updates within a few milliseconds on a local broker. Depends on: 8. `S`
+10. [ ] Commands via MQTT — Implement command request/response with strict `cmd_id` correlation (no QoS2) and full feature parity with the current serial command set (all verbs and parameters). Requests: `devices/<id>/cmd` (QoS1). Responses: `devices/<id>/cmd/resp` (QoS1) with `{ ok|err, est_ms }`. Node does not queue; if busy, immediately replies `BUSY`. CLI/TUI defaults to MQTT transport (serial selectable via `--transport serial`). Acceptance: every serial command and parameter works end‑to‑end over MQTT with correlated acks; concurrent `MOVE` rejected with `BUSY`; events/status reflect progress. Depends on: 9. `M`
+11. [ ] Multi‑Node Basics + Registry — Master maintains a live registry from retained `state`; broadcast simple commands to selected nodes. Acceptance: two nodes visible; broadcast `HOME` executes on both with distinct acks. Depends on: 10. `S`
+12. [ ] Geometry & Mapping — Master converts pattern targets to per‑motor angles/steps; persist mirror layout (motor‑pair→mirror, arrangement), homing offsets, and reachability limits. Storage mechanism TBD (not necessarily a file). Acceptance: choose a simple pattern in the TUI; nodes move to derived angles respecting limits. Depends on: 11. `M`
+13. [ ] Preset Replay (MVP) — Store and play sequences of high‑level targets on the master; pause/stop; progress via events. Acceptance: canned multi‑step demo plays on ≥2 nodes; resumes after transient broker disconnect. Depends on: 12 (or 11 for raw commands first). `S`
+14. [ ] Master Scheduler v1 (Thermal/Current Batching) — Stagger `MOVE`s by node busy state and thermal headroom from telemetry; provide dry‑run preview in CLI. Acceptance: batch runs without `BUSY` rejections; thermal warnings avoided. Depends on: 13, 9. `M`
+15. [ ] Broker Strategy & Deployment — MVP uses a developer‑machine broker and MQTT UI; later package for a site gateway (container/systemd), with runbooks and backup/restore. Acceptance: documented runbooks; CLI flags to target broker host. Depends on: 8–11. `S`
 
 > Notes
 >
-> - Includes 12 items ordered by control surface → hardware bring‑up → diagnostics → limits → presets → wireless broadcast → master scheduling → scaling → geometry → creative tooling.
+> - Now includes 15 items ordered by control surface → hardware bring‑up → diagnostics → limits → network onboarding → broker presence → telemetry → commands → multi‑node → geometry → presets → scheduling → creative tooling.
 > - Each item delivers an end‑to‑end, testable outcome without requiring repo bootstrapping.
 > - Effort scale: `S` 2–3 days, `M` ~1 week, `L` ~2 weeks.
 
@@ -24,20 +27,23 @@
 >
 > - Driver & stepping: DRV8825, full‑step only for v1; DIR is latched at motion start and not toggled mid‑move.
 > - Homing: Bump‑stop algorithm with parameters `overshoot`, `backoff`, `speed`, `accel`, `full_range`; compute midpoint as zero at `full_range/2`. Parameters default in code and may be overridden via `HOME`.
-> - Commands: `MOVE` uses absolute steps with optional `speed` (steps/s) and `accel` (steps/s^2); MOVE auto‑WAKEs before stepping and auto‑SLEEPs after completion. `WAKE`/`SLEEP` accept `<id|ALL>`. `HELP` lists all commands and parameters.
+> - Commands: `MOVE` uses absolute steps with optional `speed` (steps/s) and `accel` (steps/s^2); MOVE auto‑WAKEs before stepping and auto‑SLEEPs after completion. `WAKE`/`SLEEP` accept `<id|ALL>`. `HELP` lists all commands and parameters. Transport parity: all serial commands and parameters are available over MQTT with a 1:1 field mapping; new serial verbs must be mirrored on MQTT.
 > - Budgets: Electrical budget not enforced on the node (master responsibility). Thermal budget must be enforced on both master and node; node uses a higher threshold. Start with lab‑safe defaults and refine later.
-> - ESP‑Now: Start with broadcast, no acks/retries and no encryption; add reliability/security later if needed.
-> - Multi‑cluster: Prefer batched dispatch over shared timebase; master sequencing is sufficient for our non‑animation use case.
+> - Networking: MQTT is the primary control plane. Presence `devices/<id>/state` is retained QoS1 with LWT; status `devices/<id>/status/<motor_id>` is QoS0 on change + periodic; commands `devices/<id>/cmd` QoS1 with strict `cmd_id` correlation; responses `devices/<id>/cmd/resp` QoS1. No QoS2.
+> - Wi‑Fi credentials: stored in NVS Preferences; onboarding via SoftAP; resets via serial `NET:RESET` and long‑press button.
+> - CLI/TUI transport: defaults to MQTT from item 9 onward; serial remains a selectable debug/diagnostic path.
+> - Node queuing: none; nodes reject commands with `BUSY` while executing; master owns scheduling.
+> - Geometry & storage: defined on the master; storage mechanism TBD (do not assume file‑based yet).
+> - Broker location: developer machine/local broker for MVP; site gateway packaging later.
+> - Multi‑node: Prefer batched dispatch via master scheduling over shared timebase.
 > - Scaling: Motors can share STEP frequency (same speed), but have independent DIR and target step counts; stop per motor by gating its STEP (not SLEEP/ENBL) once its count completes.
 
 > Ordering Rationale
 >
-> - 1 first to define and test the command surface quickly (with stubs) so validation and tooling can proceed in parallel.
-> - 2 integrates hardware bring‑up behind the stable serial interface; includes per‑motor ENABLE and auto‑WAKE/SLEEP to protect motors from overheating.
-> - 3–5 add reliability, observability, and protection so later phases have stable baselines and quick debugging.
-> - 7 enables sharable demos early without waiting for wireless.
-> - 8 introduces wireless control; establishes addressing/grouping for nodes.
-> - 9 adds master‑side scheduling for safe batching once broadcast control exists.
-> - 10 extends to multi‑node dispatch tuned for our non‑animation use case.
-> - 6 isolates scaling risks early; shared STEP strategy is investigated to inform PCB and pin planning.
-> - 11–12 bring back the original geometry and creative tooling goals, aligned with the new control architecture.
+> - 1 defines and tests the serial command surface quickly; 2 integrates hardware bring‑up behind a stable interface; 3–5 add reliability, observability, and protection.
+> - 7–8 bring up networking and presence so the system is discoverable end‑to‑end.
+> - 9 provides STATUS parity over MQTT so the TUI becomes useful without commanding.
+> - 10 unlocks full control via MQTT with clear request/response semantics and `cmd_id` correlation.
+> - 11 enables multi‑node operations; 12 adds geometry mapping for target conversion; 13 delivers a demo‑ready preset flow.
+> - 14 adds master scheduling informed by real telemetry.
+> - 6 isolates scaling risks early; 15 formalizes broker deployment when needed.

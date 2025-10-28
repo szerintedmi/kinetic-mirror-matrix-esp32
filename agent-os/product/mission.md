@@ -1,7 +1,7 @@
 # Product Mission
 
 ## Pitch
-Mirror Array is a hackable kinetic mirror kit that helps makers and creative coders craft repeatable reflection patterns by providing precise, scalable motion control with instant serial control today and effortless wireless orchestration later.
+Mirror Array is a hackable kinetic mirror kit that helps makers and creative coders craft repeatable reflection patterns by providing precise, scalable motion control with instant serial control today and effortless MQTT‑based orchestration later.
 
 ## Users
 
@@ -39,12 +39,12 @@ Mirror Array is a hackable kinetic mirror kit that helps makers and creative cod
 ### DIY Mirror Chaos
 Most hacker-grade mirror projects need hours of fiddly alignment and still drift off target the moment someone nudges the rig—costing 30–60 minutes per setup and frequent do-overs.
 
-**Our Solution:** A modular mirror deck driven by a single ESP32 controlling an 8‑mirror cluster out of the box. Clear serial commands (MOVE, HOME, STATUS, WAKE/SLEEP) make it easy to script reliable moves from any laptop today, with a smooth path to wireless broadcast control when you scale.
+**Our Solution:** A modular mirror deck driven by a single ESP32 controlling an 8‑mirror cluster out of the box. Clear serial commands (MOVE, HOME, STATUS, WAKE/SLEEP) make it easy to script reliable moves from any laptop today, with a smooth path to MQTT‑based orchestration when you scale.
 
 ## Differentiators
 
 ### Hackable Paths To Scale
-There’s no direct rival that mixes modular mirror decks, fine‑grained motion, and open scripting. Unlike one‑off art builds or binary mirror walls, we keep the control flow consistent from a single 8‑mirror cluster to larger arrays. Start with simple serial scripts; later broadcast the same commands wirelessly to multiple clusters. Result: faster setup days and more time tweaking the look, not the hardware.
+There’s no direct rival that mixes modular mirror decks, fine‑grained motion, and open scripting. Unlike one‑off art builds or binary mirror walls, we keep the control flow consistent from a single 8‑mirror cluster to larger arrays. Start with simple serial scripts; later orchestrate the same commands over MQTT to multiple clusters. Result: faster setup days and more time tweaking the look, not the hardware.
 
 ## Key Features
 
@@ -62,7 +62,8 @@ There’s no direct rival that mixes modular mirror decks, fine‑grained motion
 - **Script-first workflow:** Share plain‑text command scripts that run the same on every cluster.
 
 ### Advanced Features
-- **Broadcast multi‑cluster sync:** Upgrade to wireless orchestration (ESP‑Now) that reuses the serial command protocol for bigger walls.
+- **MQTT multi‑node orchestration:** Coordinate multiple nodes via a local broker using the same command protocol with `cmd_id`‑correlated acks for predictable control.
+- **Master‑side batching & safety:** Schedule MOVE/HOME across nodes based on busy state and thermal headroom while preserving node simplicity.
 - **Scale beyond 8:** Explore driving 16+ mirrors per controller and coordinated step generation for identical motions.
 - **Live play modes:** Let guests “paint” with their reflection using joysticks, sensors, or code hooks.
 - **Scene sandboxing:** Test reachability and timing in software before committing to a build session.
