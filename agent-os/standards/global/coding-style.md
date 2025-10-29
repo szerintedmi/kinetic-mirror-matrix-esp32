@@ -29,6 +29,11 @@
   - Headings should be surrounded by blank lines
   - Lists should be surrounded by blank lines
 
+## Mermaid diagrams
+
+- Always validate diagrams you generate using the validate-mermaid command. Syntax: `validate-mermaid <(printf 'graph TD\nA-->B\n')`
+- If you include a mermaid diagram in a file inline (eg. markdown) you still must use the above validator but only with the diagram contents.
+
 ## Logging
 
 - **Purposeful logs**: Route logs through lightweight macros / functions so verbosity can be tuned per build profile, environment or configuration.
