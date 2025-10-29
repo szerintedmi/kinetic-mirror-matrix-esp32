@@ -19,7 +19,7 @@ Firmware + host tools to drive up to 8 stepper‑driven mirrors from a single ES
 ## Features (High‑Level)
 
 - Serial protocol v1 with stable grammar and shortcuts
-  - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
+  - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp) and the modular pipeline under [`lib/MotorControl/src/command`](./lib/MotorControl/src/command/), spec: [Serial command protocol v1](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
 - Wi‑Fi onboarding library with serial/MQTT-ready commands, SoftAP portal, and device status feedback
   - See: [NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp), portal assets in [data_src/net](./data_src/net), spec: [Wi‑Fi Onboarding via NVS](./agent-os/specs/2025-10-28-wifi-onboarding-via-nvs/spec.md)
 - 8‑motor hardware bring‑up via FastAccelStepper + 2×74HC595 (DIR/SLEEP)
@@ -27,9 +27,9 @@ Firmware + host tools to drive up to 8 stepper‑driven mirrors from a single ES
 - Homing & baseline calibration (bump‑stop)
   - See: [HardwareMotorController.cpp](./lib/MotorControl/src/HardwareMotorController.cpp), spec: [Homing & baseline calibration spec](./agent-os/specs/2025-10-17-homing-baseline-calibration-bump-stop/spec.md)
 - Status & diagnostics (homed, steps_since_home, budget_s, ttfc_s)
-  - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), spec: [Status & diagnostics spec](./agent-os/specs/2025-10-17-status-diagnostics/spec.md)
+  - See: [CommandHandlers.cpp](./lib/MotorControl/src/command/CommandHandlers.cpp) (status handler) and [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), spec: [Status & diagnostics spec](./agent-os/specs/2025-10-17-status-diagnostics/spec.md)
 - Thermal limits enforcement (preflight checks, WARN/ERR, last‑op timing)
-  - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h), spec: [Thermal limits enforcement spec](./agent-os/specs/2025-10-17-thermal-limits-enforcement/spec.md)
+  - See: [CommandHandlers.cpp](./lib/MotorControl/src/command/CommandHandlers.cpp) (motor handler paths), [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h), spec: [Thermal limits enforcement spec](./agent-os/specs/2025-10-17-thermal-limits-enforcement/spec.md)
 - Host CLI (Python) incl. interactive TUI
   - See: [tools/serial_cli](./tools/serial_cli/)
 
@@ -86,7 +86,7 @@ sequenceDiagram
   Dev->>MCP: parse line
   MCP->>CTR: tick(now) and preflight checks
   alt OK or WARN (limits OFF)
-    MCP-->>CLI: CTRL:OK est_ms=...
+    MCP-->>CLI: CTRL:ACK est_ms=...
     MCP->>CTR: moveAbsMask(mask,...)
     CTR->>SR: set DIR/SLEEP and latch
     CTR->>FAS: startMoveAbs(id,target,...)
@@ -194,8 +194,8 @@ All endpoints respond with compact JSON (`Content-Type: application/json`) and s
 
 Runtime Controls (device)
 
-- `GET THERMAL_LIMITING` → `CTRL:OK THERMAL_LIMITING=ON|OFF max_budget_s=N`
-- `GET` or `GET ALL` → `CTRL:OK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
+- `GET THERMAL_LIMITING` → `CTRL:ACK THERMAL_LIMITING=ON|OFF max_budget_s=N`
+- `GET` or `GET ALL` → `CTRL:ACK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
 - `SET THERMAL_LIMITING=OFF|ON`
 - `GET LAST_OP_TIMING[:<id|ALL>]` to validate estimates (`est_ms`) and actual durations
 
@@ -207,14 +207,14 @@ Runtime Controls (device)
   - `STATUS`, `WAKE:<id|ALL>`, `SLEEP:<id|ALL>`
   - `GET` (all settings), `GET ALL`
   - `GET LAST_OP_TIMING[:<id|ALL>]`, `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
-  - Responses: `CTRL:OK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, and `CTRL:WARN ...` when enforcement is OFF
+  - Responses: `CTRL:ACK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, and `CTRL:WARN ...` when enforcement is OFF
 - Full spec: [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
 - HELP source: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp)
 
 ## Repo Map (quick links)
 
 - Firmware console: [SerialConsole.cpp](./src/console/SerialConsole.cpp)
-- Command processor: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp)
+- Command processor: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp) (façade) and [`lib/MotorControl/src/command/`](./lib/MotorControl/src/command/) (pipeline modules)
 - Hardware controller: [HardwareMotorController.cpp](./lib/MotorControl/src/HardwareMotorController.cpp)
 - FastAccelStepper adapter: [FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp)
 - 74HC595 driver: [Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp)

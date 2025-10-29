@@ -98,6 +98,15 @@ void test_multi_cmd_reject_overlap_simple();
 void test_multi_cmd_reject_overlap_all();
 void test_multi_cmd_sequence_responses();
 void test_multi_cmd_whitespace_and_case();
+// Command pipeline parser additions
+void test_parser_alias_to_upper();
+void test_parser_handles_multicommands();
+void test_parse_csv_with_quotes();
+void test_batch_conflict_detection();
+void test_execute_matches_serial_output();
+void test_execute_reports_errors_structurally();
+void test_batch_aggregates_estimate();
+void test_execute_cid_increments();
 
 extern void setUp();
 extern void tearDown();
@@ -194,6 +203,16 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_set_speed_busy_reject);
   setUp(); RUN_TEST(test_set_decel_busy_reject);
   setUp(); RUN_TEST(test_home_uses_speed_accel_globals);
+
+  // Parser + batch executor regression tests
+  setUp(); RUN_TEST(test_parser_alias_to_upper);
+  setUp(); RUN_TEST(test_parser_handles_multicommands);
+  setUp(); RUN_TEST(test_parse_csv_with_quotes);
+  setUp(); RUN_TEST(test_batch_conflict_detection);
+  setUp(); RUN_TEST(test_execute_matches_serial_output);
+  setUp(); RUN_TEST(test_execute_reports_errors_structurally);
+  setUp(); RUN_TEST(test_batch_aggregates_estimate);
+  setUp(); RUN_TEST(test_execute_cid_increments);
 
   // Multi-command parsing
   setUp(); RUN_TEST(test_multi_cmd_accept_disjoint);
