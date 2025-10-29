@@ -8,18 +8,19 @@
 6. [x] Shared-STEP spike for 8 motors on one ESP32 to prep scaling beyond with a single MCU. backend with a hardware-timed shared STEP generator,  DIR/SLEEP on 74HC595, and layered per-motor gating/guard windows so eight motors run in lockstep while we validate patterns for future >8 builds.  Depends on: 2, 4. `S`
    - Status: Parked (2025-10-25). See shared-step status note: [docs/sharedstep-status.md](./docs/sharedstep-status.md)
 7. [x] Wi‑Fi Onboarding via NVS — Provide SoftAP onboarding for SSID/PSK, persist credentials in NVS Preferences, and auto‑connect on boot. Adds `/api/status` identity fields, `/api/reset`, AP-only scanning, serial `NET:LIST` guard, and mode-aware portal UX with reset guidance. Acceptance: cold boot → AP provision → joins LAN; reset paths verified. Depends on: none. `S`
-8. [ ] MQTT Steel Thread: Presence — Connect to a local broker with username/password; publish retained birth message and LWT on `devices/<id>/state`. Acceptance: node publishes “ready” immediately after connect; CLI shows online/offline flips within a few milliseconds on a local broker (target <25 ms median, <100 ms p95). Depends on: 7. `S`
-9. [ ] Telemetry via MQTT (STATUS Parity) — Publish per‑motor STATUS over MQTT with parity to the current serial fields. Topic: `devices/<id>/status/<motor_id>` (QoS0) on change and at 2–5 Hz. CLI/TUI defaults to MQTT transport for live status views from this step onward; serial remains selectable as a debug backdoor. Acceptance: serial `STATUS` and MQTT status match during motion across ≥2 motors; TUI reflects updates within a few milliseconds on a local broker. Depends on: 8. `S`
-10. [ ] Commands via MQTT — Implement command request/response with strict `cmd_id` correlation (no QoS2) and full feature parity with the current serial command set (all verbs and parameters). Requests: `devices/<id>/cmd` (QoS1). Responses: `devices/<id>/cmd/resp` (QoS1) with `{ ok|err, est_ms }`. Node does not queue; if busy, immediately replies `BUSY`. CLI/TUI defaults to MQTT transport (serial selectable via `--transport serial`). Acceptance: every serial command and parameter works end‑to‑end over MQTT with correlated acks; concurrent `MOVE` rejected with `BUSY`; events/status reflect progress. Depends on: 9. `M`
-11. [ ] Multi‑Node Basics + Registry — Master maintains a live registry from retained `state`; broadcast simple commands to selected nodes. Acceptance: two nodes visible; broadcast `HOME` executes on both with distinct acks. Depends on: 10. `S`
-12. [ ] Geometry & Mapping — Master converts pattern targets to per‑motor angles/steps; persist mirror layout (motor‑pair→mirror, arrangement), homing offsets, and reachability limits. Storage mechanism TBD (not necessarily a file). Acceptance: choose a simple pattern in the TUI; nodes move to derived angles respecting limits. Depends on: 11. `M`
-13. [ ] Preset Replay (MVP) — Store and play sequences of high‑level targets on the master; pause/stop; progress via events. Acceptance: canned multi‑step demo plays on ≥2 nodes; resumes after transient broker disconnect. Depends on: 12 (or 11 for raw commands first). `S`
-14. [ ] Master Scheduler v1 (Thermal/Current Batching) — Stagger `MOVE`s by node busy state and thermal headroom from telemetry; provide dry‑run preview in CLI. Acceptance: batch runs without `BUSY` rejections; thermal warnings avoided. Depends on: 13, 9. `M`
-15. [ ] Broker Strategy & Deployment — MVP uses a developer‑machine broker and MQTT UI; later package for a site gateway (container/systemd), with runbooks and backup/restore. Acceptance: documented runbooks; CLI flags to target broker host. Depends on: 8–11. `S`
+8. [ ] Command Pipeline Modularization — Break the legacy MotorCommandProcessor into reusable parsing/router/handler layers so Serial and upcoming MQTT transports share validation, CID sequencing, and response formatting. Reason: de-risk transport parity and cut integration friction before we add a second control plane. Depends on: 7. `S`
+9. [ ] MQTT Steel Thread: Presence — Connect to a local broker with username/password; publish retained birth message and LWT on `devices/<id>/state`. Acceptance: node publishes “ready” immediately after connect; CLI shows online/offline flips within a few milliseconds on a local broker (target <25 ms median, <100 ms p95). Depends on: 8. `S`
+10. [ ] Telemetry via MQTT (STATUS Parity) — Publish per‑motor STATUS over MQTT with parity to the current serial fields. Topic: `devices/<id>/status/<motor_id>` (QoS0) on change and at 2–5 Hz. CLI/TUI defaults to MQTT transport for live status views from this step onward; serial remains selectable as a debug backdoor. Acceptance: serial `STATUS` and MQTT status match during motion across ≥2 motors; TUI reflects updates within a few milliseconds on a local broker. Depends on: 9. `S`
+11. [ ] Commands via MQTT — Implement command request/response with strict `cmd_id` correlation (no QoS2) and full feature parity with the current serial command set (all verbs and parameters). Requests: `devices/<id>/cmd` (QoS1). Responses: `devices/<id>/cmd/resp` (QoS1) with `{ ok|err, est_ms }`. Node does not queue; if busy, immediately replies `BUSY`. CLI/TUI defaults to MQTT transport (serial selectable via `--transport serial`). Acceptance: every serial command and parameter works end‑to‑end over MQTT with correlated acks; concurrent `MOVE` rejected with `BUSY`; events/status reflect progress. Depends on: 10. `M`
+12. [ ] Multi‑Node Basics + Registry — Master maintains a live registry from retained `state`; broadcast simple commands to selected nodes. Acceptance: two nodes visible; broadcast `HOME` executes on both with distinct acks. Depends on: 11. `S`
+13. [ ] Geometry & Mapping — Master converts pattern targets to per‑motor angles/steps; persist mirror layout (motor‑pair→mirror, arrangement), homing offsets, and reachability limits. Storage mechanism TBD (not necessarily a file). Acceptance: choose a simple pattern in the TUI; nodes move to derived angles respecting limits. Depends on: 12. `M`
+14. [ ] Preset Replay (MVP) — Store and play sequences of high‑level targets on the master; pause/stop; progress via events. Acceptance: canned multi‑step demo plays on ≥2 nodes; resumes after transient broker disconnect. Depends on: 13 (or 12 for raw commands first). `S`
+15. [ ] Master Scheduler v1 (Thermal/Current Batching) — Stagger `MOVE`s by node busy state and thermal headroom from telemetry; provide dry‑run preview in CLI. Acceptance: batch runs without `BUSY` rejections; thermal warnings avoided. Depends on: 14, 10. `M`
+16. [ ] Broker Strategy & Deployment — MVP uses a developer‑machine broker and MQTT UI; later package for a site gateway (container/systemd), with runbooks and backup/restore. Acceptance: documented runbooks; CLI flags to target broker host. Depends on: 9–12. `S`
 
 > Notes
 >
-> - Now includes 15 items ordered by control surface → hardware bring‑up → diagnostics → limits → network onboarding → broker presence → telemetry → commands → multi‑node → geometry → presets → scheduling → creative tooling.
+- Now includes 16 items ordered by control surface → hardware bring‑up → diagnostics → limits → network onboarding → transport unification → presence → telemetry → commands → multi‑node → geometry → presets → scheduling → deployment.
 > - Each item delivers an end‑to‑end, testable outcome without requiring repo bootstrapping.
 > - Effort scale: `S` 2–3 days, `M` ~1 week, `L` ~2 weeks.
 
@@ -31,7 +32,7 @@
 > - Budgets: Electrical budget not enforced on the node (master responsibility). Thermal budget must be enforced on both master and node; node uses a higher threshold. Start with lab‑safe defaults and refine later.
 > - Networking: MQTT is the primary control plane. Presence `devices/<id>/state` is retained QoS1 with LWT; status `devices/<id>/status/<motor_id>` is QoS0 on change + periodic; commands `devices/<id>/cmd` QoS1 with strict `cmd_id` correlation; responses `devices/<id>/cmd/resp` QoS1. No QoS2.
 > - Wi‑Fi credentials: stored in NVS Preferences; onboarding via SoftAP; resets via serial `NET:RESET` and long‑press button.
-> - CLI/TUI transport: defaults to MQTT from item 9 onward; serial remains a selectable debug/diagnostic path.
+- CLI/TUI transport: defaults to MQTT from item 10 onward; serial remains a selectable debug/diagnostic path.
 > - Node queuing: none; nodes reject commands with `BUSY` while executing; master owns scheduling.
 > - Geometry & storage: defined on the master; storage mechanism TBD (do not assume file‑based yet).
 > - Broker location: developer machine/local broker for MVP; site gateway packaging later.
@@ -41,9 +42,9 @@
 > Ordering Rationale
 >
 > - 1 defines and tests the serial command surface quickly; 2 integrates hardware bring‑up behind a stable interface; 3–5 add reliability, observability, and protection.
-> - 7–8 bring up networking and presence so the system is discoverable end‑to‑end.
-> - 9 provides STATUS parity over MQTT so the TUI becomes useful without commanding.
-> - 10 unlocks full control via MQTT with clear request/response semantics and `cmd_id` correlation.
-> - 11 enables multi‑node operations; 12 adds geometry mapping for target conversion; 13 delivers a demo‑ready preset flow.
-> - 14 adds master scheduling informed by real telemetry.
-> - 6 isolates scaling risks early; 15 formalizes broker deployment when needed.
+- 7 delivers Wi‑Fi onboarding; 8 modularizes the command pipeline ahead of additional transports.
+- 9 establishes MQTT presence; 10 provides STATUS parity so the TUI becomes useful without commanding.
+- 11 unlocks full control via MQTT with clear request/response semantics and `cmd_id` correlation.
+- 12 enables multi‑node operations; 13 adds geometry mapping for target conversion; 14 delivers a demo‑ready preset flow.
+- 15 adds master scheduling informed by real telemetry.
+- 6 isolates scaling risks early; 16 formalizes broker deployment when needed.
