@@ -1,0 +1,234 @@
+:root {
+  --status-ap: #f9a825;
+  --status-connecting: #0288d1;
+  --status-connected: #2e7d32;
+  --status-text: #ffffff;
+}
+
+[x-cloak] {
+  display: none !important;
+}
+
+body {
+  padding-bottom: 3rem;
+}
+
+header > .lead {
+  max-width: 48rem;
+}
+
+.status-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.75rem;
+  padding: 1.5rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.status-card dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.status-card dt {
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted-color);
+  margin-bottom: 0.25rem;
+}
+
+.status-card dd {
+  margin: 0;
+  font-family: var(--pico-font-family);
+  word-break: break-word;
+}
+
+.status-pill {
+  justify-self: start;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--status-text);
+  background: var(--pico-muted-color);
+}
+
+.status-pill.ap {
+  background: var(--status-ap);
+}
+
+.status-pill.connecting {
+  background: var(--status-connecting);
+}
+
+.status-pill.connected {
+  background: var(--status-connected);
+}
+
+.notice {
+  border-radius: var(--pico-border-radius);
+  border: 1px solid currentColor;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0;
+}
+
+.notice.success {
+  color: var(--status-connected);
+  background: rgba(46, 125, 50, 0.08);
+}
+
+.notice.error {
+  color: #c62828;
+  background: rgba(198, 40, 40, 0.08);
+}
+
+.notice.info {
+  color: var(--status-connecting);
+  background: rgba(2, 136, 209, 0.08);
+}
+
+.grid {
+  margin-top: 2rem;
+  gap: 1.5rem;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.networks ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.networks ul li::marker {
+  content: none;
+}
+
+.networks li button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  --pico-background-color: var(--pico-card-background-color);
+  --pico-border-color: var(--pico-border-color);
+  --pico-color: inherit;
+  border-radius: var(--pico-border-radius);
+  border: 1px solid var(--pico-muted-border-color);
+  background: var(--pico-card-background-color);
+  color: inherit;
+}
+
+.networks li button:hover,
+.networks li button:focus {
+  border-color: var(--status-connecting);
+}
+
+.networks li .ssid {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: inherit;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.networks li .meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+  white-space: nowrap;
+}
+
+.networks li .meta span + span::before {
+  content: "•";
+  margin: 0 0.35rem;
+  color: var(--pico-muted-color);
+}
+
+.networks li .meta span:last-child {
+  font-variant-numeric: tabular-nums;
+}
+
+.networks li button:disabled {
+  opacity: 0.6;
+}
+
+.networks .hint {
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+  margin-bottom: 0.75rem;
+}
+
+.networks li.empty {
+  font-size: 0.9rem;
+  color: var(--pico-muted-color);
+  padding: 0.75rem 0;
+}
+
+@media (max-width: 600px) {
+  .networks li button {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+  .networks li .ssid {
+    white-space: normal;
+  }
+  .networks li .meta {
+    white-space: normal;
+    gap: 0.2rem;
+  }
+}
+
+.credentials form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.form-actions button {
+  flex: 1 1 12rem;
+}
+
+.credentials .hint {
+  font-size: 0.85rem;
+  color: var(--pico-muted-color);
+}
+
+@media (max-width: 768px) {
+  .card-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .status-card dl {
+    grid-template-columns: 1fr;
+  }
+}

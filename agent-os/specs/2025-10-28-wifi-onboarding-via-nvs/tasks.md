@@ -93,9 +93,9 @@ Manual test
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 3.0 Define LED pin/polarity in `include/boards/Esp32Dev.hpp` (GPIO 2, active‑low)
-- [ ] 3.1 Implement non‑blocking blinker (fast=AP, slow=connecting, solid=connected)
-- [ ] 3.2 2–4 focused tests (timing windows) or visual confirmation script
+- [x] 3.0 Define LED pin/polarity in `include/boards/Esp32Dev.hpp` (GPIO 2, active‑low)
+- [x] 3.1 Implement non‑blocking blinker (fast=AP, slow=connecting, solid=connected)
+- [x] 3.2 2–4 focused tests (timing windows) or visual confirmation script
 
 Acceptance
 
@@ -112,38 +112,44 @@ Manual test
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 4.0 Serve gzipped static files from LittleFS (`/index.html`, css, js)
-- [ ] 4.1 Implement `GET /api/scan` (list SSIDs)
-- [ ] 4.2 Implement `GET /api/status` (state/RSSI/IP)
-- [ ] 4.3 Implement `POST /api/wifi` (save creds → connect attempt)
-- [ ] 4.4 2–6 focused tests (manual with curl) for endpoints
+- [x] 4.0 Serve gzipped static files from LittleFS (`/index.html`, css, js)
+- [x] 4.1 Implement `GET /api/scan` (list SSIDs)
+- [x] 4.2 Implement `GET /api/status` (state/RSSI/IP)
+- [x] 4.3 Implement `POST /api/wifi` (save creds → connect attempt)
+- [x] 4.4 2–6 focused tests (manual with curl) for endpoints
+- [x] 4.5 Implement `POST /api/reset` (clear creds → return SoftAP details)
 
 Acceptance
 
 - Endpoints respond as specified; POST triggers connect attempt
+- `GET /api/status` exposes state, RSSI, IP, MAC address, SoftAP SSID, and SoftAP password (masked only in UI when in STA mode)
+- `/api/scan`/`NET:LIST` limited to AP mode to avoid STA resets; `/api/reset` re-enables AP and returns SSID/password
 
 Manual test
 
 - `curl http://192.168.4.1/api/scan` etc.; observe JSON and state change
+- `curl -X POST http://192.168.4.1/api/reset`; confirm AP SSID/password in response
 
 #### Task Group 5: Responsive Portal UI
 
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 4
 
-- [ ] 5.0 HTML with Pico.css + Alpine.js (or htmx); mobile‑first responsive
-- [ ] 5.1 Network list with refresh; manual SSID+PSK form
-- [ ] 5.2 Success/failure banners; field validation; touch‑friendly controls
-- [ ] 5.3 Build pipeline integration from `data_src/` → gzipped to `data/`
-- [ ] 5.4 2–6 focused checks (Playwright/manual) at 320px/768px/1024px
+- [x] 5.0 HTML with Pico.css + Alpine.js (or htmx); mobile‑first responsive
+- [x] 5.1 Network list with refresh; manual SSID+PSK form
+- [x] 5.2 Success/failure banners; field validation; touch-friendly controls
+- [x] 5.3 Build pipeline integration from `data_src/` → gzipped to `data/`
+- [x] 5.4 2–6 focused checks (Playwright/manual) at 320px/768px/1024px
+- [x] 5.5 Distinct STA vs SoftAP flows (titles, hints, reset flow, confirmation prompts)
 
 Acceptance
 
 - Portal usable on phone and desktop; assets served gzipped
+- UI disables scanning in STA mode, surfaces MAC/SoftAP details, and guides user through credential updates or resets
 
 Manual test
 
-- Connect phone to AP; complete onboarding flow end‑to‑end
+- Connect phone to AP; complete onboarding flow end-to-end
 
 ### Buttons & Resets
 
@@ -152,8 +158,8 @@ Manual test
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 6.0 Implement 5s button hold → `resetCredentials()` + reboot to AP
-- [ ] 6.1 Debounce and ignore short taps
+- [x] 6.0 Implement 5s button hold → `resetCredentials()` + reboot to AP
+- [x] 6.1 Debounce and ignore short taps
 
 Acceptance
 
@@ -174,10 +180,10 @@ Note: HELP text updates are part of Task Group 2 when implementing commands. REA
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 1–6
 
-- [ ] 7.0 Cold boot (no creds) → AP; portal sets creds → CONNECTED
-- [ ] 7.1 `NET:STATUS` reports CONNECTED with IP/RSSI
-- [ ] 7.2 Long‑press reset restores AP flow
-- [ ] 7.3 Update README with onboarding guide (SoftAP and Serial alternatives) and LED patterns
+- [x] 7.0 Cold boot (no creds) → AP; portal sets creds → CONNECTED
+- [x] 7.1 `NET:STATUS` reports CONNECTED with IP/RSSI
+- [x] 7.2 Long‑press reset restores AP flow
+- [x] 7.3 Update README with onboarding guide (SoftAP and Serial alternatives) and LED patterns
 
 Acceptance
 

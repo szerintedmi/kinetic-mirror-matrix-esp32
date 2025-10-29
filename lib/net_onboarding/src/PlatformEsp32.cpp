@@ -35,33 +35,72 @@ public:
 
   int scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) override {
     out.clear();
-    int n = WiFi.scanNetworks(/*async=*/false, /*hidden=*/include_hidden);
-    if (n <= 0) return 0;
-    // Collect all then sort by RSSI desc
+
+    auto waitForScan = []() -> int {
+      const uint32_t kTimeoutMs = 4000;
+      uint32_t start = millis();
+      int status;
+      while ((status = WiFi.scanComplete()) == WIFI_SCAN_RUNNING) {
+        if (millis() - start > kTimeoutMs) {
+          WiFi.scanDelete();
+          return WIFI_SCAN_FAILED;
+        }
+        delay(25);
+        yield();
+      }
+      return status;
+    };
+
+    bool apActive = (WiFi.getMode() & WIFI_MODE_AP) != 0;
+    int n;
+
+    int scanState = WiFi.scanComplete();
+    if (scanState == WIFI_SCAN_RUNNING) {
+      n = waitForScan();
+    } else if (scanState >= 0) {
+      n = scanState;
+    } else {
+      if (apActive) {
+        n = WiFi.scanNetworks(/*async=*/true, /*hidden=*/include_hidden);
+        if (n == WIFI_SCAN_RUNNING) {
+          n = waitForScan();
+        }
+      } else {
+        n = WiFi.scanNetworks(/*async=*/false, /*hidden=*/include_hidden);
+      }
+    }
+
+    if (n <= 0) {
+      WiFi.scanDelete();
+      return 0;
+    }
+
     std::vector<WifiScanResult> tmp;
     tmp.reserve((size_t)n);
     for (int i = 0; i < n; ++i) {
       WifiScanResult r;
       r.ssid = WiFi.SSID(i).c_str();
       r.rssi = WiFi.RSSI(i);
-      // ESP32 Arduino: WIFI_AUTH_OPEN means open
       int enc = (int)WiFi.encryptionType(i);
       r.secure = (enc != (int)WIFI_AUTH_OPEN);
 #if defined(ESP_ARDUINO_VERSION_MAJOR) || defined(ESP32)
-      // channel(i) is available on ESP32 Arduino
       r.channel = WiFi.channel(i);
 #else
       r.channel = 0;
 #endif
       tmp.push_back(r);
     }
-    std::sort(tmp.begin(), tmp.end(), [](const WifiScanResult& a, const WifiScanResult& b){ return a.rssi > b.rssi; });
+
+    WiFi.scanDelete();
+
+    std::sort(tmp.begin(), tmp.end(), [](const WifiScanResult& a, const WifiScanResult& b){
+      return a.rssi > b.rssi;
+    });
     if (max_results > 0 && (int)tmp.size() > max_results) tmp.resize((size_t)max_results);
     out = std::move(tmp);
     return (int)out.size();
   }
 };
-
 class Esp32Nvs : public INvs {
 public:
   bool begin(const char* ns, bool readOnly) override { return prefs_.begin(ns, readOnly); }
@@ -75,6 +114,8 @@ private:
 
 std::unique_ptr<IWifi> MakeWifi() { return std::unique_ptr<IWifi>(new Esp32Wifi()); }
 std::unique_ptr<INvs> MakeNvs() { return std::unique_ptr<INvs>(new Esp32Nvs()); }
+
+
 
 } // namespace net_onboarding
 

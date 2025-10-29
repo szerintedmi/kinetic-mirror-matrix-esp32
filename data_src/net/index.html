@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Wi-Fi Onboarding</title>
+    <link rel="stylesheet" href="/css/pico_v2_1_1.min.css" />
+    <link rel="stylesheet" href="/net/styles.css" />
+    <script defer src="/net/app.js"></script>
+    <script defer src="/js/alpinejs_v3_13_3.min.js"></script>
+    <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
+    <link rel="icon" href="/favicon.ico" type="image/x-icon" />
+  </head>
+  <body x-data="wifiPortal()" x-init="init()">
+    <main class="container">
+      <header>
+        <h1 x-text="pageTitle()"></h1>
+        <p class="lead" x-text="pageSubtitle()"></p>
+      </header>
+
+      <section class="status-card">
+        <div
+          class="status-pill"
+          :class="statusClass()"
+          x-text="status.stateLabel"
+        ></div>
+        <dl>
+          <div>
+            <dt>Device MAC</dt>
+            <dd x-text="status.mac || '—'"></dd>
+          </div>
+          <div>
+            <dt>Current SSID</dt>
+            <dd x-text="status.ssid || '—'"></dd>
+          </div>
+          <div>
+            <dt>IP Address</dt>
+            <dd x-text="status.ip || '—'"></dd>
+          </div>
+          <div>
+            <dt>RSSI</dt>
+            <dd x-text="status.rssiLabel"></dd>
+          </div>
+          <div x-cloak x-show="isApMode()">
+            <dt>SoftAP Password</dt>
+            <dd><code x-text="status.apPassword || 'unknown'"></code></dd>
+          </div>
+        </dl>
+      </section>
+
+      <template x-if="message.text">
+        <section class="notice" :class="message.kind">
+          <strong x-text="message.heading"></strong>
+          <p x-text="message.text"></p>
+        </section>
+      </template>
+
+      <section class="grid">
+        <article class="networks">
+          <header class="card-header">
+            <h2>Nearby Networks</h2>
+            <button
+              type="button"
+              class="secondary"
+              @click="refreshNetworks()"
+              :disabled="loading.scan || !isApMode()"
+            >
+              Refresh
+            </button>
+          </header>
+          <p class="hint" x-text="networkHint()" x-cloak></p>
+          <ul>
+            <template x-if="!hasScanned">
+              <li class="empty">Click Refresh to scan Wi‑Fi networks.</li>
+            </template>
+            <template x-if="hasScanned && networks.length === 0">
+              <li class="empty">No networks found yet.</li>
+            </template>
+            <template x-for="network in networks" :key="network.id">
+              <li>
+                <button
+                  type="button"
+                  @click="chooseNetwork(network)"
+                  :disabled="busy"
+                >
+                  <div class="ssid" x-text="network.ssid"></div>
+                  <div class="meta">
+                    <span x-text="network.secure ? 'Secure' : 'Open'"></span>
+                    <span x-text="network.rssi + ' dBm'"></span>
+                  </div>
+                </button>
+              </li>
+            </template>
+          </ul>
+        </article>
+
+        <article class="credentials" id="manual-entry" tabindex="-1">
+          <header class="card-header">
+            <h2 x-text="manualHeading()"></h2>
+          </header>
+          <p class="hint" x-text="manualHint()" x-cloak></p>
+          <form @submit.prevent="submit" novalidate>
+            <label>
+              Network SSID
+              <input
+                type="text"
+                name="ssid"
+                x-model.trim="form.ssid"
+                maxlength="32"
+                required
+                :disabled="busy"
+              />
+            </label>
+            <label>
+              Passphrase
+              <input
+                type="password"
+                name="pass"
+                x-model="form.pass"
+                maxlength="63"
+                minlength="8"
+                autocomplete="new-password"
+                :disabled="busy"
+                placeholder="Leave blank for open networks"
+              />
+            </label>
+            <div class="form-actions">
+              <button type="submit" :disabled="busy || !canSubmit()" x-text="submitLabel()"></button>
+              <button
+                type="button"
+                class="secondary"
+                x-show="showResetButton()"
+                x-cloak
+                @click="resetToAp"
+                :disabled="busy"
+              >
+                Reset Wi-Fi Settings
+              </button>
+            </div>
+            <p class="hint">
+              Minimum 8 characters for WPA2 networks. Open networks can leave
+              the passphrase blank.
+            </p>
+          </form>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

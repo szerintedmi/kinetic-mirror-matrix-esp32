@@ -20,6 +20,8 @@ Firmware + host tools to drive up to 8 stepper‑driven mirrors from a single ES
 
 - Serial protocol v1 with stable grammar and shortcuts
   - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
+- Wi‑Fi onboarding library with serial/MQTT-ready commands, SoftAP portal, and device status feedback
+  - See: [NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp), portal assets in [data_src/net](./data_src/net), spec: [Wi‑Fi Onboarding via NVS](./agent-os/specs/2025-10-28-wifi-onboarding-via-nvs/spec.md)
 - 8‑motor hardware bring‑up via FastAccelStepper + 2×74HC595 (DIR/SLEEP)
   - See: [FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp), [Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp), [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp)
 - Homing & baseline calibration (bump‑stop)
@@ -106,8 +108,10 @@ Prereqs
 Build and Upload (ESP32)
 
 - Configure your board pins/wiring: [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp), [wiring guide](./docs/esp32-74hc595-wiring.md)
-- Build: `pio run -e esp32dev`
-- Upload: `pio run -e esp32dev -t upload`
+- Build firmware: `pio run -e esp32dev`
+- Upload firmware: `pio run -e esp32dev -t upload`
+- Build portal filesystem image: `pio run -e esp32dev -t buildfs`
+- Upload portal filesystem: `pio run -e esp32dev -t uploadfs`
 - Monitor: `pio device monitor -b 115200`
   - On boot you should see: `CTRL:READY Serial v1 — send HELP`
 
@@ -127,6 +131,50 @@ Tests
 
 - Native: `pio test -e native`
 - On‑Device: `pio test -e esp32dev`
+
+## Wi‑Fi Onboarding
+
+### SoftAP portal
+
+1. Power the device with no credentials saved (hold the BOOT button for 5 seconds if you need to clear existing credentials; see **Long‑press reset** below).
+2. Join the broadcast SSID `SOFT_AP_SSID_PREFIX + MAC suffix` using the password from [`include/secrets.h`](./include/secrets.h) (`SOFT_AP_PASS`).
+3. Browse to `http://192.168.4.1/` from any phone or laptop connected to the SoftAP.
+4. Use the portal to refresh nearby networks, tap one to prefill the form, or manually enter SSID/PSK. Submitting triggers an immediate connect attempt and streams status updates.
+
+The UI is built with Pico.css + Alpine.js and lives under [`data_src/net`](./data_src/net). Assets are gzipped into LittleFS at build time via [`tools/gzip_fs.py`](./tools/gzip_fs.py).
+
+### Serial fallback commands
+
+When a USB cable is convenient, the existing `NET:*` verbs remain available:
+
+- `NET:STATUS` — prints current state, IP, and RSSI (when connected).
+- `NET:LIST` — scans nearby SSIDs (top 12) ordered by RSSI; available only while the device SoftAP is active.
+- `NET:SET,"ssid","pass"` — quoted CSV payload with validation/error codes identical to the portal.
+- `NET:RESET` — clears saved credentials; the device re-enters SoftAP mode automatically.
+
+Use `tools/serial_cli` or the interactive TUI to issue these commands (`python -m serial_cli interactive --port <PORT>`).
+
+### Status indicators
+
+- **LED (GPIO2, active-low):**
+  - Fast blink ≈125 ms — SoftAP active and waiting for credentials.
+  - Slow blink ≈400 ms — Connecting to the configured network.
+  - Solid on — STA connected successfully.
+- **Serial events:** each transition emits `CTRL: NET:...` lines with correlation IDs so host tools can pair async updates with user commands.
+
+### Long-press reset
+
+Hold the ESP32 BOOT button (GPIO0) for ≥5 seconds to clear NVS credentials and drop back into SoftAP mode. Short taps are ignored to avoid accidental wipes.
+
+### HTTP API quick reference
+
+| Endpoint | Method | Description |
+| --- | --- | --- |
+| `/api/status` | GET | Current onboarding state, SSID, IP, RSSI (if connected), and active SoftAP password. |
+| `/api/scan` | GET | Top nearby networks ordered by RSSI (`ssid`, `rssi`, `secure`, `channel`). |
+| `/api/wifi` | POST | Accepts JSON `{"ssid":"...","pass":"..."}` to persist credentials and trigger a connect attempt. Returns `409` while a connection is already in progress. |
+
+All endpoints respond with compact JSON (`Content-Type: application/json`) and set `Cache-Control: no-store` to avoid stale data inside captive portal flows.
 
 ## Setup & Tuning Knobs
 

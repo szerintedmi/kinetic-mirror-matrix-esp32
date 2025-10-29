@@ -5,6 +5,7 @@
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/NetSingleton.h"
 #include "net_onboarding/Cid.h"
+#include "boards/Esp32Dev.hpp"
 
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
 #include <WiFi.h>
@@ -14,6 +15,42 @@ using net_onboarding::State;
 using net_onboarding::Net;
 
 static State g_last_state = State::AP_ACTIVE; // will be updated after begin()
+constexpr uint32_t kResetHoldMs = 5000;
+
+static void reset_button_setup()
+{
+#if defined(ARDUINO)
+  if (RESET_BUTTON_PIN >= 0) {
+    pinMode(RESET_BUTTON_PIN, RESET_BUTTON_ACTIVE_LOW ? INPUT_PULLUP : INPUT_PULLDOWN);
+  }
+#endif
+}
+
+static void reset_button_tick(uint32_t now_ms)
+{
+#if defined(ARDUINO)
+  if (RESET_BUTTON_PIN < 0) return;
+  bool pressed = digitalRead(RESET_BUTTON_PIN) == (RESET_BUTTON_ACTIVE_LOW ? LOW : HIGH);
+  static bool was_pressed = false;
+  static uint32_t press_started = 0;
+  static bool fired = false;
+
+  if (pressed) {
+    if (!was_pressed) {
+      press_started = now_ms;
+      fired = false;
+    } else if (!fired && (now_ms - press_started) >= kResetHoldMs) {
+      fired = true;
+      Serial.println("CTRL: NET:RESET_BUTTON LONG_PRESS");
+      Net().resetCredentials();
+    }
+  } else {
+    fired = false;
+  }
+
+  was_pressed = pressed;
+#endif
+}
 
 // Quote and escape a C-string for serial output: returns Arduino String with
 // surrounding double quotes and escapes embedded '"' and '\\'.
@@ -33,6 +70,7 @@ void setup() {
   serial_console_setup();
 
   // Configure Wi‑Fi onboarding
+  Net().configureStatusLed(STATUS_LED_PIN, STATUS_LED_ACTIVE_LOW);
   Net().setConnectTimeoutMs(8000);
 #ifdef SEED_NVS_CLEAR
   // Optional one-time build flag to force AP path
@@ -40,6 +78,7 @@ void setup() {
 #endif
   Net().begin(8000);
   g_last_state = Net().status().state;
+  reset_button_setup();
 
   // Emit initial state as control event
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
@@ -69,6 +108,7 @@ void setup() {
 void loop() {
   serial_console_tick();
   Net().loop();
+  reset_button_tick(millis());
 
   auto s = Net().status();
   if (s.state != g_last_state) {

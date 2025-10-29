@@ -15,3 +15,11 @@ constexpr int SHIFT595_OE = 22;
 
 // STEP pins for motors 0..7
 constexpr int STEP_PINS[8] = {32, 25, 27, 13, 4, 17, 19, 21};
+
+// Status LED (on-board LED on GPIO2, active-low)
+constexpr int STATUS_LED_PIN = 2;
+constexpr bool STATUS_LED_ACTIVE_LOW = true;
+
+// BOOT button (GPIO0) used for long-press reset; active-low when pressed
+constexpr int RESET_BUTTON_PIN = 0;
+constexpr bool RESET_BUTTON_ACTIVE_LOW = true;

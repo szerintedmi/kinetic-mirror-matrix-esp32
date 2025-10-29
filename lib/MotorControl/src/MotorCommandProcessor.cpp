@@ -181,13 +181,13 @@ std::string MotorCommandProcessor::handleHELP()
   os << "NET:RESET\n";
   os << "NET:STATUS\n";
   os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
-  os << "NET:LIST (scan nearby SSIDs)\n";
+  os << "NET:LIST (scan nearby SSIDs; AP mode only)\n";
 #else
   // NET verbs available in both native and Arduino builds; HELP remains consistent
   os << "NET:RESET\n";
   os << "NET:STATUS\n";
   os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
-  os << "NET:LIST (scan nearby SSIDs)\n";
+  os << "NET:LIST (scan nearby SSIDs; AP mode only)\n";
 #endif
 #if !(USE_SHARED_STEP)
   // Dedicated-step builds: also advertise the extended HOME/MOVE forms
@@ -954,9 +954,8 @@ std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t
     }
     if (sub == "LIST")
     {
-      // Suspend during CONNECTING to keep timing bounded
       uint32_t cid = net_onboarding::NextCid();
-      if (Net().status().state == State::CONNECTING) { std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BUSY_CONNECTING"; return eo.str(); }
+      if (Net().status().state != State::AP_ACTIVE) { std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_SCAN_AP_ONLY"; return eo.str(); }
       std::ostringstream os;
       bool need_newline = false;
 

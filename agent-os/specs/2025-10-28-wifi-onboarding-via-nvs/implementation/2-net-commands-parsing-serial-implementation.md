@@ -5,7 +5,7 @@
   - `NET:STATUS` returns state, RSSI, IP, and SSID.
   - `NET:RESET` clears creds and returns `CTRL:ACK`; AP activation is announced asynchronously.
   - `NET:SET,"<ssid>","<pass>"` supports quoted fields/escapes; returns immediate `CTRL:ACK`, then async progress events.
-- Standardized success token from `CTRL:OK` to `CTRL:ACK` across firmware and tests.
+- Standardized success token from `CTRL:OK` to `CTRL:ACK` across firmware and tests, and updated HELP text to call out that `NET:LIST` is AP-only.
 - Consolidated CTRL formats (CID-first):
   - `CTRL:ACK CID=<id> ...`
   - `CTRL:ERR CID=<id> E## NAME ...`
@@ -21,10 +21,10 @@
 
 ## Extensions (implemented)
 - Command Correlation IDs (CID): firmware generates a monotonic `u32` per accepted command. All `CTRL:ACK` responses now include `CID=<id>`. NET async lines (`NET:CONNECTING`, `NET:CONNECTED`, `NET:AP_ACTIVE`, and `CTRL:ERR NET_CONNECT_FAILED`) also carry `CID=<id>` for the in-flight NET command. CID clears when the flow completes (on `CONNECTED` or `AP_ACTIVE`).
-- `NET:LIST`: returns a multi-line list of nearby networks ordered by RSSI, e.g.
+- `NET:LIST`: when the SoftAP is active, returns a multi-line list of nearby networks ordered by RSSI:
   - First line: `CTRL:ACK CID=<id> scanning=1` (on-device this ACK is emitted immediately before the scan runs so the CLI never sees “(no response)”).
   - Payload header: `NET:LIST CID=<id>`, followed by one line per entry `SSID="<name>" rssi=<dbm> secure=<0|1> channel=<n>` (top 12 by RSSI).
-  - Suspended during `CONNECTING` → `CTRL:ERR CID=<id> NET_BUSY_CONNECTING`.
+  - In STA/CONNECTING states the command now rejects with `CTRL:ERR CID=<id> NET_SCAN_AP_ONLY`.
 
 ## Files Touched (high-level)
 - `lib/net_onboarding/include/net_onboarding/NetSingleton.h`, `lib/net_onboarding/src/NetSingleton.cpp` — Introduced `Net()` singleton.
@@ -42,6 +42,7 @@
 - `NET:STATUS` → `CTRL:ACK CID=<id> state=<AP_ACTIVE|CONNECTING|CONNECTED> rssi=<dBm|NA> ip=<x.x.x.x> ssid="<...>" pass="<****|SOFT_AP_PASS>"`.
 - `NET:SET,<ssid>,<pass>` → `CTRL:ACK` (non‑blocking). Async flow:
   - `CTRL: NET:CONNECTING` then either `CTRL: NET:CONNECTED ...` or `CTRL:ERR NET_CONNECT_FAILED` + `CTRL: NET:AP_ACTIVE ...`.
+- `NET:LIST` → available only in `AP_ACTIVE`. Returns `CTRL:ACK CID=<id> scanning=1` followed by `NET:LIST CID=<id>` payload lines; in other states returns `CTRL:ERR CID=<id> NET_SCAN_AP_ONLY`.
 - Validation:
   - SSID: 1–32 chars; PASS: 0 or 8–63 chars. If 1–7 → `CTRL:ERR NET_BAD_PARAM PASS_TOO_SHORT`.
 - Busy rule: `NET:SET`/`RESET` rejected with `CTRL:ERR NET_BUSY_CONNECTING` during CONNECTING; `NET:STATUS` always allowed.
@@ -59,4 +60,4 @@ Formatting/quoting details:
 
 ## Forward-looking extensions (added to tasks/spec)
 - Command Correlation ID (CID), device‑generated: on accepting a command, firmware assigns a monotonic `u32` CID (wrap allowed), replies `CTRL:ACK CID=<id>`, and includes `CID=<id>` on all subsequent lines for that command (including async NET events). The interactive TUI uses CID only to attribute async responses to the current user command and suppress background‑poll responses while that command is active.
-- `NET:LIST`: list nearby Wi‑Fi networks ordered by RSSI for onboarding UI.
+- `NET:LIST`: when SoftAP is active, list nearby Wi‑Fi networks ordered by RSSI for onboarding UI; otherwise reject with `NET_SCAN_AP_ONLY`.

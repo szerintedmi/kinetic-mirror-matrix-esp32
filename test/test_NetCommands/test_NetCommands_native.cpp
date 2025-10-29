@@ -90,6 +90,17 @@ void test_net_list_returns_networks() {
   TEST_ASSERT_TRUE(items.find("\nCID=") == std::string::npos);
 }
 
+void test_net_list_requires_ap_mode() {
+#if defined(USE_STUB_BACKEND)
+  Net().setTestSimulation(true, 0);
+#endif
+  (void)proto.processLine("NET:SET,ssid,password", 0);
+  pump_for(5);
+  std::string r = proto.processLine("NET:LIST", 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.find("NET_SCAN_AP_ONLY") != std::string::npos);
+}
+
 int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_help_includes_net_verbs);
@@ -98,5 +109,6 @@ int main(int, char**) {
   RUN_TEST(test_net_set_validation_bad_param);
   RUN_TEST(test_net_reset_from_connected_back_to_ap);
   RUN_TEST(test_net_list_returns_networks);
+  RUN_TEST(test_net_list_requires_ap_mode);
   return UNITY_END();
 }
