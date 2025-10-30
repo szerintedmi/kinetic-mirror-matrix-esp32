@@ -364,13 +364,6 @@ class TextualUI(BaseUI):
                 rows, log, err, last_ts, _help_text = worker.get_state()
 
                 # Update status bar
-                try:
-                    import time as _t
-
-                    age = max(0.0, _t.time() - last_ts) if last_ts else 0.0
-                except Exception:
-                    age = 0.0
-
                 net: Dict[str, str] = {}
                 if hasattr(worker, "get_net_info"):
                     try:
@@ -383,8 +376,60 @@ class TextualUI(BaseUI):
                 if transport == "mqtt":
                     host = net.get("host") or "-"
                     port = net.get("port") or "-"
-                    status_text = f"transport=mqtt broker={host}:{port} last update={age:.1f}s"
+                    status_text = f"transport=mqtt broker={host}:{port}"
+                    device_info: Dict[str, Dict[str, object]] = {}
+                    if hasattr(worker, "get_device_summaries"):
+                        try:
+                            device_info = worker.get_device_summaries()  # type: ignore[attr-defined]
+                        except Exception:
+                            device_info = {}
+                    if not device_info:
+                        for r in rows:
+                            dev = str(r.get("device", "") or "")
+                            if not dev:
+                                continue
+                            age_val = float(r.get("age_s", 0.0) or 0.0)
+                            entry = device_info.get(dev)
+                            if entry is None or age_val < float(entry.get("age_s", float("inf"))):
+                                device_info[dev] = {
+                                    "node_state": r.get("node_state", ""),
+                                    "ip": r.get("ip", ""),
+                                    "age_s": age_val,
+                                }
+                    summaries: List[str] = []
+                    for dev in sorted(device_info.keys()):
+                        info = device_info[dev]
+                        age_val = float(info.get("age_s", float("inf")) or float("inf"))
+                        if age_val == float("inf"):
+                            age_fmt = "[red]unknown[/]"
+                        elif age_val > 5.0:
+                            age_fmt = f"[red]{age_val:.1f}s[/]"
+                        elif age_val > 2.0:
+                            age_fmt = f"[yellow]{age_val:.1f}s[/]"
+                        else:
+                            age_fmt = f"{age_val:.1f}s"
+                        state_val = str(info.get("node_state", "") or "")
+                        state_lower = state_val.lower()
+                        if state_lower and state_lower != "ready":
+                            color = "red" if state_lower == "offline" else "yellow"
+                            state_fmt = f"[{color}]{state_val}[/]"
+                        else:
+                            state_fmt = state_val or "-"
+                        ip_val = str(info.get("ip", "") or "-")
+                        label = dev or "(unknown)"
+                        summaries.append(f"{label} state={state_fmt} ip={ip_val} age={age_fmt}")
+                    if summaries:
+                        status_text += "  " + " | ".join(summaries)
+                    else:
+                        status_text += "  no telemetry yet"
                 else:
+                    try:
+                        import time as _t
+
+                        age = max(0.0, _t.time() - last_ts) if last_ts else 0.0
+                    except Exception:
+                        age = 0.0
+
                     thermal_text = ""
                     if hasattr(worker, "get_thermal_state"):
                         try:
@@ -412,7 +457,7 @@ class TextualUI(BaseUI):
                         wifi_banner = f"SSID: [red]{ssid or 'N/A'}[/] disconnected"
                     port_val = getattr(worker, "port", "-")
                     baud_val = getattr(worker, "baud", "-")
-                    status_text = f"port={port_val} baud={baud_val} last status={age:.1f}s"
+                    status_text = f"port={port_val} baud={baud_val} age={age:.1f}s"
                     if thermal_text:
                         status_text += f"  {thermal_text}"
                     if wifi_banner:
@@ -428,13 +473,12 @@ class TextualUI(BaseUI):
                     for r in rows or []:
                         row: List[str] = []
                         for key, _label, _w in self._columns:
-                            val = r.get(key, "")
-                            if key == "age_s":
-                                try:
-                                    val = f"{float(val):.1f}"
-                                except Exception:
-                                    val = ""
-                            row.append(str(val))
+                            raw_val = r.get(key, "")
+                            if key in ("moving", "awake", "homed"):
+                                val = "1" if str(raw_val) in ("1", "True", "true") else "0"
+                            else:
+                                val = str(raw_val)
+                            row.append(val)
                         data.append(row)
                     if table.row_count != len(data):
                         table.clear()

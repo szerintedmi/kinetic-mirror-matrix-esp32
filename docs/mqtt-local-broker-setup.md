@@ -1,6 +1,6 @@
 # Local Mosquitto Setup (macOS)
 
-Follow these steps to stand up a local Mosquitto broker for the MQTT presence steel thread.
+Follow these steps to stand up a local Mosquitto broker for the MQTT telemetry steel thread.
 
 ## 1. Install Mosquitto via Homebrew
 
@@ -74,8 +74,8 @@ Commit updated secrets only if they contain non-sensitive defaults; otherwise ke
 - Verify the port is open: `nc -zv localhost 1883`
 - Publish a retained test payload: `mosquitto_pub -u mirror -P '<password>' -t test/ping -r -m 'pong'`
 - Confirm it is retained: `mosquitto_sub -u mirror -P '<password>' -t test/#`
-- With firmware running, watch for presence topics: `mosquitto_sub -u mirror -P '<password>' -t 'devices/+/state'`
-- A healthy node immediately publishes `{"state":"ready",...}` and, after a restart, an `{"state":"offline"}` LWT message should appear.
+- With firmware running, watch for telemetry snapshots: `mosquitto_sub -u mirror -P '<password>' -t 'devices/+/status'`
+- A healthy node immediately publishes `{"node_state":"ready","ip":"<ipv4>","motors":{...}}` at 1 Hz idle / 5 Hz motion, and the broker delivers the LWT payload `{"node_state":"offline","motors":{}}` if the node disconnects unexpectedly.
 
 ## 7. Troubleshooting Checklist
 

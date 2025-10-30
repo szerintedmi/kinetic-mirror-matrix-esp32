@@ -1,12 +1,12 @@
 #include "mqtt/MqttPresenceClient.h"
 
-#include "net_onboarding/MessageId.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/SerialImmediate.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <deque>
 #include <utility>
 #include <string>
 
@@ -21,11 +21,12 @@ namespace mqtt {
 namespace {
 
 constexpr const char *kTopicPrefix = "devices/";
-constexpr const char *kTopicSuffix = "/state";
+constexpr const char *kTopicSuffix = "/status";
 constexpr uint16_t kMqttKeepAliveSeconds = 30;
-constexpr const char *kOfflinePayloadJson = "{\"state\":\"offline\"}";
+constexpr const char *kOfflinePayloadJson = "{\"node_state\":\"offline\",\"motors\":{}}";
 constexpr uint32_t kInitialReconnectDelayMs = 1000;
 constexpr uint32_t kMaxReconnectDelayMs = 30000;
+constexpr size_t kMaxQueuedMessages = 16;
 
 } // namespace
 
@@ -43,7 +44,7 @@ MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding &net,
       log_(std::move(log)),
       cfg_(cfg) {
   if (!publish_) {
-    publish_ = [](const PresencePublish &) { return false; };
+    publish_ = [](const PublishMessage &) { return false; };
   }
   if (!log_) {
     log_ = [](const std::string &line) { net_onboarding::PrintCtrlLineImmediate(line); };
@@ -54,7 +55,8 @@ MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding &net,
   mac_topic_ = NormalizeMacToTopic(mac);
   topic_ = std::string(kTopicPrefix) + mac_topic_ + kTopicSuffix;
   ready_publish_.topic = topic_;
-  ready_publish_.retain = true;
+  ready_publish_.retain = false;
+  ready_publish_.qos = 0;
   offline_payload_ = BuildOfflinePayload();
   last_ip_ = "0.0.0.0";
   updateIdentityIfNeeded();
@@ -85,10 +87,7 @@ void MqttPresenceClient::loop(uint32_t now_ms) {
     immediate_requested_ = true;
   }
 
-  uint32_t elapsed = connected_ ? (now_ms - last_publish_ms_) : 0;
-  bool time_due = !last_publish_ms_ || (elapsed >= cfg_.heartbeat_interval_ms);
-
-  if (publish_pending_ || immediate_requested_ || time_due) {
+  if (publish_pending_ || immediate_requested_) {
     if (!publishReady(now_ms)) {
       publish_pending_ = true;
     }
@@ -140,17 +139,14 @@ std::string MqttPresenceClient::NormalizeMacToTopic(const std::array<char, 18> &
   return out;
 }
 
-std::string MqttPresenceClient::BuildReadyPayload(const std::string &ip,
-                                                  const std::string &msg_id) {
+std::string MqttPresenceClient::BuildReadyPayload(const std::string &ip) {
   const char *ip_cstr = ip.empty() ? "0.0.0.0" : ip.c_str();
   size_t ip_len = ip.empty() ? 7 : ip.size();
   std::string payload;
-  payload.reserve(40 + ip_len + msg_id.size());
-  payload.append("{\"state\":\"ready\",\"ip\":\"");
+  payload.reserve(32 + ip_len);
+  payload.append("{\"node_state\":\"ready\",\"ip\":\"");
   payload.append(ip_cstr, ip_len);
-  payload.append("\",\"msg_id\":\"");
-  payload.append(msg_id);
-  payload.append("\"}");
+  payload.append("\",\"motors\":{}}");
   return payload;
 }
 
@@ -162,16 +158,13 @@ bool MqttPresenceClient::publishReady(uint32_t now_ms) {
   if (!publish_) {
     return false;
   }
-  std::string msg_id = net_onboarding::NextMsgId();
   ready_publish_.topic = topic_;
   std::string &payload = ready_publish_.payload;
   payload.clear();
-  payload.reserve(40 + last_ip_.size() + msg_id.size());
-  payload.append("{\"state\":\"ready\",\"ip\":\"");
+  payload.reserve(32 + last_ip_.size());
+  payload.append("{\"node_state\":\"ready\",\"ip\":\"");
   payload.append(last_ip_);
-  payload.append("\",\"msg_id\":\"");
-  payload.append(msg_id);
-  payload.append("\"}");
+  payload.append("\",\"motors\":{}}");
 
   if (!publish_(ready_publish_)) {
     return false;
@@ -317,7 +310,7 @@ public:
       : net_(net),
         log_fn_(move(log)),
         logic_(net_,
-               [this](const PresencePublish &pub) { return publish(pub); },
+               [this](const PublishMessage &pub) { return publish(pub); },
                [this](const string &line) { this->log(line); }) {
     if (!log_fn_) {
       log_fn_ = [](const string &line) {
@@ -363,6 +356,7 @@ public:
     }
 
     if (client_.connected()) {
+      drainPublishQueue();
       return;
     }
 
@@ -382,6 +376,22 @@ public:
 
   void updatePowerState(bool active) {
     logic_.setPowerActive(active);
+  }
+
+  bool enqueue(const PublishMessage &msg) {
+    if (publish_queue_.size() >= kMaxQueuedMessages) {
+      publish_queue_.pop_front();
+    }
+    publish_queue_.push_back(msg);
+    return true;
+  }
+
+  const std::string &topic() const {
+    return logic_.topic();
+  }
+
+  const std::string &offlinePayload() const {
+    return logic_.offlinePayload();
   }
 
 private:
@@ -417,14 +427,14 @@ private:
     log(line);
   }
 
-  bool publish(const PresencePublish &pub) {
+  bool publish(const PublishMessage &pub) {
     if (!client_.connected()) {
       return false;
     }
     auto payload_len = static_cast<uint16_t>(pub.payload.size());
     uint16_t packet_id = client_.publish(
         pub.topic.c_str(),
-        1,
+        pub.qos,
         pub.retain,
         pub.payload.c_str(),
         payload_len);
@@ -501,7 +511,7 @@ private:
     if (!topic.empty() && topic != last_will_topic_) {
       last_will_topic_ = topic;
       const std::string &offline = logic_.offlinePayload();
-      client_.setWill(last_will_topic_.c_str(), 1, true,
+      client_.setWill(last_will_topic_.c_str(), 0, false,
                       offline.c_str(), static_cast<uint16_t>(offline.size()));
     }
     string base_client_id = DeriveClientIdFromTopic(topic);
@@ -528,6 +538,26 @@ private:
     next_reconnect_ms_ = now_ms + delay;
     logReconnectDelay(delay);
     reconnect_backoff_ms_ = std::min(reconnect_backoff_ms_ * 2, kMaxReconnectDelayMs);
+  }
+
+  void drainPublishQueue() {
+    if (!client_.connected()) {
+      return;
+    }
+    while (!publish_queue_.empty()) {
+      PublishMessage &msg = publish_queue_.front();
+      auto payload_len = static_cast<uint16_t>(msg.payload.size());
+      uint16_t packet_id = client_.publish(
+          msg.topic.c_str(),
+          msg.qos,
+          msg.retain,
+          msg.payload.c_str(),
+          payload_len);
+      if (packet_id == 0) {
+        break;
+      }
+      publish_queue_.pop_front();
+    }
   }
 
   std::string connectionSummary() const {
@@ -562,6 +592,7 @@ private:
   LogFn log_fn_;
   AsyncMqttClient client_;
   MqttPresenceClient logic_;
+  std::deque<PublishMessage> publish_queue_;
   string last_will_topic_;
   string broker_host_;
   string broker_user_;
@@ -595,6 +626,29 @@ void AsyncMqttPresenceClient::updateMotionState(bool active) {
 
 void AsyncMqttPresenceClient::updatePowerState(bool active) {
   impl_->updatePowerState(active);
+}
+
+bool AsyncMqttPresenceClient::enqueuePublish(const PublishMessage &msg) {
+  if (!impl_) {
+    return false;
+  }
+  return impl_->enqueue(msg);
+}
+
+const std::string &AsyncMqttPresenceClient::statusTopic() const {
+  static const std::string kEmpty;
+  if (!impl_) {
+    return kEmpty;
+  }
+  return impl_->topic();
+}
+
+const std::string &AsyncMqttPresenceClient::offlinePayload() const {
+  static const std::string kEmpty;
+  if (!impl_) {
+    return kEmpty;
+  }
+  return impl_->offlinePayload();
 }
 
 #endif // ARDUINO

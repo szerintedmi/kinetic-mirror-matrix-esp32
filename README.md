@@ -124,7 +124,7 @@ Host CLI
 
 - Examples:
   - `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
-  - `python -m serial_cli interactive --transport mqtt`  # subscribes to MQTT presence topics and renders device/ip/msg_id updates (commands disabled)
+  - `python -m serial_cli interactive --transport mqtt`  # subscribes to aggregate MQTT status snapshots and renders the STATUS table (commands disabled)
   - `python -m serial_cli help --port /dev/ttyUSB0`
   - `python -m serial_cli status --port /dev/ttyUSB0`
   - `python -m serial_cli status --transport mqtt --timeout 1.5`
@@ -133,20 +133,20 @@ Host CLI
 - The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
 
-MQTT transport routes STATUS/TUI tables exclusively from retained presence messages on `devices/<mac>/state`. When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
+MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
 
 Tests
 
 - Native: `pio test -e native`
 - On‑Device: `pio test -e esp32dev`
 
-## MQTT Presence
+## MQTT Telemetry
 
 - On successful broker handshake the firmware emits `CTRL: MQTT_CONNECTED broker=<host>:<port>` once per boot.
-- Publishes retained presence on `devices/<mac>/state` using QoS 1.
-- Ready payload format: `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` (hardware-seeded UUIDv4 shared with serial acknowledgments).
-- Offline LWT payload: `{"state":"offline"}` retained on the same topic.
-- Publishes every ~1 Hz while connected and immediately when motion or power state flips.
+- Publishes aggregate snapshots on `devices/<mac>/status` using QoS0/non-retained semantics.
+- Snapshot payload format: `{"node_state":"ready","ip":"<ipv4>","motors":{"0":{...}}}`; fields mirror the serial STATUS columns (see [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md)).
+- Offline LWT payload: `{"node_state":"offline","motors":{}}` published on the same topic.
+- Maintains a 1 Hz cadence while idle and 5 Hz while any motor is moving, with change-driven bursts between ticks.
 - On broker loss logs `CTRL: MQTT_DISCONNECTED …` once, schedules exponential-backoff retries with `CTRL: MQTT_RECONNECT delay=<ms>`, and resumes with `CTRL: MQTT_CONNECTED broker=…` upon success.
 - Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
 - Follow-up: add runtime SET/GET verbs for MQTT broker host/user/pass (tracked as a deferred implementation task).

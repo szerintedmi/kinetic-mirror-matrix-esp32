@@ -11,15 +11,16 @@ class NetOnboarding;
 
 namespace mqtt {
 
-struct PresencePublish {
+struct PublishMessage {
   std::string topic;
   std::string payload;
-  bool retain = true;
+  uint8_t qos = 0;
+  bool retain = false;
 };
 
 class MqttPresenceClient {
 public:
-  using PublishFn = std::function<bool(const PresencePublish &)>;
+  using PublishFn = std::function<bool(const PublishMessage &)>;
   using LogFn = std::function<void(const std::string &)>;
 
   struct Config {
@@ -49,8 +50,7 @@ public:
   const std::string &lastPublishedPayload() const { return last_payload_; }
 
   static std::string NormalizeMacToTopic(const std::array<char, 18> &mac);
-  static std::string BuildReadyPayload(const std::string &ip,
-                                       const std::string &msg_id);
+  static std::string BuildReadyPayload(const std::string &ip);
   static std::string BuildOfflinePayload();
 
 private:
@@ -65,7 +65,7 @@ private:
 
   std::string mac_topic_;
   std::string topic_;
-  PresencePublish ready_publish_;
+  PublishMessage ready_publish_;
   std::string offline_payload_;
   std::string last_payload_;
   std::string last_ip_;
@@ -86,6 +86,7 @@ private:
 class AsyncMqttPresenceClient {
 public:
   using LogFn = MqttPresenceClient::LogFn;
+  using PublishMessage = mqtt::PublishMessage;
 
   AsyncMqttPresenceClient(net_onboarding::NetOnboarding &net, LogFn log = {});
   ~AsyncMqttPresenceClient();
@@ -93,6 +94,9 @@ public:
   void loop(uint32_t now_ms);
   void updateMotionState(bool active);
   void updatePowerState(bool active);
+  bool enqueuePublish(const PublishMessage &msg);
+  const std::string &statusTopic() const;
+  const std::string &offlinePayload() const;
 
 private:
   class Impl;

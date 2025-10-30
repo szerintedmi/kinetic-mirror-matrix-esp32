@@ -271,7 +271,7 @@ def _render_presence_table(rows: List[Dict[str, str]]) -> str:
 
 
 def render_table(rows: List[Dict[str, str]]) -> str:
-    if rows and isinstance(rows[0], dict) and "device" in rows[0]:
+    if rows and isinstance(rows[0], dict) and "device" in rows[0] and "id" not in rows[0]:
         return _render_presence_table(rows)
     cols = [
         ("id", 2, "id"),
@@ -326,7 +326,7 @@ def _run_status_mqtt(ns) -> int:
         if table:
             print(table)
         else:
-            print("No MQTT presence data received.")
+            print("No MQTT telemetry received yet.")
         if log:
             print("\nRecent MQTT events:")
             for ln in log[-10:]:

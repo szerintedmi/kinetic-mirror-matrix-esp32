@@ -14,15 +14,43 @@ from serial_cli import render_table, main as cli_main
 from tools.serial_cli.mqtt_runtime import MqttWorker
 
 
-def test_render_presence_table():
+def test_render_status_table():
     rows = [
-        {"device": "02123456789a", "state": "ready", "ip": "10.0.0.2", "msg_id": "abc", "last_seen": time.time()},
-        {"device": "02123456789b", "state": "offline", "ip": "", "msg_id": "def", "last_seen": time.time()},
+        {
+            "device": "02123456789a",
+            "id": "0",
+            "pos": "120",
+            "moving": "1",
+            "awake": "1",
+            "homed": "1",
+            "steps_since_home": "360",
+            "budget_s": "1.8",
+            "ttfc_s": "0.4",
+            "est_ms": "240",
+            "started_ms": "812345",
+            "actual_ms": "230",
+        },
+        {
+            "device": "02123456789a",
+            "id": "1",
+            "pos": "-45",
+            "moving": "0",
+            "awake": "1",
+            "homed": "0",
+            "steps_since_home": "12",
+            "budget_s": "0.0",
+            "ttfc_s": "0.0",
+            "est_ms": "180",
+            "started_ms": "712300",
+            "actual_ms": "",
+        },
     ]
     output = render_table(rows)
-    assert "device" in output
-    assert "02123456789a" in output
-    assert "ready" in output
+    assert "id" in output
+    assert "pos" in output
+    assert "moving" in output
+    assert "awake" in output
+    assert "actual_ms" in output
 
 
 class StubMqttClient:
@@ -71,24 +99,67 @@ class StubMqttClient:
             self.on_message(self, None, msg)
 
 
-def test_mqtt_worker_ingest_duplicate():
+def _sample_payload(actual_ms=True):
+    motors = {
+        "0": {
+            "id": 0,
+            "position": 120,
+            "moving": True,
+            "awake": True,
+            "homed": True,
+            "steps_since_home": 360,
+            "budget_s": 1.8,
+            "ttfc_s": 0.4,
+            "speed": 4000,
+            "accel": 16000,
+            "est_ms": 240,
+            "started_ms": 812345,
+        },
+        "1": {
+            "id": 1,
+            "position": -45,
+            "moving": False,
+            "awake": True,
+            "homed": False,
+            "steps_since_home": 12,
+            "budget_s": 0.0,
+            "ttfc_s": 0.0,
+            "speed": 3200,
+            "accel": 12000,
+            "est_ms": 180,
+            "started_ms": 712300,
+        },
+    }
+    if actual_ms:
+        motors["0"]["actual_ms"] = 230
+    return json.dumps({"node_state": "ready", "ip": "10.0.0.2", "motors": motors})
+
+
+def test_mqtt_worker_ingest_snapshot():
     worker = MqttWorker(broker={}, client_factory=lambda: None)
-    worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abc"}', timestamp=100.0)
+    payload = _sample_payload()
+    worker.ingest_message("devices/aa/status", payload, timestamp=100.0)
     rows, log, err, ts, _ = worker.get_state()
-    assert len(rows) == 1
-    assert log == []
-    assert isinstance(rows[0]["age_s"], float)
+    assert err is None
+    assert len(rows) == 2
+    first = rows[0]
+    assert first["device"] == "aa"
+    assert first["node_state"] == "ready"
+    assert first["ip"] == "10.0.0.2"
+    assert first["id"] == "0"
+    assert first["moving"] == "1"
+    assert first["actual_ms"] == "230"
+    assert isinstance(first["age_s"], float)
 
-    # Duplicate msg_id should not append another log entry
-    worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abc"}', timestamp=101.0)
-    rows2, log2, _, _, _ = worker.get_state()
-    assert log2 == log
-    assert rows2[0]["state"] == "ready"
+    second = rows[1]
+    assert second["id"] == "1"
+    assert second["moving"] == "0"
+    assert second["actual_ms"] == ""
 
-    # New msg_id records a new log entry
-    worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abd"}', timestamp=102.0)
-    _, log3, _, _, _ = worker.get_state()
-    assert log3 == log
+    worker.ingest_message("devices/aa/status", _sample_payload(actual_ms=False), timestamp=105.0)
+    rows_updated, _, _, _, _ = worker.get_state()
+    assert rows_updated[0]["actual_ms"] == ""
+    assert rows_updated[1]["actual_ms"] == ""
 
 
 def test_cli_mqtt_command_error():
@@ -125,14 +196,27 @@ def test_status_mqtt_uses_worker():
 
         def get_state(self):
             now = time.time()
-            rows = [{
-                "device": "02123456789a",
-                "state": "ready",
-                "ip": "10.0.0.2",
-                "msg_id": "abc",
-                "last_seen": now,
-            }]
-            log = ["[ready] 02123456789a ip=10.0.0.2 msg_id=abc"]
+            rows = [
+                {
+                    "device": "02123456789a",
+                    "node_state": "ready",
+                    "ip": "10.0.0.2",
+                    "id": "0",
+                    "pos": "120",
+                    "moving": "1",
+                    "awake": "1",
+                    "homed": "1",
+                    "steps_since_home": "360",
+                    "budget_s": "1.8",
+                    "ttfc_s": "0.4",
+                    "est_ms": "240",
+                    "started_ms": "812345",
+                    "actual_ms": "230",
+                    "last_seen": now,
+                    "age_s": 0.05,
+                }
+            ]
+            log = ["[mqtt] connected; subscribed to devices/+/status"]
             return rows, log, None, now, ""
 
     stub = StubWorker()
@@ -143,7 +227,8 @@ def test_status_mqtt_uses_worker():
             rc = cli_main(["status", "--transport", "mqtt", "--timeout", "0.5"])
     output = buf.getvalue()
     assert rc == 0
-    assert "02123456789a" in output
+    assert "id" in output
+    assert "120" in output
     assert stub.started and stub.stopped
 
 
@@ -155,40 +240,39 @@ def test_mqtt_worker_integration_latency_and_debounce():
         deadline = time.time() + 2.0
         connected = False
         while time.time() < deadline:
-            rows, logs, _, _, _ = worker.get_state()
-            if logs and "[mqtt] connected" in logs[-1]:
+            _, logs, _, _, _ = worker.get_state()
+            if logs and "connected; subscribed" in logs[-1]:
                 connected = True
                 break
             time.sleep(0.05)
         assert connected, "worker failed to connect within timeout"
 
         mac = "02123456789a"
-        topic = f"devices/{mac}/state"
-        payload1 = json.dumps({"state": "ready", "ip": "10.0.0.2", "msg_id": "abc"})
-        send_time = time.time()
+        topic = f"devices/{mac}/status"
+        payload1 = _sample_payload()
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
         rows, log, err, last_ts, _ = worker.get_state()
-        assert len(rows) == 1
-        row = rows[0]
-        assert row["device"] == mac
-        assert row["state"] == "ready"
-        assert row["ip"] == "10.0.0.2"
-        assert row["msg_id"] == "abc"
-        latency = time.time() - row["last_seen"]
+        assert len(rows) == 2
+        first = rows[0]
+        assert first["device"] == mac
+        assert first["node_state"] == "ready"
+        assert first["id"] == "0"
+        assert first["moving"] == "1"
+        assert first["ip"] == "10.0.0.2"
+        latency = time.time() - first["last_seen"]
         assert latency < 0.25
 
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
         rows_dup, log_dup, _, _, _ = worker.get_state()
-        assert rows_dup[0]["msg_id"] == "abc"
         assert log_dup == log
 
-        payload2 = json.dumps({"state": "ready", "ip": "10.0.0.2", "msg_id": "abd"})
+        payload2 = _sample_payload(actual_ms=False)
         stub.emit_message(topic, payload2)
         time.sleep(0.05)
         rows_new, log_new, _, _, _ = worker.get_state()
-        assert rows_new[0]["msg_id"] == "abd"
+        assert rows_new[0]["actual_ms"] == ""
     finally:
         worker.stop()
         worker.join(timeout=1)
@@ -196,11 +280,12 @@ def test_mqtt_worker_integration_latency_and_debounce():
 
 def main():
     try:
-        test_render_presence_table()
-        test_mqtt_worker_ingest_duplicate()
+        test_render_status_table()
+        test_mqtt_worker_ingest_snapshot()
         test_cli_mqtt_command_error()
-        test_status_mqtt_uses_worker()
         test_mqtt_worker_queue_cmd_logs_error()
+        test_status_mqtt_uses_worker()
+        test_mqtt_worker_integration_latency_and_debounce()
     except AssertionError:
         print("Tests failed.")
         return 1
