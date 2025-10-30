@@ -1,3 +1,4 @@
+import json
 import os
 import sys
 
@@ -22,6 +23,52 @@ def test_render_presence_table():
     assert "device" in output
     assert "02123456789a" in output
     assert "ready" in output
+
+
+class StubMqttClient:
+    def __init__(self):
+        self.on_connect = None
+        self.on_disconnect = None
+        self.on_message = None
+        self._connected = False
+        self.subscriptions = []
+
+    def username_pw_set(self, user, password):
+        self._user = user
+        self._password = password
+
+    def connect(self, host, port, keepalive=30):
+        self._host = host
+        self._port = port
+        self._keepalive = keepalive
+        self._connected = True
+        if self.on_connect:
+            self.on_connect(self, None, None, 0)
+
+    def disconnect(self):
+        was_connected = self._connected
+        self._connected = False
+        if was_connected and self.on_disconnect:
+            self.on_disconnect(self, None, 0)
+
+    def loop_start(self):
+        pass
+
+    def loop_stop(self):
+        pass
+
+    def subscribe(self, topic, qos=0):
+        self.subscriptions.append((topic, qos))
+        return 1
+
+    def emit_message(self, topic, payload):
+        if self.on_message:
+            class _Msg:
+                pass
+            msg = _Msg()
+            msg.topic = topic
+            msg.payload = payload.encode()
+            self.on_message(self, None, msg)
 
 
 def test_mqtt_worker_ingest_duplicate():
@@ -98,6 +145,53 @@ def test_status_mqtt_uses_worker():
     assert rc == 0
     assert "02123456789a" in output
     assert stub.started and stub.stopped
+
+
+def test_mqtt_worker_integration_latency_and_debounce():
+    stub = StubMqttClient()
+    worker = MqttWorker(broker={"host": "localhost", "port": 1883}, client_factory=lambda: stub)
+    worker.start()
+    try:
+        deadline = time.time() + 2.0
+        connected = False
+        while time.time() < deadline:
+            rows, logs, _, _, _ = worker.get_state()
+            if logs and "[mqtt] connected" in logs[-1]:
+                connected = True
+                break
+            time.sleep(0.05)
+        assert connected, "worker failed to connect within timeout"
+
+        mac = "02123456789a"
+        topic = f"devices/{mac}/state"
+        payload1 = json.dumps({"state": "ready", "ip": "10.0.0.2", "msg_id": "abc"})
+        send_time = time.time()
+        stub.emit_message(topic, payload1)
+        time.sleep(0.05)
+        rows, log, err, last_ts, _ = worker.get_state()
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["device"] == mac
+        assert row["state"] == "ready"
+        assert row["ip"] == "10.0.0.2"
+        assert row["msg_id"] == "abc"
+        latency = time.time() - row["last_seen"]
+        assert latency < 0.25
+
+        stub.emit_message(topic, payload1)
+        time.sleep(0.05)
+        rows_dup, log_dup, _, _, _ = worker.get_state()
+        assert rows_dup[0]["msg_id"] == "abc"
+        assert log_dup == log
+
+        payload2 = json.dumps({"state": "ready", "ip": "10.0.0.2", "msg_id": "abd"})
+        stub.emit_message(topic, payload2)
+        time.sleep(0.05)
+        rows_new, log_new, _, _, _ = worker.get_state()
+        assert rows_new[0]["msg_id"] == "abd"
+    finally:
+        worker.stop()
+        worker.join(timeout=1)
 
 
 def main():

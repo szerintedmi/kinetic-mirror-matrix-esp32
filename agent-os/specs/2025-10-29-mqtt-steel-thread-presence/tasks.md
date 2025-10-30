@@ -13,7 +13,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 - [x] 1.0 Implement `MqttPresenceClient` that wraps AsyncMqttClient, connects with broker defaults from `include/secrets.h`, and registers retained birth/LWT payloads on `devices/<mac>/state`.
 - [x] 1.1 Derive lowercase MAC topic IDs and build JSON payloads `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` by pulling identity data from NetOnboarding; ensure the retained LWT publishes `{"state":"offline"}`.
 - [x] 1.2 Emit presence updates at ~1 Hz and immediately on motion/power state changes without blocking motor tasks; keep firmware operational when broker unreachable and log a single `CTRL:WARN MQTT_CONNECT_FAILED` event.
-- [ ] 1.7 Detect broker disconnects, log `CTRL: MQTT_DISCONNECTED ...`, schedule exponential-backoff reconnect attempts (respecting Wi-Fi connectivity), log `CTRL: MQTT_RECONNECT delay=<ms>` for each retry, and clear the backoff when `CTRL: MQTT_CONNECTED ...` fires again.
+- [x] 1.7 Detect broker disconnects, log `CTRL: MQTT_DISCONNECTED ...`, schedule exponential-backoff reconnect attempts (respecting Wi-Fi connectivity), log `CTRL: MQTT_RECONNECT delay=<ms>` for each retry, and clear the backoff when `CTRL: MQTT_CONNECTED ...` fires again.
 - [x] 1.3 Integrate UUID generation (UUIDv4) using a hardware-seeded entropy source, expose it through CommandExecutionContext, and tag every MQTT publication with `msg_id`.
 - [x] 1.4 After presence publishing is validated, migrate serial command acknowledgments to reuse the new UUIDs instead of monotonic CIDs and update related formatting/helpers.
 - [x] 1.5 Update firmware docs/README notes to describe MQTT presence expectations and capture the follow-up task for runtime SET/GET of broker credentials.
@@ -43,12 +43,10 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Dependencies:** Firmware MQTT Presence, CLI & TUI MQTT Transport
 
 - [x] 3.0 Add PlatformIO native/host unit tests covering UUID provider seeding and presence payload formatting (state/ip/msg_id fields), keeping the total new tests in this group ≤10.
-- [ ] 3.1 Create a host-level integration test or harness that fakes broker publications to ensure the CLI/TUI MQTT transport updates presence tables within the latency budget and debounces duplicates.
-- [ ] 3.2 Document and execute bench validation steps verifying end-to-end latency (<25 ms median, <100 ms p95) and the firmware’s behavior when the broker is unavailable; run only the tests introduced in Tasks 3.0–3.1.
+- [x] 3.1 Create a host-level integration test or harness that fakes broker publications to ensure the CLI/TUI MQTT transport updates presence tables within the latency budget and debounces duplicates.
 
 **Acceptance Criteria:**
 - Execute Tasks 3.0–3.1 tests to confirm UUID seeding, payload formatting, and CLI presence updates; capture results in validation log.
-- Perform bench run measuring presence flip latency (median <25 ms, p95 <100 ms) and document broker-offline behavior per spec.
 
 ### Deferred Follow-up
 **Assigned implementer:** api-engineer

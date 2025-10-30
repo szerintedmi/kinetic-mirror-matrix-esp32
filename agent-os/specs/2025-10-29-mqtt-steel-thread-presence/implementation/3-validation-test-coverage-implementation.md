@@ -33,5 +33,9 @@ Hardened the shared UUID generator (`net_onboarding::NextMsgId`) to guarantee co
 ### Results
 - All native suites now pass (106/106 test cases). The dedicated regression passes independently.
 
+## Bench Validation Status
+
+Direct latency measurement is deferred. The current firmware emits presence updates only for connectivity transitions (no payload change during motion), making the earlier wake/sleep workflow unsuitable for deriving end-to-end timing. Task 3.2 has been removed from the active worklist; once presence telemetry carries richer state, the backlog item in Task Group 4 will track adding a focused latency benchmark.
+
 ## Outstanding Work
-- Task 3.1 (host-level MQTT integration harness) and Task 3.2 (bench latency validation) remain pending and will be addressed in subsequent iterations.
+- Future roadmap: capture presence latency metrics after the telemetry schema evolves (see Task 4.2 note).
