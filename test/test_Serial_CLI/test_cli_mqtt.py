@@ -29,19 +29,19 @@ def test_mqtt_worker_ingest_duplicate():
     worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abc"}', timestamp=100.0)
     rows, log, err, ts, _ = worker.get_state()
     assert len(rows) == 1
-    assert log[-1].startswith("[ready]")
+    assert log == []
     assert isinstance(rows[0]["age_s"], float)
 
     # Duplicate msg_id should not append another log entry
     worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abc"}', timestamp=101.0)
     rows2, log2, _, _, _ = worker.get_state()
-    assert len(log2) == len(log)
+    assert log2 == log
     assert rows2[0]["state"] == "ready"
 
     # New msg_id records a new log entry
     worker.ingest_message("devices/aa/state", '{"state":"ready","ip":"1.2.3.4","msg_id":"abd"}', timestamp=102.0)
     _, log3, _, _, _ = worker.get_state()
-    assert len(log3) == len(log) + 1
+    assert log3 == log
 
 
 def test_cli_mqtt_command_error():

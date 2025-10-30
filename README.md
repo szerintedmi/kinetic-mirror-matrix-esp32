@@ -130,9 +130,10 @@ Host CLI
   - `python -m serial_cli status --transport mqtt --timeout 1.5`
   - `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
   - `python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800 --backoff 150`
+- The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
 
-MQTT transport routes STATUS/TUI tables exclusively from retained presence messages on `devices/<mac>/state`. When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane surfaces presence flips with MAC, IP, and `msg_id` annotations.
+MQTT transport routes STATUS/TUI tables exclusively from retained presence messages on `devices/<mac>/state`. When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
 
 Tests
 

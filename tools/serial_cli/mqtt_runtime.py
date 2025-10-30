@@ -69,6 +69,9 @@ class MqttWorker(threading.Thread):
         self._error: Optional[str] = None
         self._last_update_ts: float = 0.0
         self._client = None
+        self._connected = False
+        self._reconnect_backoff = 1.0
+        self._next_connect_ts = 0.0
         self._columns = (
             ("device", "device", 16),
             ("state", "state", 8),
@@ -96,6 +99,7 @@ class MqttWorker(threading.Thread):
     # Thread API
     # ------------------------------------------------------------------
     def run(self) -> None:  # pragma: no cover - exercised via integration/TUI
+        client = None
         try:
             client = self._client_factory()
             self._client = client
@@ -110,12 +114,53 @@ class MqttWorker(threading.Thread):
 
             host = str(self._broker.get("host", "127.0.0.1"))
             port = int(self._broker.get("port", 1883))
-            client.connect(host, port, keepalive=30)
-            client.loop_forever()
+
+            client.loop_start()
+            with self._lock:
+                self._connected = False
+                self._reconnect_backoff = 1.0
+                self._next_connect_ts = 0.0
+
+            while not self._stop_event.is_set():
+                attempt = False
+                with self._lock:
+                    connected = self._connected
+                    next_ts = self._next_connect_ts
+                if not connected:
+                    now = time.time()
+                    if next_ts == 0.0 or now >= next_ts:
+                        attempt = True
+                if attempt:
+                    try:
+                        client.connect(host, port, keepalive=30)
+                        with self._lock:
+                            self._next_connect_ts = float("inf")
+                    except Exception as exc:
+                        delay = None
+                        with self._lock:
+                            delay = self._reconnect_backoff
+                            self._reconnect_backoff = min(self._reconnect_backoff * 2.0, 30.0)
+                            self._next_connect_ts = time.time() + delay
+                        self._append_log(f"[mqtt error] {exc}")
+                        self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
+                    time.sleep(0.1)
+                else:
+                    time.sleep(0.1)
+
         except Exception as exc:
             with self._lock:
                 self._error = str(exc)
-                self._append_log(f"[mqtt error] {exc}")
+            self._append_log(f"[mqtt error] {exc}")
+        finally:
+            if client is not None:
+                try:
+                    client.loop_stop()
+                except Exception:
+                    pass
+                try:
+                    client.disconnect()
+                except Exception:
+                    pass
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -180,11 +225,22 @@ class MqttWorker(threading.Thread):
     def _on_connect(self, client, userdata, flags, rc):
         topic = "devices/+/state"
         client.subscribe(topic, qos=1)
+        with self._lock:
+            self._connected = True
+            self._reconnect_backoff = 1.0
+            self._next_connect_ts = float("inf")
         self._append_log(f"[mqtt] connected; subscribed to {topic}")
 
     def _on_disconnect(self, client, userdata, rc):
+        with self._lock:
+            self._connected = False
         if not self._stop_event.is_set():
             self._append_log("[mqtt] disconnected")
+            with self._lock:
+                delay = self._reconnect_backoff
+                self._reconnect_backoff = min(self._reconnect_backoff * 2.0, 30.0)
+                self._next_connect_ts = time.time() + delay
+            self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
 
     def _on_message(self, client, userdata, msg):
         payload = msg.payload.decode(errors="ignore") if isinstance(msg.payload, bytes) else str(msg.payload)
