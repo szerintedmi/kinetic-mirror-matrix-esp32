@@ -14,12 +14,14 @@ Deliver a minimal MQTT presence pathway that broadcasts node availability with r
 - Use the device MAC (lowercase hex without separators) to form the topic `devices/<mac>/state`; publish a retained QoS1 birth message immediately after connect with JSON payload `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}`, where `<ipv4>` is the dotted quad pulled from NetOnboarding status.
 - Configure a retained QoS1 LWT payload of `{"state":"offline"}` on the same topic; no intermediate "connecting" state is emitted.
 - Push presence updates at ~1 Hz while connected and immediately on state changes (wake, sleep, motion start/stop) so the CLI/TUI sees flips within the `<25 ms` / `<100 ms` SLA when the broker is reachable.
-- If broker connection fails, log a single `CTRL:WARN MQTT_CONNECT_FAILED` line (serial) and keep executing motor work; do not auto-retry within this steel thread.
+- When the broker connection fails, log `CTRL:WARN MQTT_CONNECT_FAILED …` once, then enter a non-blocking reconnect loop capped by an exponential backoff (start ≥1 s, max ≤30 s) so presence recovers automatically while motor work continues.
+- Emit `CTRL: MQTT_DISCONNECTED …` immediately when the MQTT session drops and `CTRL: MQTT_RECONNECT delay=<ms>` whenever a retry is scheduled; on success, continue to log the existing `CTRL: MQTT_CONNECTED broker=…`.
 - Generate a UUIDv4 `msg_id` for every MQTT publication using an ESP32-safe entropy source (e.g., `esp_random` via `k0i05/esp_uuid`), attach it to presence payloads as the JSON field `"msg_id":"<uuid>"`, and expose the generator through the existing command pipeline context.
 - After the MQTT pathway is validated, switch serial command acknowledgments to reuse the same UUIDs instead of the current monotonic CID to maintain correlation parity across transports.
 - Extend `tools/serial_cli` so both the command-line utilities and interactive TUI accept `--transport {serial,mqtt}` (default serial). When `mqtt` is selected, connect with `paho-mqtt` using the same default host/user/pass, subscribe to `devices/+/state`, and drive the TUI status table from MQTT presence messages.
 - While in MQTT mode, non-presence CLI commands (`move`, `home`, `wake`, etc.) may respond with `error: MQTT transport not implemented yet` without attempting broker command dispatch; STATUS views must be populated exclusively from MQTT data.
 - Surface presence activity in the CLI log stream by debouncing duplicate payloads and tagging entries with the node MAC and latest IP address for quick operator diagnostics.
+- Reconnect attempts must respect Wi-Fi state (only retry while `NetOnboarding` is CONNECTED) and backoff timers must reset after a successful connection.
 
 ### Non-Functional Requirements
 - Firmware-side MQTT integration must add <15 kB flash and keep incremental RAM usage under 4 kB to preserve resource headroom.

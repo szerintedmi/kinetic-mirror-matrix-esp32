@@ -123,11 +123,33 @@ void test_presence_logs_failure_once() {
   TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(logs[0].find("MQTT_CONNECT_FAILED")));
 }
 
+void test_presence_failure_log_resets_after_connect() {
+  net_onboarding::NetOnboarding net;
+  connectNet(net);
+
+  std::vector<std::string> logs;
+  auto publish_fn = [](const PresencePublish &) { return true; };
+  auto log_fn = [&](const std::string &line) { logs.push_back(line); };
+
+  mqtt::MqttPresenceClient client(net, publish_fn, log_fn);
+  client.handleConnectFailure();
+  TEST_ASSERT_EQUAL_INT(1, static_cast<int>(logs.size()));
+
+  client.handleConnected(0, "mqtt.local:1883");
+  TEST_ASSERT_EQUAL_INT(2, static_cast<int>(logs.size()));
+  client.handleDisconnected();
+  client.handleConnectFailure();
+
+  TEST_ASSERT_EQUAL_INT(3, static_cast<int>(logs.size()));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(logs.back().find("MQTT_CONNECT_FAILED")));
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_presence_payload_formatting);
   RUN_TEST(test_presence_logs_connect_success);
   RUN_TEST(test_presence_uuid_sequence);
   RUN_TEST(test_presence_logs_failure_once);
+  RUN_TEST(test_presence_failure_log_resets_after_connect);
   return UNITY_END();
 }

@@ -24,6 +24,8 @@ constexpr const char *kTopicPrefix = "devices/";
 constexpr const char *kTopicSuffix = "/state";
 constexpr uint16_t kMqttKeepAliveSeconds = 30;
 constexpr const char *kOfflinePayloadJson = "{\"state\":\"offline\"}";
+constexpr uint32_t kInitialReconnectDelayMs = 1000;
+constexpr uint32_t kMaxReconnectDelayMs = 30000;
 
 } // namespace
 
@@ -95,6 +97,7 @@ void MqttPresenceClient::loop(uint32_t now_ms) {
 
 void MqttPresenceClient::handleConnected(uint32_t now_ms, const std::string &broker_info) {
   connected_ = true;
+  failure_logged_ = false;
   if (!broker_info.empty()) {
     log_("CTRL: MQTT_CONNECTED broker=" + broker_info);
   }
@@ -350,12 +353,25 @@ public:
   void loop(uint32_t now_ms) {
     logic_.loop(now_ms);
     refreshClientIdentity();
+    auto status = net_.status();
+    if (status.state != net_onboarding::State::CONNECTED) {
+      connect_attempted_ = false;
+      connect_succeeded_ = false;
+      next_reconnect_ms_ = 0;
+      reconnect_backoff_ms_ = kInitialReconnectDelayMs;
+      return;
+    }
+
+    if (client_.connected()) {
+      return;
+    }
+
     if (!connect_attempted_) {
-      auto status = net_.status();
-      if (status.state == net_onboarding::State::CONNECTED) {
+      if (!next_reconnect_ms_ || now_ms >= next_reconnect_ms_) {
         logConnectAttempt(status);
         client_.connect();
         connect_attempted_ = true;
+        next_reconnect_ms_ = 0;
       }
     }
   }
@@ -369,6 +385,38 @@ public:
   }
 
 private:
+  void logDisconnected(AsyncMqttClientDisconnectReason reason) {
+    std::string line("CTRL: MQTT_DISCONNECTED");
+    std::string summary = connectionSummary();
+    if (!summary.empty()) {
+      line += " ";
+      line += summary;
+    }
+    std::string reason_str = DisconnectReasonToString(reason);
+    if (!reason_str.empty()) {
+      if (!summary.empty()) {
+        line += " ";
+      } else {
+        line += " ";
+      }
+      line += "reason=";
+      line += reason_str;
+    }
+    log(line);
+  }
+
+  void logReconnectDelay(uint32_t delay_ms) {
+    std::string line("CTRL: MQTT_RECONNECT");
+    std::string summary = connectionSummary();
+    if (!summary.empty()) {
+      line += " ";
+      line += summary;
+    }
+    line += " delay=";
+    line += std::to_string(delay_ms);
+    log(line);
+  }
+
   bool publish(const PresencePublish &pub) {
     if (!client_.connected()) {
       return false;
@@ -390,6 +438,9 @@ private:
   void setupCallbacks() {
     client_.onConnect([this](bool /*sessionPresent*/) {
       connect_succeeded_ = true;
+      connect_attempted_ = true;
+      reconnect_backoff_ms_ = kInitialReconnectDelayMs;
+      next_reconnect_ms_ = 0;
       std::string broker_info;
       if (!broker_host_.empty()) {
         broker_info = broker_host_;
@@ -398,19 +449,31 @@ private:
       logic_.handleConnected(millis(), broker_info);
     });
     client_.onDisconnect([this](AsyncMqttClientDisconnectReason reason) {
+      bool was_connected = connect_succeeded_;
       logic_.handleDisconnected();
-      if (!connect_succeeded_) {
-        std::string context = connectionSummary();
-        std::string reason_str = DisconnectReasonToString(reason);
-        if (!reason_str.empty()) {
-          if (!context.empty()) {
-            context += " ";
-          }
-          context += "reason=";
-          context += reason_str;
-        }
-        logic_.handleConnectFailure(context);
+      connect_attempted_ = false;
+      connect_succeeded_ = false;
+      logDisconnected(reason);
+
+      auto status = net_.status();
+      if (status.state == net_onboarding::State::CONNECTED) {
+        scheduleReconnect(millis());
+      } else {
+        next_reconnect_ms_ = 0;
+        reconnect_backoff_ms_ = kInitialReconnectDelayMs;
       }
+
+      std::string context = connectionSummary();
+      std::string reason_str = DisconnectReasonToString(reason);
+      if (!reason_str.empty()) {
+        if (!context.empty()) {
+          context += " ";
+        }
+        context += "reason=";
+        context += reason_str;
+      }
+      (void)was_connected;
+      logic_.handleConnectFailure(context);
     });
   }
 
@@ -460,6 +523,13 @@ private:
     }
   }
 
+  void scheduleReconnect(uint32_t now_ms) {
+    uint32_t delay = reconnect_backoff_ms_;
+    next_reconnect_ms_ = now_ms + delay;
+    logReconnectDelay(delay);
+    reconnect_backoff_ms_ = std::min(reconnect_backoff_ms_ * 2, kMaxReconnectDelayMs);
+  }
+
   std::string connectionSummary() const {
     std::string summary;
     if (!broker_host_.empty() || broker_port_ != 0) {
@@ -497,6 +567,8 @@ private:
   string broker_user_;
   uint16_t broker_port_ = 0;
   string client_id_;
+  uint32_t next_reconnect_ms_ = 0;
+  uint32_t reconnect_backoff_ms_ = kInitialReconnectDelayMs;
   bool connect_attempted_ = false;
   bool connect_succeeded_ = false;
 };

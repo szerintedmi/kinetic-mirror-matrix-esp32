@@ -13,9 +13,11 @@ We're continuing our implementation of MQTT Steel Thread: Presence by implementi
 - [ ] 1.4 After presence publishing is validated, migrate serial command acknowledgments to reuse the new UUIDs instead of monotonic CIDs and update related formatting/helpers.
 - [ ] 1.5 Update firmware docs/README notes to describe MQTT presence expectations and capture the follow-up task for runtime SET/GET of broker credentials.
 - [ ] 1.6 Write 2-4 focused unit tests (native/host where possible) covering payload formatting, UUID propagation, and the broker-failure log path; run only these new tests.
+- [ ] 1.7 Detect broker disconnects, log `CTRL: MQTT_DISCONNECTED ...`, schedule exponential-backoff reconnect attempts (respecting Wi-Fi connectivity), log `CTRL: MQTT_RECONNECT delay=<ms>` for each retry, and clear the backoff when `CTRL: MQTT_CONNECTED ...` fires again.
 
 **Acceptance Criteria:**
 - Flash firmware, connect to local Mosquitto with defaults, and confirm retained `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` appears on `devices/<mac>/state`; power-cycle node to see retained `{"state":"offline"}` and single `CTRL:WARN MQTT_CONNECT_FAILED` when broker is unreachable.
+- Simulate broker loss (stop broker or drop Wi-Fi) and verify `CTRL: MQTT_DISCONNECTED ...` followed by `CTRL: MQTT_RECONNECT delay=<ms>` logs until `CTRL: MQTT_CONNECTED broker=...` returns and presence resumes.
 - Run the 2-4 new unit tests and verify they pass.
 
 ## Understand the context

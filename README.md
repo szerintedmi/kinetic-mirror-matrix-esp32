@@ -146,6 +146,7 @@ Tests
 - Ready payload format: `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` (hardware-seeded UUIDv4 shared with serial acknowledgments).
 - Offline LWT payload: `{"state":"offline"}` retained on the same topic.
 - Publishes every ~1 Hz while connected and immediately when motion or power state flips.
+- On broker loss logs `CTRL: MQTT_DISCONNECTED …` once, schedules exponential-backoff retries with `CTRL: MQTT_RECONNECT delay=<ms>`, and resumes with `CTRL: MQTT_CONNECTED broker=…` upon success.
 - Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
 - Follow-up: add runtime SET/GET verbs for MQTT broker host/user/pass (tracked as a deferred implementation task).
 
