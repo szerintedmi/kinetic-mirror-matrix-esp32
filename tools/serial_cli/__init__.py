@@ -133,6 +133,8 @@ def _add_common(sub):
     sub.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)")
     sub.add_argument("--timeout", "-t", type=float, default=2.0, help="Read timeout seconds (default 2.0)")
     sub.add_argument("--dry-run", action="store_true", help="Print command only; do not open serial")
+    sub.add_argument("--transport", choices=("serial", "mqtt"), default="serial",
+                     help="Transport to use (serial or mqtt). Default serial.")
     return sub
 
 
@@ -234,7 +236,43 @@ def parse_kv_line(text: str) -> Dict[str, str]:
     return out
 
 
+def _render_presence_table(rows: List[Dict[str, str]]) -> str:
+    cols = [
+        ("device", 18, "device"),
+        ("state", 8, "state"),
+        ("ip", 16, "ip"),
+        ("age_s", 8, "age_s"),
+        ("msg_id", 36, "msg_id"),
+    ]
+    header = " ".join([label[:width].rjust(width) for key, width, label in cols])
+    lines = [header, "-" * len(header)]
+    for entry in rows:
+        line_parts = []
+        for key, width, label in cols:
+            if key == "age_s":
+                val = entry.get("age_s", "")
+                if (val is None or val == "") and "last_seen" in entry:
+                    try:
+                        now = time.time()
+                        val = max(0.0, now - float(entry["last_seen"]))
+                    except Exception:
+                        val = ""
+                try:
+                    val = f"{float(val):.1f}"
+                except Exception:
+                    val = ""
+            else:
+                val = entry.get(label, "")
+            line_parts.append(str(val)[:width].rjust(width))
+        lines.append(" ".join(line_parts))
+    if len(lines) == 2:
+        lines.append("(no presence updates yet)".rjust(len(header)))
+    return "\n".join(lines)
+
+
 def render_table(rows: List[Dict[str, str]]) -> str:
+    if rows and isinstance(rows[0], dict) and "device" in rows[0]:
+        return _render_presence_table(rows)
     cols = [
         ("id", 2, "id"),
         ("pos", 6, "pos"),
@@ -261,10 +299,53 @@ def render_table(rows: List[Dict[str, str]]) -> str:
 
 
 
+def _make_mqtt_worker(*, broker_overrides: Optional[Dict[str, str]] = None, **kwargs):
+    from .mqtt_runtime import MqttWorker, load_mqtt_defaults
+
+    broker = load_mqtt_defaults()
+    if broker_overrides:
+        broker.update(broker_overrides)
+    return MqttWorker(broker=broker, **kwargs)
+
+
+def _run_status_mqtt(ns) -> int:
+    wait_seconds = max(0.5, float(getattr(ns, "timeout", 1.0)))
+    try:
+        worker = _make_mqtt_worker()
+    except RuntimeError as exc:
+        print(exc, file=sys.stderr)
+        return 2
+    worker.start()
+    try:
+        time.sleep(wait_seconds)
+        rows, log, err, last_update, _ = worker.get_state()
+        if err:
+            print(f"error: {err}", file=sys.stderr)
+            return 1
+        table = render_table(rows)
+        if table:
+            print(table)
+        else:
+            print("No MQTT presence data received.")
+        if log:
+            print("\nRecent MQTT events:")
+            for ln in log[-10:]:
+                print(ln)
+    finally:
+        worker.stop()
+        worker.join(timeout=1.0)
+    return 0
+
+
 def main(argv=None) -> int:
     ns = make_parser().parse_args(argv)
+    if ns.command in ("status", "st") and ns.transport == "mqtt":
+        return _run_status_mqtt(ns)
     if ns.command == "interactive":
         return run_interactive(ns)
+    if ns.transport == "mqtt":
+        print("error: MQTT transport not implemented yet")
+        return 1
 
     # Estimation + measurement utilities
     if ns.command in ("check-move", "check-home"):
@@ -390,32 +471,38 @@ def main(argv=None) -> int:
 
 
 def run_interactive(ns: argparse.Namespace) -> int:
-    if ns.dry_run:
-        print("'interactive' ignores --dry-run; requires a serial port.", file=sys.stderr)
-        return 2
-    if serial is None:
-        print("pyserial not installed. Install 'pyserial' to use interactive mode.", file=sys.stderr)
-        return 2
-    if not ns.port:
-        print("--port is required for interactive mode", file=sys.stderr)
-        return 2
     try:
         from .tui.textual_ui import TextualUI as UIClass  # type: ignore
     except Exception as e:
         print("textual is required for interactive mode. Install with: pip install textual rich", file=sys.stderr)
         print(f"Import error: {e}", file=sys.stderr)
         return 2
-
-    worker = SerialWorker(
-        port=ns.port,
-        baud=ns.baud,
-        timeout=ns.timeout,
-        poll_rate_hz=ns.rate,
-        serial_module=serial,
-        parse_status=parse_status_lines,
-        parse_kv=parse_kv_line,
-        parse_thermal=parse_thermal_get_response,
-    )
+    if ns.transport == "mqtt":
+        try:
+            worker = _make_mqtt_worker()
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            return 2
+    else:
+        if ns.dry_run:
+            print("'interactive' ignores --dry-run; requires a serial port.", file=sys.stderr)
+            return 2
+        if serial is None:
+            print("pyserial not installed. Install 'pyserial' to use interactive mode.", file=sys.stderr)
+            return 2
+        if not ns.port:
+            print("--port is required for interactive mode", file=sys.stderr)
+            return 2
+        worker = SerialWorker(
+            port=ns.port,
+            baud=ns.baud,
+            timeout=ns.timeout,
+            poll_rate_hz=ns.rate,
+            serial_module=serial,
+            parse_status=parse_status_lines,
+            parse_kv=parse_kv_line,
+            parse_thermal=parse_thermal_get_response,
+        )
     worker.start()
     try:
         ui = UIClass(worker, render_table)  # type: ignore[call-arg]

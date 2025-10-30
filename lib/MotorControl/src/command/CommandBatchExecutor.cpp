@@ -38,7 +38,7 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
     uint32_t mask = maskFor(cmd, context);
     if (mask != 0 && (mask & seen)) {
       std::ostringstream eo;
-      eo << "CTRL:ERR CID=" << context.nextCid() << " E03 BAD_PARAM MULTI_CMD_CONFLICT";
+      eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E03 BAD_PARAM MULTI_CMD_CONFLICT";
       return CommandResult::Error(eo.str());
     }
     seen |= mask;
@@ -48,7 +48,7 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   for (const auto &cmd : commands) {
     if (!router.knowsVerb(cmd.verb)) {
       std::ostringstream eo;
-      eo << "CTRL:ERR CID=" << context.nextCid() << " E01 BAD_CMD";
+      eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E01 BAD_CMD";
       return CommandResult::Error(eo.str());
     }
   }
@@ -106,7 +106,7 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   }
   if (saw_est) {
     std::ostringstream ok;
-    ok << "CTRL:ACK CID=" << context.nextCid() << " est_ms=" << agg_est_ms;
+    ok << "CTRL:ACK msg_id=" << context.nextMsgId() << " est_ms=" << agg_est_ms;
     combined.push_back(ok.str());
   }
   CommandResult res;

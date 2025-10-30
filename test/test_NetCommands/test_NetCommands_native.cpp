@@ -39,7 +39,7 @@ void test_help_includes_net_verbs() {
 
 void test_net_status_in_ap_mode() {
   std::string r = proto.processLine("NET:STATUS", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find("state=AP_ACTIVE") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" rssi=NA") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ip=") != std::string::npos);
@@ -48,7 +48,7 @@ void test_net_status_in_ap_mode() {
 
 void test_net_set_returns_status_after_wait() {
   std::string resp = proto.processLine("NET:SET,\"ssid,with,commas\",\"pa ssword\"", 0);
-  TEST_ASSERT_TRUE(resp.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(resp.rfind("CTRL:ACK msg_id=", 0) == 0);
 }
 
 void test_net_set_validation_bad_param() {
@@ -71,23 +71,23 @@ void test_net_reset_from_connected_back_to_ap() {
   // Connected now; reset should return OK (status line emitted asynchronously)
   std::string rr = proto.processLine("NET:RESET", 0);
   TEST_ASSERT_TRUE(rr.rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(rr.find(" CID=") != std::string::npos);
+  TEST_ASSERT_TRUE(rr.find(" msg_id=") != std::string::npos);
 }
 
 void test_net_list_returns_networks() {
   // In native stub, scan returns canned results
   std::string r = proto.processLine("NET:LIST", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" scanning=1") != std::string::npos);
-  // ACK first; find the NET:LIST header line with CID
+  // ACK first; find the NET:LIST header line with msg_id
   auto pos = r.find("\nNET:LIST");
   TEST_ASSERT_TRUE(pos != std::string::npos);
-  TEST_ASSERT_TRUE(r.find("NET:LIST CID=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("NET:LIST msg_id=") != std::string::npos);
   std::string items = r.substr(pos);
   TEST_ASSERT_TRUE(items.find("SSID=") != std::string::npos);
   TEST_ASSERT_TRUE(items.find(" rssi=") != std::string::npos);
-  // Result lines should not repeat CID tokens
-  TEST_ASSERT_TRUE(items.find("\nCID=") == std::string::npos);
+  // Result lines should not repeat msg_id tokens
+  TEST_ASSERT_TRUE(items.find("\nmsg_id=") == std::string::npos);
 }
 
 void test_net_list_requires_ap_mode() {
@@ -97,7 +97,7 @@ void test_net_list_requires_ap_mode() {
   (void)proto.processLine("NET:SET,ssid,password", 0);
   pump_for(5);
   std::string r = proto.processLine("NET:LIST", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ERR msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find("NET_SCAN_AP_ONLY") != std::string::npos);
 }
 

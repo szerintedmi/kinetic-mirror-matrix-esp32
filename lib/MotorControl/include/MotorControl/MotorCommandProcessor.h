@@ -15,6 +15,8 @@ public:
   std::string processLine(const std::string& line, uint32_t now_ms);
   void tick(uint32_t now_ms) { controller_->tick(now_ms); }
   motor::command::CommandResult execute(const std::string &line, uint32_t now_ms);
+  MotorController &controller() { return *controller_; }
+  const MotorController &controller() const { return *controller_; }
 
 private:
   std::unique_ptr<MotorController> controller_;

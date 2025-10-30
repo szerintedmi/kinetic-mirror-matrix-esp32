@@ -1,6 +1,6 @@
 #include "MotorControl/command/CommandExecutionContext.h"
 
-#include "net_onboarding/Cid.h"
+#include "net_onboarding/MessageId.h"
 #include "net_onboarding/NetSingleton.h"
 #include "net_onboarding/SerialImmediate.h"
 
@@ -36,14 +36,16 @@ int &CommandExecutionContext::defaultSpeed() { return default_speed_sps_; }
 int &CommandExecutionContext::defaultAccel() { return default_accel_sps2_; }
 int &CommandExecutionContext::defaultDecel() { return default_decel_sps2_; }
 
-uint32_t CommandExecutionContext::nextCid() const { return net_onboarding::NextCid(); }
-
-void CommandExecutionContext::setActiveCid(uint32_t cid) const {
-  net_onboarding::SetActiveCid(cid);
+std::string CommandExecutionContext::nextMsgId() const {
+  return net_onboarding::NextMsgId();
 }
 
-void CommandExecutionContext::clearActiveCid() const {
-  net_onboarding::ClearActiveCid();
+void CommandExecutionContext::setActiveMsgId(const std::string &msg_id) const {
+  net_onboarding::SetActiveMsgId(msg_id);
+}
+
+void CommandExecutionContext::clearActiveMsgId() const {
+  net_onboarding::ClearActiveMsgId();
 }
 
 bool CommandExecutionContext::printCtrlLineImmediate(const std::string &line) const {

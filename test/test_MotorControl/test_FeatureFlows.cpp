@@ -24,7 +24,7 @@ void test_flow_set_off_move_exceeds_max_warn_ok()
   std::string last = (nl == std::string::npos) ? r : r.substr(r.find_last_of('\n') + 1);
   TEST_ASSERT_TRUE(starts_with(first, "CTRL:WARN "));
   TEST_ASSERT_TRUE(first.find(" THERMAL_REQ_GT_MAX") != std::string::npos);
-  TEST_ASSERT_TRUE(starts_with(last, "CTRL:ACK CID="));
+  TEST_ASSERT_TRUE(starts_with(last, "CTRL:ACK msg_id="));
   TEST_ASSERT_TRUE(last.find(" est_ms=") != std::string::npos);
 }
 

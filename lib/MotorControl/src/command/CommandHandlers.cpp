@@ -11,6 +11,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <string>
 
 namespace motor {
 namespace command {
@@ -33,12 +34,6 @@ uint32_t parseEstMs(const std::string &line) {
     any = true;
   }
   return any ? value : 0;
-}
-
-std::string formatAckWithEst(uint32_t cid, uint32_t est_ms) {
-  std::ostringstream os;
-  os << "CTRL:ACK CID=" << cid << " est_ms=" << est_ms;
-  return os.str();
 }
 
 } // namespace
@@ -68,14 +63,14 @@ CommandResult MotorCommandHandler::execute(const ParsedCommand &command,
   if (command.verb == "HOME" || command.verb == "H") {
     return handleHome(command.args, context, now_ms);
   }
-  return CommandResult::Error("CTRL:ERR CID=" + std::to_string(context.nextCid()) + " E01 BAD_CMD");
+  return CommandResult::Error("CTRL:ERR msg_id=" + context.nextMsgId() + " E01 BAD_CMD");
 }
 
 CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandExecutionContext &context) {
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
     return CommandResult::Error(eo.str());
   }
   for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
@@ -84,12 +79,12 @@ CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandEx
     int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
     if (avail_s <= 0) {
       if (context.thermalLimitsEnabled()) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E12 THERMAL_NO_BUDGET_WAKE";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E12 THERMAL_NO_BUDGET_WAKE";
         return CommandResult::Error(eo.str());
       } else {
         context.controller().wakeMask(mask);
         std::ostringstream out;
-        out << "CTRL:WARN CID=" << cid << " THERMAL_NO_BUDGET_WAKE\nCTRL:ACK CID=" << cid;
+        out << "CTRL:WARN msg_id=" << msg_id << " THERMAL_NO_BUDGET_WAKE\nCTRL:ACK msg_id=" << msg_id;
         CommandResult res;
         res.lines = Split(out.str(), '\n');
         return res;
@@ -97,45 +92,45 @@ CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandEx
     }
   }
   context.controller().wakeMask(mask);
-  return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+  return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
 }
 
 CommandResult MotorCommandHandler::handleSleep(const std::string &args, CommandExecutionContext &context) {
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
     return CommandResult::Error(eo.str());
   }
   if (!context.controller().sleepMask(mask)) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
     return CommandResult::Error(eo.str());
   }
-  return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+  return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
 }
 
 CommandResult MotorCommandHandler::handleMove(const std::string &args,
                                               CommandExecutionContext &context,
                                               uint32_t now_ms) {
   using motor::command::Split;
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   auto parts = Split(args, ',');
   if (parts.size() < 2) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
   uint32_t mask;
   if (!ParseIdMask(Trim(parts[0]), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
     return CommandResult::Error(eo.str());
   }
   long target;
   if (!ParseInt(Trim(parts[1]), target)) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
   if (target < kMinPos || target > kMaxPos) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E07 POS_OUT_OF_RANGE";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E07 POS_OUT_OF_RANGE";
     return CommandResult::Error(eo.str());
   }
   int speed = context.defaultSpeed();
@@ -143,26 +138,26 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
 #if (USE_SHARED_STEP)
   if ((parts.size() >= 3 && !Trim(parts[2]).empty()) ||
       (parts.size() >= 4 && !Trim(parts[3]).empty())) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
 #else
   if (parts.size() >= 3 && !Trim(parts[2]).empty()) {
     if (!ParseInt(Trim(parts[2]), speed) || speed <= 0) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   }
   if (parts.size() >= 4 && !Trim(parts[3]).empty()) {
     if (!ParseInt(Trim(parts[3]), accel) || accel <= 0) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   }
   if (parts.size() > 4) {
     for (size_t i = 4; i < parts.size(); ++i) {
       if (!Trim(parts[i]).empty()) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
         return CommandResult::Error(eo.str());
       }
     }
@@ -172,7 +167,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
   if (!(context.inBatch() && context.batchInitiallyIdle())) {
     for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
       if (context.controller().state(id).moving) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
         return CommandResult::Error(eo.str());
       }
     }
@@ -195,19 +190,19 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
     int req_s = static_cast<int>((req_ms + 999) / 1000);
     if (req_s > static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S)) {
       if (context.thermalLimitsEnabled()) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E10 THERMAL_REQ_GT_MAX id=" << static_cast<int>(id)
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E10 THERMAL_REQ_GT_MAX id=" << static_cast<int>(id)
                                   << " req_ms=" << req_ms
                                   << " max_budget_s=" << static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S);
         return CommandResult::Error(eo.str());
       } else {
-        std::ostringstream wo; wo << "CTRL:WARN CID=" << cid << " THERMAL_REQ_GT_MAX id=" << static_cast<int>(id)
+        std::ostringstream wo; wo << "CTRL:WARN msg_id=" << msg_id << " THERMAL_REQ_GT_MAX id=" << static_cast<int>(id)
                                   << " req_ms=" << req_ms
                                   << " max_budget_s=" << static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S);
         if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
-          std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+          std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
           return CommandResult::Error(eo.str());
         }
-        std::ostringstream ack; ack << "CTRL:ACK CID=" << cid << " est_ms=" << req_ms;
+        std::ostringstream ack; ack << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << req_ms;
         CommandResult res;
         res.lines.push_back(wo.str());
         res.lines.push_back(ack.str());
@@ -230,21 +225,21 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
     int ttfc_s = ttfc_tenths / 10;
     if (req_s > avail_s) {
       if (context.thermalLimitsEnabled()) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E11 THERMAL_NO_BUDGET id=" << static_cast<int>(id)
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E11 THERMAL_NO_BUDGET id=" << static_cast<int>(id)
                                   << " req_ms=" << max_req_ms
                                   << " budget_s=" << avail_s
                                   << " ttfc_s=" << ttfc_s;
         return CommandResult::Error(eo.str());
       } else {
-        std::ostringstream wo; wo << "CTRL:WARN CID=" << cid << " THERMAL_NO_BUDGET id=" << static_cast<int>(id)
+        std::ostringstream wo; wo << "CTRL:WARN msg_id=" << msg_id << " THERMAL_NO_BUDGET id=" << static_cast<int>(id)
                                   << " req_ms=" << max_req_ms
                                   << " budget_s=" << avail_s
                                   << " ttfc_s=" << ttfc_s;
         if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
-          std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+          std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
           return CommandResult::Error(eo.str());
         }
-        std::ostringstream ack; ack << "CTRL:ACK CID=" << cid << " est_ms=" << max_req_ms;
+        std::ostringstream ack; ack << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << max_req_ms;
         CommandResult res;
         res.lines.push_back(wo.str());
         res.lines.push_back(ack.str());
@@ -253,10 +248,10 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
     }
   }
   if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
     return CommandResult::Error(eo.str());
   }
-  std::ostringstream ack; ack << "CTRL:ACK CID=" << cid << " est_ms=" << max_req_ms;
+  std::ostringstream ack; ack << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << max_req_ms;
   return CommandResult::SingleLine(ack.str());
 }
 
@@ -264,14 +259,14 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
                                               CommandExecutionContext &context,
                                               uint32_t now_ms) {
   auto parts = Split(args, ',');
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   if (parts.empty()) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
   uint32_t mask;
   if (!ParseIdMask(Trim(parts[0]), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
     return CommandResult::Error(eo.str());
   }
 
@@ -288,13 +283,13 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
 
   if (!token(1).empty()) {
     if (!ParseInt(token(1), overshoot)) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   }
   if (!token(2).empty()) {
     if (!ParseInt(token(2), backoff)) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   }
@@ -302,43 +297,43 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
 #if (USE_SHARED_STEP)
   if (!token(3).empty()) {
     if (!ParseInt(token(3), full_range)) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   }
   if (!token(4).empty()) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
 #else
   if (parts.size() == 4 && !token(3).empty()) {
     if (!ParseInt(token(3), full_range)) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
   } else {
     if (!token(3).empty()) {
       if (!ParseInt(token(3), speed) || speed <= 0) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
         return CommandResult::Error(eo.str());
       }
     }
     if (!token(4).empty()) {
       if (!ParseInt(token(4), accel) || accel <= 0) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
         return CommandResult::Error(eo.str());
       }
     }
     if (!token(5).empty()) {
       if (!ParseInt(token(5), full_range)) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
         return CommandResult::Error(eo.str());
       }
     }
     if (parts.size() > 6) {
       for (size_t i = 6; i < parts.size(); ++i) {
         if (!Trim(parts[i]).empty()) {
-          std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+          std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
           return CommandResult::Error(eo.str());
         }
       }
@@ -368,21 +363,21 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
 
   if (req_s > static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S)) {
     if (context.thermalLimitsEnabled()) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E10 THERMAL_REQ_GT_MAX id=" << static_cast<int>(first_id)
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E10 THERMAL_REQ_GT_MAX id=" << static_cast<int>(first_id)
                                 << " req_ms=" << req_ms_total
                                 << " max_budget_s=" << static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S);
       return CommandResult::Error(eo.str());
     } else {
-      std::ostringstream wo; wo << "CTRL:WARN CID=" << cid << " THERMAL_REQ_GT_MAX id=" << static_cast<int>(first_id)
+      std::ostringstream wo; wo << "CTRL:WARN msg_id=" << msg_id << " THERMAL_REQ_GT_MAX id=" << static_cast<int>(first_id)
                                 << " req_ms=" << req_ms_total
                                 << " max_budget_s=" << static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S);
       if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
         return CommandResult::Error(eo.str());
       }
       std::ostringstream out;
       out << wo.str() << "\n"
-          << "CTRL:ACK CID=" << cid << " est_ms=" << req_ms_total;
+          << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << req_ms_total;
       CommandResult res;
       res.lines = Split(out.str(), '\n');
       return res;
@@ -403,23 +398,23 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
     int ttfc_s = ttfc_tenths / 10;
     if (req_s > avail_s) {
       if (context.thermalLimitsEnabled()) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E11 THERMAL_NO_BUDGET id=" << static_cast<int>(id)
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E11 THERMAL_NO_BUDGET id=" << static_cast<int>(id)
                                   << " req_ms=" << req_ms_total
                                   << " budget_s=" << avail_s
                                   << " ttfc_s=" << ttfc_s;
         return CommandResult::Error(eo.str());
       } else {
-        std::ostringstream wo; wo << "CTRL:WARN CID=" << cid << " THERMAL_NO_BUDGET id=" << static_cast<int>(id)
+        std::ostringstream wo; wo << "CTRL:WARN msg_id=" << msg_id << " THERMAL_NO_BUDGET id=" << static_cast<int>(id)
                                   << " req_ms=" << req_ms_total
                                   << " budget_s=" << avail_s
                                   << " ttfc_s=" << ttfc_s;
         if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
-          std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+          std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
           return CommandResult::Error(eo.str());
         }
         std::ostringstream out;
         out << wo.str() << "\n"
-            << "CTRL:ACK CID=" << cid << " est_ms=" << req_ms_total;
+            << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << req_ms_total;
         CommandResult res;
         res.lines = Split(out.str(), '\n');
         return res;
@@ -428,11 +423,11 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
   }
 
   if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
     return CommandResult::Error(eo.str());
   }
   std::ostringstream ok;
-  ok << "CTRL:ACK CID=" << cid << " est_ms=" << req_ms_total;
+  ok << "CTRL:ACK msg_id=" << msg_id << " est_ms=" << req_ms_total;
   return CommandResult::SingleLine(ok.str());
 }
 
@@ -462,7 +457,7 @@ CommandResult QueryCommandHandler::execute(const ParsedCommand &command,
     context.controller().tick(now_ms);
     return handleSet(command.args, context);
   }
-  return CommandResult::Error("CTRL:ERR CID=" + std::to_string(context.nextCid()) + " E01 BAD_CMD");
+  return CommandResult::Error("CTRL:ERR msg_id=" + context.nextMsgId() + " E01 BAD_CMD");
 }
 
 CommandResult QueryCommandHandler::handleHelp() const {
@@ -500,10 +495,10 @@ CommandResult QueryCommandHandler::handleHelp() const {
 }
 
 CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context) {
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   CommandResult res;
   std::ostringstream ack;
-  ack << "CTRL:ACK CID=" << cid;
+  ack << "CTRL:ACK msg_id=" << msg_id;
   res.lines.push_back(ack.str());
   for (size_t i = 0; i < context.controller().motorCount(); ++i) {
     const MotorState &s = context.controller().state(i);
@@ -537,11 +532,11 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context
 }
 
 CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExecutionContext &context) {
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   std::string key = ToUpperCopy(Trim(args));
   if (key.empty() || key == "ALL") {
     std::ostringstream os;
-    os << "CTRL:ACK CID=" << cid << ' '
+    os << "CTRL:ACK msg_id=" << msg_id << ' '
        << "SPEED=" << context.defaultSpeed() << ' '
        << "ACCEL=" << context.defaultAccel() << ' '
        << "DECEL=" << context.defaultDecel() << ' '
@@ -550,20 +545,20 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
     return CommandResult::SingleLine(os.str());
   }
   if (key == "SPEED") {
-    std::ostringstream os; os << "CTRL:ACK CID=" << cid << " SPEED=" << context.defaultSpeed();
+    std::ostringstream os; os << "CTRL:ACK msg_id=" << msg_id << " SPEED=" << context.defaultSpeed();
     return CommandResult::SingleLine(os.str());
   }
   if (key == "ACCEL") {
-    std::ostringstream os; os << "CTRL:ACK CID=" << cid << " ACCEL=" << context.defaultAccel();
+    std::ostringstream os; os << "CTRL:ACK msg_id=" << msg_id << " ACCEL=" << context.defaultAccel();
     return CommandResult::SingleLine(os.str());
   }
   if (key == "DECEL") {
-    std::ostringstream os; os << "CTRL:ACK CID=" << cid << " DECEL=" << context.defaultDecel();
+    std::ostringstream os; os << "CTRL:ACK msg_id=" << msg_id << " DECEL=" << context.defaultDecel();
     return CommandResult::SingleLine(os.str());
   }
   if (key == "THERMAL_LIMITING") {
     std::ostringstream os;
-    os << "CTRL:ACK CID=" << cid
+    os << "CTRL:ACK msg_id=" << msg_id
        << " THERMAL_LIMITING=" << (context.thermalLimitsEnabled() ? "ON" : "OFF")
        << " max_budget_s=" << static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S);
     return CommandResult::SingleLine(os.str());
@@ -574,9 +569,9 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
     if (p != std::string::npos) rest = Trim(key.substr(p + 1));
     if (rest.empty() || rest == "ALL") {
       CommandResult res;
-      uint32_t list_cid = context.nextCid();
+      std::string list_cid = context.nextMsgId();
       std::ostringstream header;
-      header << "CTRL:ACK CID=" << list_cid;
+      header << "CTRL:ACK msg_id=" << list_cid;
       res.lines.push_back(header.str());
       res.lines.push_back("LAST_OP_TIMING");
       for (uint8_t i = 0; i < context.controller().motorCount(); ++i) {
@@ -593,35 +588,35 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
     }
     uint32_t mask;
     if (!ParseIdMask(rest, mask, context.controller().motorCount())) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
       return CommandResult::Error(eo.str());
     }
     uint8_t id = 0;
     for (; id < context.controller().motorCount(); ++id) if (mask & (1u << id)) break;
     if (id >= context.controller().motorCount()) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E02 BAD_ID";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
       return CommandResult::Error(eo.str());
     }
     const MotorState &s = context.controller().state(id);
     std::ostringstream os;
-    os << "CTRL:ACK CID=" << cid << " LAST_OP_TIMING ongoing=" << (s.last_op_ongoing ? 1 : 0)
+    os << "CTRL:ACK msg_id=" << msg_id << " LAST_OP_TIMING ongoing=" << (s.last_op_ongoing ? 1 : 0)
        << " id=" << static_cast<int>(id)
        << " est_ms=" << s.last_op_est_ms
        << " started_ms=" << s.last_op_started_ms;
     if (!s.last_op_ongoing) os << " actual_ms=" << s.last_op_last_ms;
     return CommandResult::SingleLine(os.str());
   }
-  std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+  std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
   return CommandResult::Error(eo.str());
 }
 
 CommandResult QueryCommandHandler::handleSet(const std::string &args, CommandExecutionContext &context) {
-  uint32_t cid = context.nextCid();
+  std::string msg_id = context.nextMsgId();
   std::string payload = Trim(args);
   std::string up = ToUpperCopy(payload);
   size_t eq = up.find('=');
   if (eq == std::string::npos) {
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
   std::string key = Trim(up.substr(0, eq));
@@ -629,61 +624,61 @@ CommandResult QueryCommandHandler::handleSet(const std::string &args, CommandExe
   if (key == "THERMAL_LIMITING") {
     if (val == "ON") {
       context.setThermalLimitsEnabled(true);
-      return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+      return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
     } else if (val == "OFF") {
       context.setThermalLimitsEnabled(false);
-      return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+      return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
     }
-    std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
     return CommandResult::Error(eo.str());
   }
   if (key == "SPEED") {
     long v;
     if (!ParseInt(val, v) || v <= 0) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
     for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
       if (context.controller().state(id).moving) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
         return CommandResult::Error(eo.str());
       }
     }
     context.defaultSpeed() = static_cast<int>(v);
-    return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
   }
   if (key == "ACCEL") {
     long v;
     if (!ParseInt(val, v) || v <= 0) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
     for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
       if (context.controller().state(id).moving) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
         return CommandResult::Error(eo.str());
       }
     }
     context.defaultAccel() = static_cast<int>(v);
-    return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
   }
   if (key == "DECEL") {
     long v;
     if (!ParseInt(val, v) || v < 0) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
     for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
       if (context.controller().state(id).moving) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E04 BUSY";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
         return CommandResult::Error(eo.str());
       }
     }
     context.defaultDecel() = static_cast<int>(v);
     context.controller().setDeceleration(context.defaultDecel());
-    return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
   }
-  std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " E03 BAD_PARAM";
+  std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E03 BAD_PARAM";
   return CommandResult::Error(eo.str());
 }
 
@@ -706,33 +701,33 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
 
   if (sub == "RESET") {
     auto before = context.net().status().state;
-    uint32_t cid = context.nextCid();
+    std::string msg_id = context.nextMsgId();
     if (before == State::CONNECTING) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BUSY_CONNECTING";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BUSY_CONNECTING";
       return CommandResult::Error(eo.str());
     }
-    context.setActiveCid(cid);
+    context.setActiveMsgId(msg_id);
     context.net().resetCredentials();
     auto after = context.net().status();
     if (before == State::AP_ACTIVE) {
       std::ostringstream os;
-      os << "CTRL:ACK CID=" << cid << "\n";
-      os << "CTRL: NET:AP_ACTIVE CID=" << cid
+      os << "CTRL:ACK msg_id=" << msg_id << "\n";
+      os << "CTRL: NET:AP_ACTIVE msg_id=" << msg_id
          << " ssid=" << after.ssid.data()
          << " ip=" << after.ip.data();
-      context.clearActiveCid();
+      context.clearActiveMsgId();
       CommandResult res;
       res.lines = Split(os.str(), '\n');
       return res;
     }
-    return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
   }
 
   if (sub == "STATUS") {
     auto s = context.net().status();
-    uint32_t cid = context.nextCid();
+    std::string msg_id = context.nextMsgId();
     std::ostringstream os;
-    os << "CTRL:ACK CID=" << cid << ' ' << "state=";
+    os << "CTRL:ACK msg_id=" << msg_id << ' ' << "state=";
     if (s.state == State::AP_ACTIVE) os << "AP_ACTIVE";
     else if (s.state == State::CONNECTING) os << "CONNECTING";
     else if (s.state == State::CONNECTED) os << "CONNECTED";
@@ -750,50 +745,50 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
   }
 
   if (sub == "SET") {
-    uint32_t cid = context.nextCid();
+    std::string msg_id = context.nextMsgId();
     if (context.net().status().state == State::CONNECTING) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BUSY_CONNECTING";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BUSY_CONNECTING";
       return CommandResult::Error(eo.str());
     }
     auto toks = ParseCsvQuoted(a);
     if (toks.size() != 3) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
     const std::string &ssid = toks[1];
     const std::string &pass = toks[2];
     if (ssid.empty() || ssid.size() > 32) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
     if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
       if (pass.size() > 0 && pass.size() < 8) {
-        std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BAD_PARAM PASS_TOO_SHORT";
+        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM PASS_TOO_SHORT";
         return CommandResult::Error(eo.str());
       }
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_BAD_PARAM";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
       return CommandResult::Error(eo.str());
     }
-    context.setActiveCid(cid);
+    context.setActiveMsgId(msg_id);
     bool ok = context.net().setCredentials(ssid.c_str(), pass.c_str());
     if (!ok) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_SAVE_FAILED";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_SAVE_FAILED";
       return CommandResult::Error(eo.str());
     }
-    return CommandResult::SingleLine("CTRL:ACK CID=" + std::to_string(cid));
+    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
   }
 
   if (sub == "LIST") {
-    uint32_t cid = context.nextCid();
+    std::string msg_id = context.nextMsgId();
     if (context.net().status().state != State::AP_ACTIVE) {
-      std::ostringstream eo; eo << "CTRL:ERR CID=" << cid << " NET_SCAN_AP_ONLY";
+      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_SCAN_AP_ONLY";
       return CommandResult::Error(eo.str());
     }
     CommandResult res;
     bool need_newline = false;
 
     std::ostringstream ack;
-    ack << "CTRL:ACK CID=" << cid << " scanning=1";
+    ack << "CTRL:ACK msg_id=" << msg_id << " scanning=1";
     if (!context.printCtrlLineImmediate(ack.str())) {
       res.lines.push_back(ack.str());
       need_newline = true;
@@ -803,7 +798,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
     int n = context.net().scanNetworks(nets, 12, true);
 
     std::ostringstream header;
-    header << "NET:LIST CID=" << cid;
+    header << "NET:LIST msg_id=" << msg_id;
     if (!context.printCtrlLineImmediate(header.str())) {
       res.lines.push_back(header.str());
       need_newline = true;
@@ -829,7 +824,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
     return res;
   }
 
-  std::ostringstream eo; eo << "CTRL:ERR CID=" << context.nextCid() << " E03 BAD_PARAM";
+  std::ostringstream eo; eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E03 BAD_PARAM";
   return CommandResult::Error(eo.str());
 }
 

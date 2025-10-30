@@ -23,9 +23,9 @@ CommandResult CommandRouter::dispatch(const ParsedCommand &command,
       return handler->execute(command, context, now_ms);
     }
   }
-  return CommandResult::Error("CTRL:ERR CID=" + std::to_string(context.nextCid()) + " E01 BAD_CMD");
+  std::string msg_id = context.nextMsgId();
+  return CommandResult::Error("CTRL:ERR msg_id=" + msg_id + " E01 BAD_CMD");
 }
 
 } // namespace command
 } // namespace motor
-

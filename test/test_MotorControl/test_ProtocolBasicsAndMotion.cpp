@@ -7,6 +7,7 @@
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/MotionKinematics.h"
+#include "test_common/TestTimeout.h"
 
 static MotorCommandProcessor proto;
 
@@ -70,7 +71,7 @@ void test_help_format() {
 
 void test_get_all_settings_single_line() {
   std::string r = proto.processLine("GET", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
@@ -226,6 +227,7 @@ void test_multi_cmd_accept_disjoint() {
 }
 
 void test_multi_cmd_reject_overlap_simple() {
+  TEST_TIMEOUT_GUARD(500);
   auto r = proto.processLine("WAKE:0;SLEEP:0", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" E03 BAD_PARAM MULTI_CMD_CONFLICT") != std::string::npos);
@@ -250,7 +252,7 @@ void test_multi_cmd_whitespace_and_case() {
   auto lines = split_lines(r);
   // With aggregation, MOVE/HOME batch returns single consolidated OK with est_ms
   TEST_ASSERT_EQUAL_INT(1, (int)lines.size());
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(lines[0].find(" est_ms=") != std::string::npos);
 }
 

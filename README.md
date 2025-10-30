@@ -108,29 +108,46 @@ Prereqs
 Build and Upload (ESP32)
 
 - Configure your board pins/wiring: [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp), [wiring guide](./docs/esp32-74hc595-wiring.md)
-- Build firmware: `pio run -e esp32dev`
-- Upload firmware: `pio run -e esp32dev -t upload`
-- Build portal filesystem image: `pio run -e esp32dev -t buildfs`
-- Upload portal filesystem: `pio run -e esp32dev -t uploadfs`
+- Build firmware: `pio run -e esp32DedicatedStep`
+- Upload firmware: `pio run -e esp32DedicatedStep -t upload`
+- Build portal filesystem image: `pio run -e esp32DedicatedStep -t buildfs`
+- Upload portal filesystem: `pio run -e esp32DedicatedStep -t uploadfs`
 - Monitor: `pio device monitor -b 115200`
   - On boot you should see: `CTRL:READY Serial v1 — send HELP`
 
 Host CLI
 
 - From repo root: `python -m serial_cli --help`
+- Dependencies:
+  - Serial transport: `pip install pyserial`
+  - MQTT presence transport / TUI: `pip install paho-mqtt textual rich`
 
 - Examples:
   - `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
+  - `python -m serial_cli interactive --transport mqtt`  # subscribes to MQTT presence topics and renders device/ip/msg_id updates (commands disabled)
   - `python -m serial_cli help --port /dev/ttyUSB0`
   - `python -m serial_cli status --port /dev/ttyUSB0`
+  - `python -m serial_cli status --transport mqtt --timeout 1.5`
   - `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
   - `python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800 --backoff 150`
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
+
+MQTT transport routes STATUS/TUI tables exclusively from retained presence messages on `devices/<mac>/state`. When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane surfaces presence flips with MAC, IP, and `msg_id` annotations.
 
 Tests
 
 - Native: `pio test -e native`
 - On‑Device: `pio test -e esp32dev`
+
+## MQTT Presence
+
+- On successful broker handshake the firmware emits `CTRL: MQTT_CONNECTED broker=<host>:<port>` once per boot.
+- Publishes retained presence on `devices/<mac>/state` using QoS 1.
+- Ready payload format: `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` (hardware-seeded UUIDv4 shared with serial acknowledgments).
+- Offline LWT payload: `{"state":"offline"}` retained on the same topic.
+- Publishes every ~1 Hz while connected and immediately when motion or power state flips.
+- Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
+- Follow-up: add runtime SET/GET verbs for MQTT broker host/user/pass (tracked as a deferred implementation task).
 
 ## Wi‑Fi Onboarding
 
@@ -178,9 +195,9 @@ All endpoints respond with compact JSON (`Content-Type: application/json`) and s
 
 ## Setup & Tuning Knobs
 
- - Build flags and test routing: [platformio.ini](./platformio.ini)
-  - `-DUSE_STUB_BACKEND` selects the stub backend (hardware is default)
-  - Default test filter limits on‑device tests to driver layer
+- Build flags and test routing: [platformio.ini](./platformio.ini)
+- `-DUSE_STUB_BACKEND` selects the stub backend (hardware is default)
+- Default test filter limits on‑device tests to driver layer
 - Motion/limits constants: [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h)
   - Defaults: `DEFAULT_SPEED_SPS`, `DEFAULT_ACCEL_SPS2`
   - Limits: `MIN_POS_STEPS`, `MAX_POS_STEPS`

@@ -2,6 +2,8 @@
 #if defined(ARDUINO)
 #include <Arduino.h>
 #include "MotorControl/MotorCommandProcessor.h"
+#include "mqtt/MqttPresenceClient.h"
+#include "net_onboarding/NetSingleton.h"
 
 // Defer heavy backend initialization until setup() runs, to avoid
 // hardware init during static construction before Arduino core is ready.
@@ -9,6 +11,7 @@ static MotorCommandProcessor *commandProcessor = nullptr;
 static char inputBuf[256];
 static size_t inputLen = 0;
 static uint32_t ignore_until_ms = 0; // grace period to ignore deploy-time noise
+static mqtt::AsyncMqttPresenceClient *presenceClient = nullptr;
 
 void serial_console_setup()
 {
@@ -21,6 +24,12 @@ void serial_console_setup()
   if (!commandProcessor)
   {
     commandProcessor = new MotorCommandProcessor();
+  }
+
+  if (!presenceClient)
+  {
+    presenceClient = new mqtt::AsyncMqttPresenceClient(net_onboarding::Net());
+    presenceClient->begin();
   }
 
   // After flashing/deploy, host tools may send text into the port.
@@ -103,6 +112,24 @@ void serial_console_tick()
   if (commandProcessor)
   {
     commandProcessor->tick(millis());
+  }
+
+  if (presenceClient && commandProcessor)
+  {
+    bool any_moving = false;
+    bool any_awake = false;
+    MotorController &mc = commandProcessor->controller();
+    size_t motor_count = mc.motorCount();
+    for (size_t i = 0; i < motor_count; ++i)
+    {
+      const MotorState &s = mc.state(i);
+      if (s.moving) any_moving = true;
+      if (s.awake) any_awake = true;
+      if (any_moving && any_awake) break;
+    }
+    presenceClient->updateMotionState(any_moving);
+    presenceClient->updatePowerState(any_awake);
+    presenceClient->loop(millis());
   }
 
   // Debug heartbeat removed after stabilization

@@ -3,8 +3,7 @@
 #include "MotorControl/MotorController.h"
 #include "net_onboarding/NetOnboarding.h"
 
-#include <cstdint>
-#include <functional>
+#include <string>
 
 namespace motor {
 namespace command {
@@ -29,9 +28,9 @@ public:
   int &defaultAccel();
   int &defaultDecel();
 
-  uint32_t nextCid() const;
-  void setActiveCid(uint32_t cid) const;
-  void clearActiveCid() const;
+  std::string nextMsgId() const;
+  void setActiveMsgId(const std::string &msg_id) const;
+  void clearActiveMsgId() const;
   bool printCtrlLineImmediate(const std::string &line) const;
 
   net_onboarding::NetOnboarding &net() const;

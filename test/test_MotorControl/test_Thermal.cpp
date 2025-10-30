@@ -62,7 +62,7 @@ void test_preflight_warn_when_disabled_then_ok() {
   bool r1_warn = (r1.rfind("CTRL:WARN ", 0) == 0) && (r1.find(" THERMAL_REQ_GT_MAX") != std::string::npos);
   if (!r1_warn) { std::printf("[DEBUG] r1 unexpected response:\n%s\n", r1.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r1_warn, "Expected r1 to start with CTRL:WARN THERMAL_REQ_GT_MAX");
-  bool r1_ok = (r1.find("\nCTRL:ACK CID=") != std::string::npos) && (r1.find(" est_ms=") != std::string::npos);
+  bool r1_ok = (r1.find("\nCTRL:ACK msg_id=") != std::string::npos) && (r1.find(" est_ms=") != std::string::npos);
   if (!r1_ok) { std::printf("[DEBUG] r1 missing final ACK est_ms:\n%s\n", r1.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r1_ok, "Expected r1 to include final CTRL:ACK est_ms");
 
@@ -74,7 +74,7 @@ void test_preflight_warn_when_disabled_then_ok() {
   bool r2_warn = (r2.rfind("CTRL:WARN ", 0) == 0) && (r2.find(" THERMAL_NO_BUDGET") != std::string::npos);
   if (!r2_warn) { std::printf("[DEBUG] r2 unexpected response:\n%s\n", r2.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r2_warn, "Expected r2 to start with CTRL:WARN THERMAL_NO_BUDGET");
-  bool r2_ok = (r2.find("\nCTRL:ACK CID=") != std::string::npos) && (r2.find(" est_ms=") != std::string::npos);
+  bool r2_ok = (r2.find("\nCTRL:ACK msg_id=") != std::string::npos) && (r2.find(" est_ms=") != std::string::npos);
   if (!r2_ok) { std::printf("[DEBUG] r2 missing final ACK est_ms:\n%s\n", r2.c_str()); std::fflush(stdout); }
   TEST_ASSERT_TRUE_MESSAGE(r2_ok, "Expected r2 to include final CTRL:ACK est_ms");
 }
@@ -93,14 +93,14 @@ void test_move_ok_returns_estimate() {
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=4000", 0).rfind("CTRL:ACK", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=16000", 0).rfind("CTRL:ACK", 0) == 0);
   std::string r = p.processLine("MOVE:0,10", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" est_ms=") != std::string::npos);
 }
 
 void test_home_ok_returns_estimate() {
   MotorCommandProcessor p;
   std::string r = p.processLine("HOME:0", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" est_ms=") != std::string::npos);
 }
 
@@ -109,7 +109,7 @@ void test_last_op_timing_move() {
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1000", 0).rfind("CTRL:ACK", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=1000", 0).rfind("CTRL:ACK", 0) == 0);
   std::string r = p.processLine("MOVE:0,50", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" est_ms=") != std::string::npos);
   // During operation, device may report either pre-start or moving state; skip strict check
   // After completion
@@ -123,7 +123,7 @@ void test_last_op_timing_move() {
 void test_last_op_timing_home() {
   MotorCommandProcessor p;
   std::string r = p.processLine("HOME:0", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK CID=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" est_ms=") != std::string::npos);
   // During operation, behavior may vary by timing; validate post-completion only
   p.tick(2000);

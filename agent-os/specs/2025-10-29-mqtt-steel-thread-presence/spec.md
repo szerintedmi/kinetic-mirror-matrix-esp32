@@ -11,11 +11,11 @@ Deliver a minimal MQTT presence pathway that broadcasts node availability with r
 ## Core Requirements
 ### Functional Requirements
 - Firmware connects to the MQTT broker using the existing Wi-Fi session and the default broker host/user/pass compiled in `include/secrets.h`; no new credential storage is introduced yet.
-- Use the device MAC (lowercase hex without separators) to form the topic `devices/<mac>/state`; publish a retained QoS1 birth message immediately after connect with payload `state=ready ip=<ipv4>`, where `<ipv4>` is the dotted quad pulled from NetOnboarding status.
-- Configure a retained QoS1 LWT payload of `state=offline` on the same topic; no intermediate "connecting" state is emitted.
+- Use the device MAC (lowercase hex without separators) to form the topic `devices/<mac>/state`; publish a retained QoS1 birth message immediately after connect with JSON payload `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}`, where `<ipv4>` is the dotted quad pulled from NetOnboarding status.
+- Configure a retained QoS1 LWT payload of `{"state":"offline"}` on the same topic; no intermediate "connecting" state is emitted.
 - Push presence updates at ~1 Hz while connected and immediately on state changes (wake, sleep, motion start/stop) so the CLI/TUI sees flips within the `<25 ms` / `<100 ms` SLA when the broker is reachable.
 - If broker connection fails, log a single `CTRL:WARN MQTT_CONNECT_FAILED` line (serial) and keep executing motor work; do not auto-retry within this steel thread.
-- Generate a UUIDv4 `msg_id` for every MQTT publication using an ESP32-safe entropy source (e.g., `esp_random` via `k0i05/esp_uuid`), attach it to presence payloads as `msg_id=<uuid>`, and expose the generator through the existing command pipeline context.
+- Generate a UUIDv4 `msg_id` for every MQTT publication using an ESP32-safe entropy source (e.g., `esp_random` via `k0i05/esp_uuid`), attach it to presence payloads as the JSON field `"msg_id":"<uuid>"`, and expose the generator through the existing command pipeline context.
 - After the MQTT pathway is validated, switch serial command acknowledgments to reuse the same UUIDs instead of the current monotonic CID to maintain correlation parity across transports.
 - Extend `tools/serial_cli` so both the command-line utilities and interactive TUI accept `--transport {serial,mqtt}` (default serial). When `mqtt` is selected, connect with `paho-mqtt` using the same default host/user/pass, subscribe to `devices/+/state`, and drive the TUI status table from MQTT presence messages.
 - While in MQTT mode, non-presence CLI commands (`move`, `home`, `wake`, etc.) may respond with `error: MQTT transport not implemented yet` without attempting broker command dispatch; STATUS views must be populated exclusively from MQTT data.
@@ -43,7 +43,7 @@ No visual assets provided; reuse existing CLI/TUI styling and layouts.
 
 ## Technical Approach
 - Database: No new storage; broker defaults remain compiled in `include/secrets.h`. Document follow-up task for runtime SET/GET support using Preferences once MQTT path is proven.
-- API: Topics `devices/<mac>/state` (QoS1 retained). Payload schema `state=<ready|offline> ip=<ipv4> msg_id=<uuid>`. LWT mirrors birth payload with `state=offline` and no IP.
+- API: Topics `devices/<mac>/state` (QoS1 retained). Payload schema `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` for ready publications and `{"state":"offline"}` for the LWT.
 - Frontend: Extend `serial_cli` argument parsing to add `--transport`, reuse existing renderers to display latest MQTT-derived status rows, and annotate unavailable commands when MQTT mode is active.
 - Testing: Add PlatformIO native unit tests for UUID formatting and payload builder; add host-side integration test (mock MQTT broker or loopback) that publishes synthetic presence messages and asserts CLI/TUI parses them; perform bench validation that a node connect/disconnect flips state within latency targets.
 
@@ -54,7 +54,7 @@ No visual assets provided; reuse existing CLI/TUI styling and layouts.
 - Automated broker reconnection logic or reboot-triggered retries beyond the initial connection attempt.
 
 ## Success Criteria
-- Node publishes retained `state=ready` with IP and UUID immediately after broker connection and retained `state=offline` on LWT when powered down or disconnected.
+- Node publishes retained JSON presence `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` immediately after broker connection and retains `{"state":"offline"}` as the LWT when powered down or disconnected.
 - CLI/TUI invoked with `--transport mqtt` shows presence rows updating from MQTT messages and reports `error: MQTT transport not implemented yet` when other commands are issued.
 - Serial acknowledgments switch to UUID-based IDs without breaking existing tests, and UUIDs match those used in MQTT presence publications once the migration lands.
 - Bench test verifies presence flips meet the `<25 ms` / `<100 ms` performance target on a local Mosquitto broker, with firmware continuing motor operations when the broker is unavailable.

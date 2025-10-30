@@ -53,6 +53,25 @@ class TextualUI(BaseUI):
             ("actual_ms", "actual_ms", 12),
         ]
 
+        transport = getattr(worker, "transport", "serial")
+        columns_from_worker: Optional[List[Tuple[str, str, int]]] = None
+        if hasattr(worker, "get_table_columns"):
+            try:
+                raw_cols = worker.get_table_columns()
+                columns_from_worker = [
+                    (
+                        str(col[0]),
+                        str(col[1] if len(col) > 1 else col[0]),
+                        int(col[2] if len(col) > 2 else 12),
+                    )
+                    for col in raw_cols
+                ]
+            except Exception:
+                columns_from_worker = None
+        TABLE_COLS: List[Tuple[str, str, int]] = (
+            columns_from_worker if columns_from_worker else STATUS_COLS
+        )
+
         class HelpOverlay(ModalScreen[None]):
             """Modal help overlay with keys and device HELP text."""
 
@@ -202,6 +221,8 @@ class TextualUI(BaseUI):
                 # When they navigate back past the newest history item,
                 # we restore this text instead of clearing the field.
                 self._hist_buffer: Optional[str] = None
+                self._columns: List[Tuple[str, str, int]] = list(TABLE_COLS)
+                self._transport = transport.lower()
 
             def compose(self) -> ComposeResult:  # type: ignore[override]
                 yield Header(show_clock=False)
@@ -221,7 +242,8 @@ class TextualUI(BaseUI):
                 # Prepare table columns once
                 table = self.query_one("#status_table", DataTable)
                 if not self._cols_ready:
-                    for key, label, width in STATUS_COLS:
+                    table.clear(columns=True)
+                    for key, label, width in self._columns:
                         table.add_column(label, width=width)
                     table.cursor_type = "row"
                     table.zebra_stripes = True
@@ -250,7 +272,10 @@ class TextualUI(BaseUI):
                 except Exception:
                     hz = 2.0
                 self.set_interval(1.0 / hz, self._refresh)
-                self.query_one("#cmd_input", Input).focus()
+                cmd_input = self.query_one("#cmd_input", Input)
+                if self._transport == "mqtt":
+                    cmd_input.placeholder = "MQTT presence mode (commands disabled)"
+                cmd_input.focus()
 
             # Add Help in the Command Palette (Ctrl+P)
             def get_system_commands(self, screen):  # type: ignore[override]
@@ -342,64 +367,80 @@ class TextualUI(BaseUI):
                 try:
                     import time as _t
 
-                    age = 0.0
-                    if last_ts:
-                        age = max(0.0, _t.time() - last_ts)
+                    age = max(0.0, _t.time() - last_ts) if last_ts else 0.0
                 except Exception:
                     age = 0.0
-                thermal_text = ""
-                try:
-                    if hasattr(worker, "get_thermal_state"):
-                        t_state = worker.get_thermal_state()
-                    else:
-                        t_state = None
-                    if t_state is not None:
-                        enabled, max_budget = t_state
-                        thermal_text = (
-                            f"thermal limiting=[green]ON[/]"
-                            if enabled
-                            else f"thermal limiting=[red]OFF[/]"
-                        )
-                        if isinstance(max_budget, int):
-                            thermal_text += f" (max={max_budget}s)"
-                except Exception:
-                    thermal_text = ""
-                # Wi‑Fi banner (NET:STATUS)
-                wifi_banner = ""
-                try:
-                    if hasattr(worker, "get_net_info"):
+
+                net: Dict[str, str] = {}
+                if hasattr(worker, "get_net_info"):
+                    try:
                         net = worker.get_net_info() or {}
-                        state = (net.get("state") or "").upper()
-                        ssid = net.get("ssid") or ""
-                        ip = net.get("ip") or ""
-                        if state == "CONNECTED":
-                            wifi_banner = f"SSID: [green]{ssid}[/] connected [green]({ip})[/]"
-                        elif state == "AP_ACTIVE":
-                            wifi_banner = f"SSID: [yellow]{ssid}[/] AP mode [yellow]({ip})[/]"
-                        elif state:
-                            wifi_banner = f"SSID: [red]{ssid or 'N/A'}[/] disconnected"
-                except Exception:
+                    except Exception:
+                        net = {}
+
+                transport = (net.get("transport") or self._transport or "").lower()
+                status_text = ""
+                if transport == "mqtt":
+                    host = net.get("host") or "-"
+                    port = net.get("port") or "-"
+                    status_text = f"transport=mqtt broker={host}:{port} last update={age:.1f}s"
+                else:
+                    thermal_text = ""
+                    if hasattr(worker, "get_thermal_state"):
+                        try:
+                            t_state = worker.get_thermal_state()
+                        except Exception:
+                            t_state = None
+                        if t_state is not None:
+                            enabled, max_budget = t_state
+                            thermal_text = (
+                                f"thermal limiting=[green]ON[/]"
+                                if enabled
+                                else f"thermal limiting=[red]OFF[/]"
+                            )
+                            if isinstance(max_budget, int):
+                                thermal_text += f" (max={max_budget}s)"
                     wifi_banner = ""
-                status = f"port={worker.port} baud={worker.baud} last status={age:.1f}s  {thermal_text}  {wifi_banner}"
-                self.query_one("#status_bar", Static).update(status)
+                    state = (net.get("state") or "").upper()
+                    ssid = net.get("ssid") or ""
+                    ip = net.get("ip") or ""
+                    if state == "CONNECTED":
+                        wifi_banner = f"SSID: [green]{ssid}[/] connected [green]({ip})[/]"
+                    elif state == "AP_ACTIVE":
+                        wifi_banner = f"SSID: [yellow]{ssid}[/] AP mode [yellow]({ip})[/]"
+                    elif state:
+                        wifi_banner = f"SSID: [red]{ssid or 'N/A'}[/] disconnected"
+                    port_val = getattr(worker, "port", "-")
+                    baud_val = getattr(worker, "baud", "-")
+                    status_text = f"port={port_val} baud={baud_val} last status={age:.1f}s"
+                    if thermal_text:
+                        status_text += f"  {thermal_text}"
+                    if wifi_banner:
+                        status_text += f"  {wifi_banner}"
+                if err:
+                    status_text += f"  error={err}"
+                self.query_one("#status_bar", Static).update(status_text.strip())
 
                 # Update table - simple replace for now
                 table = self.query_one("#status_table", DataTable)
                 try:
-                    # Build a normalized list of row tuples matching STATUS_COLS order
                     data: List[List[str]] = []
                     for r in rows or []:
-                        row = [str(r.get(key, "")) for key, _label, _w in STATUS_COLS]
+                        row: List[str] = []
+                        for key, _label, _w in self._columns:
+                            val = r.get(key, "")
+                            if key == "age_s":
+                                try:
+                                    val = f"{float(val):.1f}"
+                                except Exception:
+                                    val = ""
+                            row.append(str(val))
                         data.append(row)
                     if table.row_count != len(data):
                         table.clear()
-                        for _key, label, width in STATUS_COLS:
-                            # Columns are already set in on_mount
-                            pass
                         for rec in data:
                             table.add_row(*rec)
                     else:
-                        # Replace existing rows in place
                         for i, rec in enumerate(data):
                             table.update_row(i, rec)
                 except Exception:

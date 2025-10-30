@@ -6,11 +6,14 @@
 
 #include <cctype>
 #include <cstdlib>
+#include <cstdio>
+#include <cstring>
 
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/command/CommandParser.h"
 #include "MotorControl/command/CommandUtils.h"
 #include "MotorControl/command/ResponseFormatter.h"
+#include "net_onboarding/MessageId.h"
 
 using motor::command::CommandParser;
 using motor::command::ParsedCommand;
@@ -69,13 +72,21 @@ void test_execute_reports_errors_structurally() {
   TEST_ASSERT_EQUAL_STRING(formatted.c_str(), structured.lines[0].c_str());
 }
 
-static uint32_t cid_from(const std::string &line) {
-  auto pos = line.find("CID=");
+static std::string msg_id_from(const std::string &line) {
+  auto pos = line.find("msg_id=");
   TEST_ASSERT_TRUE(pos != std::string::npos);
-  pos += 4;
+  pos += 6;  // skip past 'msg_id='
   size_t end = pos;
-  while (end < line.size() && isdigit(static_cast<unsigned char>(line[end]))) ++end;
-  return static_cast<uint32_t>(strtoul(line.substr(pos, end - pos).c_str(), nullptr, 10));
+  while (end < line.size() && !isspace(static_cast<unsigned char>(line[end]))) {
+    ++end;
+  }
+  auto id = line.substr(pos, end - pos);
+  TEST_ASSERT_TRUE(id.size() == 36);
+  TEST_ASSERT_EQUAL_CHAR('-', id[8]);
+  TEST_ASSERT_EQUAL_CHAR('-', id[13]);
+  TEST_ASSERT_EQUAL_CHAR('-', id[18]);
+  TEST_ASSERT_EQUAL_CHAR('-', id[23]);
+  return id;
 }
 
 void test_batch_aggregates_estimate() {
@@ -88,14 +99,22 @@ void test_batch_aggregates_estimate() {
 }
 
 void test_execute_cid_increments() {
+  net_onboarding::SetMsgIdGenerator([]() mutable {
+    static uint64_t counter = 0;
+    char buf[37];
+    std::snprintf(buf, sizeof(buf),
+                  "00000000-0000-4000-8000-%012llx",
+                  static_cast<unsigned long long>(counter++));
+    return std::string(buf);
+  });
   MotorCommandProcessor proc;
   auto first = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(first.is_error);
   TEST_ASSERT_TRUE(first.lines.size() >= 1);
-  uint32_t cid1 = cid_from(first.lines[0]);
   auto second = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(second.is_error);
   TEST_ASSERT_TRUE(second.lines.size() >= 1);
-  uint32_t cid2 = cid_from(second.lines[0]);
-  TEST_ASSERT_TRUE(cid2 != cid1);
+  TEST_ASSERT_TRUE_MESSAGE(std::strcmp(first.lines[0].c_str(), second.lines[0].c_str()) != 0,
+                          ("duplicate msg_id first=" + first.lines[0] + " second=" + second.lines[0]).c_str());
+  net_onboarding::ResetMsgIdGenerator();
 }

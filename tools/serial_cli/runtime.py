@@ -57,7 +57,7 @@ class SerialWorker(threading.Thread):
         self._connected_err: Optional[str] = None
         self._pending: Optional[PendingCommand] = None
         self._buffer: str = ""
-        self._background_cids: Dict[int, float] = {}
+        self._background_ids: Dict[str, float] = {}
         self._last_status_rows: List[Dict[str, str]] = []
         self._last_status_text: str = ""
         self._net_info: Dict[str, str] = {}
@@ -269,9 +269,9 @@ class SerialWorker(threading.Thread):
 
         if upper.startswith("CTRL:ACK") or upper.startswith("CTRL:ERR"):
             pending.ack_seen = True
-            cid = self._extract_cid(line)
-            if cid is not None and cid in self._background_cids:
-                self._background_cids.pop(cid, None)
+            msg_id = self._extract_msg_id(line)
+            if msg_id is not None and msg_id in self._background_ids:
+                self._background_ids.pop(msg_id, None)
 
         if "SCANNING=1" in upper:
             pending.stream_deadline = max(
@@ -377,33 +377,32 @@ class SerialWorker(threading.Thread):
             upper.startswith("CTRL: NET:")
             or (upper.startswith("CTRL:ERR") and " NET_" in upper)
         ):
-            self._maybe_track_background_cid(line)
+            self._maybe_track_background_id(line)
             return
         self._log_line(line)
 
     def _log_line(self, line: str) -> None:
-        self._maybe_track_background_cid(line)
+        self._maybe_track_background_id(line)
         with self._lock:
             self._log.append(line)
 
-    def _maybe_track_background_cid(self, line: str) -> None:
-        cid = self._extract_cid(line)
-        if cid is None:
+    def _maybe_track_background_id(self, line: str) -> None:
+        msg_id = self._extract_msg_id(line)
+        if msg_id is None:
             return
         now = time.monotonic()
-        self._background_cids[cid] = now + 2.0
-        stale = [k for k, t in self._background_cids.items() if t < now]
+        self._background_ids[msg_id] = now + 2.0
+        stale = [k for k, t in self._background_ids.items() if t < now]
         for k in stale:
-            self._background_cids.pop(k, None)
+            self._background_ids.pop(k, None)
 
     # ------------------------------------------------------------------
-    def _extract_cid(self, line: str) -> Optional[int]:
+    def _extract_msg_id(self, line: str) -> Optional[str]:
         for tok in line.split():
-            if tok.startswith("CID="):
-                try:
-                    return int(tok.split("=", 1)[1])
-                except Exception:
-                    return None
+            if tok.startswith("msg_id="):
+                value = tok.split("=", 1)[1]
+                if value:
+                    return value
         return None
 
     def _record_disconnect(self, exc: Exception) -> None:

@@ -7,7 +7,7 @@ We're continuing our implementation of MQTT Steel Thread: Presence by implementi
 **Dependencies:** None
 
 - [ ] 1.0 Implement `MqttPresenceClient` that wraps AsyncMqttClient, connects with broker defaults from `include/secrets.h`, and registers retained birth/LWT payloads on `devices/<mac>/state`.
-- [ ] 1.1 Derive lowercase MAC topic IDs and build payloads `state=ready ip=<ipv4> msg_id=<uuid>` by pulling identity data from NetOnboarding; ensure LWT publishes `state=offline`.
+- [ ] 1.1 Derive lowercase MAC topic IDs and build JSON payloads `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` by pulling identity data from NetOnboarding; ensure the retained LWT publishes `{"state":"offline"}`.
 - [ ] 1.2 Emit presence updates at ~1 Hz and immediately on motion/power state changes without blocking motor tasks; keep firmware operational when broker unreachable and log a single `CTRL:WARN MQTT_CONNECT_FAILED` event.
 - [ ] 1.3 Integrate UUID generation (UUIDv4) using a hardware-seeded entropy source, expose it through CommandExecutionContext, and tag every MQTT publication with `msg_id`.
 - [ ] 1.4 After presence publishing is validated, migrate serial command acknowledgments to reuse the new UUIDs instead of monotonic CIDs and update related formatting/helpers.
@@ -15,7 +15,7 @@ We're continuing our implementation of MQTT Steel Thread: Presence by implementi
 - [ ] 1.6 Write 2-4 focused unit tests (native/host where possible) covering payload formatting, UUID propagation, and the broker-failure log path; run only these new tests.
 
 **Acceptance Criteria:**
-- Flash firmware, connect to local Mosquitto with defaults, and confirm retained `state=ready ip=<ipv4> msg_id=<uuid>` appears on `devices/<mac>/state`; power-cycle node to see retained `state=offline` and single `CTRL:WARN MQTT_CONNECT_FAILED` when broker is unreachable.
+- Flash firmware, connect to local Mosquitto with defaults, and confirm retained `{"state":"ready","ip":"<ipv4>","msg_id":"<uuid>"}` appears on `devices/<mac>/state`; power-cycle node to see retained `{"state":"offline"}` and single `CTRL:WARN MQTT_CONNECT_FAILED` when broker is unreachable.
 - Run the 2-4 new unit tests and verify they pass.
 
 ## Understand the context
