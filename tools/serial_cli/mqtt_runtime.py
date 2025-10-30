@@ -222,10 +222,8 @@ class MqttWorker(threading.Thread):
             msg_id = parts.get("msg_id", "")
         ts = timestamp if timestamp is not None else time.time()
 
-        log_line = None
         with self._lock:
             entry = self._presence.get(mac, {})
-            duplicate = msg_id and entry.get("msg_id") == msg_id
             entry.update(
                 {
                     "state": state,
@@ -236,10 +234,6 @@ class MqttWorker(threading.Thread):
             )
             self._presence[mac] = entry
             self._last_update_ts = ts
-            if not duplicate:
-                log_line = f"[{state or '?'}] {mac} ip={ip or '-'} msg_id={msg_id or '-'}"
-        if log_line:
-            self._append_log(log_line)
 
     # ------------------------------------------------------------------
     def _append_log(self, line: str) -> None:
