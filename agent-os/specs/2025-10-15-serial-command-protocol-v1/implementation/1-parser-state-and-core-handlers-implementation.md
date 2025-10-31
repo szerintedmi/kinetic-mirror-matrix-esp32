@@ -29,7 +29,7 @@ Implement protocol core: robust line reader, command parser, in-memory motor bac
 
 ## Key Implementation Details
 ### Protocol and Grammar
-- Verbs: HELP, STATUS, WAKE, SLEEP, MOVE, HOME
+- Actions: HELP, STATUS, WAKE, SLEEP, MOVE, HOME
 - Grammar:
   - `MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]`
   - `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]`

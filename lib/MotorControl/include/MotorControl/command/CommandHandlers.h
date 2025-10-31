@@ -7,7 +7,7 @@ namespace command {
 
 class MotorCommandHandler : public CommandHandler {
 public:
-  bool canHandle(const std::string &verb) const override;
+  bool canHandle(const std::string &action) const override;
   CommandResult execute(const ParsedCommand &command,
                         CommandExecutionContext &context,
                         uint32_t now_ms) override;
@@ -21,7 +21,7 @@ private:
 
 class QueryCommandHandler : public CommandHandler {
 public:
-  bool canHandle(const std::string &verb) const override;
+  bool canHandle(const std::string &action) const override;
   CommandResult execute(const ParsedCommand &command,
                         CommandExecutionContext &context,
                         uint32_t now_ms) override;
@@ -35,7 +35,7 @@ private:
 
 class NetCommandHandler : public CommandHandler {
 public:
-  bool canHandle(const std::string &verb) const override;
+  bool canHandle(const std::string &action) const override;
   CommandResult execute(const ParsedCommand &command,
                         CommandExecutionContext &context,
                         uint32_t now_ms) override;
@@ -43,4 +43,3 @@ public:
 
 } // namespace command
 } // namespace motor
-

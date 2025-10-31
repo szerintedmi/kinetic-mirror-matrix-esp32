@@ -376,6 +376,12 @@ void HardwareMotorController::tick(uint32_t now_ms) {
       motors_[i].homed = true;
       motors_[i].steps_since_home = 0;
       homing_[i].active = false;
+      if (motors_[i].last_op_ongoing) {
+        motors_[i].last_op_ongoing = false;
+        if (motors_[i].last_op_started_ms != 0 && now_ms >= motors_[i].last_op_started_ms) {
+          motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
+        }
+      }
     }
   }
   // Native: start/stop latches handled above; Arduino: adapter handles gating

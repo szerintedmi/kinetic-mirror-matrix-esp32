@@ -13,7 +13,7 @@
 #include "MotorControl/command/CommandParser.h"
 #include "MotorControl/command/CommandUtils.h"
 #include "MotorControl/command/ResponseFormatter.h"
-#include "net_onboarding/MessageId.h"
+#include "transport/MessageId.h"
 
 using motor::command::CommandParser;
 using motor::command::ParsedCommand;
@@ -24,7 +24,7 @@ void test_parser_alias_to_upper() {
   CommandParser parser;
   auto commands = parser.parse("st");
   TEST_ASSERT_EQUAL_UINT32(1, commands.size());
-  TEST_ASSERT_EQUAL_STRING("ST", commands[0].verb.c_str());
+  TEST_ASSERT_EQUAL_STRING("ST", commands[0].action.c_str());
   TEST_ASSERT_TRUE(commands[0].args.empty());
 }
 
@@ -32,9 +32,9 @@ void test_parser_handles_multicommands() {
   CommandParser parser;
   auto commands = parser.parse("move:0,120 ; sleep:0");
   TEST_ASSERT_EQUAL_UINT32(2, commands.size());
-  TEST_ASSERT_EQUAL_STRING("MOVE", commands[0].verb.c_str());
+  TEST_ASSERT_EQUAL_STRING("MOVE", commands[0].action.c_str());
   TEST_ASSERT_EQUAL_STRING("0,120", Trim(commands[0].args).c_str());
-  TEST_ASSERT_EQUAL_STRING("SLEEP", commands[1].verb.c_str());
+  TEST_ASSERT_EQUAL_STRING("SLEEP", commands[1].action.c_str());
 }
 
 void test_parse_csv_with_quotes() {
@@ -99,7 +99,7 @@ void test_batch_aggregates_estimate() {
 }
 
 void test_execute_cid_increments() {
-  net_onboarding::SetMsgIdGenerator([]() mutable {
+  transport::message_id::SetGenerator([]() mutable {
     static uint64_t counter = 0;
     char buf[37];
     std::snprintf(buf, sizeof(buf),
@@ -116,5 +116,5 @@ void test_execute_cid_increments() {
   TEST_ASSERT_TRUE(second.lines.size() >= 1);
   TEST_ASSERT_TRUE_MESSAGE(std::strcmp(first.lines[0].c_str(), second.lines[0].c_str()) != 0,
                           ("duplicate msg_id first=" + first.lines[0] + " second=" + second.lines[0]).c_str());
-  net_onboarding::ResetMsgIdGenerator();
+  transport::message_id::ResetGenerator();
 }

@@ -17,7 +17,7 @@ Standards: `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/sta
     - Defaults: speed=4000, accel=16000 (override via protocol)
   - [ ] 2.3 Enforce sequencing per move
     - Compute/set DIR & SLEEP bits → driver.set_dir_sleep() → start steppers
-  - [ ] 2.4 Map WAKE/SLEEP protocol verbs as overrides
+  - [ ] 2.4 Map WAKE/SLEEP protocol actions as overrides
     - Keep FastAccelStepper auto-sleep; WAKE/SLEEP forces SLEEP bit via driver
   - [ ] 2.5 Integrate backend selection
     - Provide compile-time switch to choose `StubBackend` vs `HardwareBackend`

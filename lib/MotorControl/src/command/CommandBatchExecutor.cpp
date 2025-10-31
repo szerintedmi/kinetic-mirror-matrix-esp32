@@ -44,9 +44,9 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
     seen |= mask;
   }
 
-  // Unknown verb detection
+  // Unknown action detection
   for (const auto &cmd : commands) {
-    if (!router.knowsVerb(cmd.verb)) {
+    if (!router.knowsAction(cmd.action)) {
       std::ostringstream eo;
       eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E01 BAD_CMD";
       return CommandResult::Error(eo.str());
@@ -114,20 +114,20 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   return res;
 }
 
-bool CommandBatchExecutor::isMotionVerb(const std::string &verb) const {
-  return verb == "MOVE" || verb == "M" ||
-         verb == "HOME" || verb == "H" ||
-         verb == "WAKE" || verb == "SLEEP";
+bool CommandBatchExecutor::isMotionAction(const std::string &action) const {
+  return action == "MOVE" || action == "M" ||
+         action == "HOME" || action == "H" ||
+         action == "WAKE" || action == "SLEEP";
 }
 
 uint32_t CommandBatchExecutor::maskFor(const ParsedCommand &command,
                                        const CommandExecutionContext &context) const {
-  if (!isMotionVerb(command.verb)) {
+  if (!isMotionAction(command.action)) {
     return 0;
   }
   uint32_t mask = 0;
-  if (command.verb == "MOVE" || command.verb == "M" ||
-      command.verb == "HOME" || command.verb == "H") {
+  if (command.action == "MOVE" || command.action == "M" ||
+      command.action == "HOME" || command.action == "H") {
     auto parts = Split(Trim(command.args), ',');
     if (!parts.empty()) {
       ParseIdMask(Trim(parts[0]), mask, context.controller().motorCount());
@@ -140,4 +140,3 @@ uint32_t CommandBatchExecutor::maskFor(const ParsedCommand &command,
 
 } // namespace command
 } // namespace motor
-

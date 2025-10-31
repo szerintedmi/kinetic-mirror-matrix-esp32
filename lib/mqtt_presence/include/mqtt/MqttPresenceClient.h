@@ -87,6 +87,7 @@ class AsyncMqttPresenceClient {
 public:
   using LogFn = MqttPresenceClient::LogFn;
   using PublishMessage = mqtt::PublishMessage;
+  using MessageCallback = std::function<void(const std::string &, const std::string &)>;
 
   AsyncMqttPresenceClient(net_onboarding::NetOnboarding &net, LogFn log = {});
   ~AsyncMqttPresenceClient();
@@ -97,6 +98,7 @@ public:
   bool enqueuePublish(const PublishMessage &msg);
   const std::string &statusTopic() const;
   const std::string &offlinePayload() const;
+  bool subscribe(const std::string &topic, uint8_t qos, MessageCallback cb);
 
 private:
   class Impl;

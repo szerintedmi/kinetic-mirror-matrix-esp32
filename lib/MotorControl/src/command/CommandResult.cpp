@@ -19,4 +19,3 @@ std::string JoinLines(const std::vector<std::string> &lines) {
 
 } // namespace command
 } // namespace motor
-

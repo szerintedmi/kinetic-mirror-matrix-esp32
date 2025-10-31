@@ -12,7 +12,7 @@ namespace command {
 
 struct ParsedCommand {
   std::string raw;
-  std::string verb;
+  std::string action;
   std::string args;
 };
 
@@ -23,4 +23,3 @@ public:
 
 } // namespace command
 } // namespace motor
-

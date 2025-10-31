@@ -10,7 +10,7 @@
 Tighten host-side coverage for the MQTT presence steel thread by validating UUID generation paths, ensuring STATUS commands surface unique `msg_id` values, and keeping the native test suite regression-free while the remaining integration/bench validation work continues.
 
 ## Implementation Summary
-Hardened the shared UUID generator (`net_onboarding::NextMsgId`) to guarantee consecutive IDs never repeat, even when deterministic test hooks attempt to recycle a value. Added a lightweight Unity suite under `test/test_common` that exercises the STATUS flow end-to-end through `MotorCommandProcessor`, preventing regressions where ACK lines reuse the same `msg_id`. Updated `test_execute_cid_increments` to rely on the shared helper and executed the full native suite to confirm all host-side tests—including the newly added regression—pass cleanly.
+Hardened the shared UUID generator (`transport::message_id::Next()`) to guarantee consecutive IDs never repeat, even when deterministic test hooks attempt to recycle a value. Added a lightweight Unity suite under `test/test_common` that exercises the STATUS flow end-to-end through `MotorCommandProcessor`, preventing regressions where ACK lines reuse the same `msg_id`. Updated `test_execute_cid_increments` to rely on the shared helper and executed the full native suite to confirm all host-side tests—including the newly added regression—pass cleanly.
 
 ## Files Changed/Created
 

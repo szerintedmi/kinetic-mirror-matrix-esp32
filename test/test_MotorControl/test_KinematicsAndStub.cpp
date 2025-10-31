@@ -31,8 +31,8 @@ void test_stub_move_uses_estimator_duration() {
   int d = 500, v = 1200, a = 8000;
   uint32_t t = MotionKinematics::estimateMoveTimeMs(d, v, a);
   // Set globals then issue simplified MOVE
-  TEST_ASSERT_TRUE(p.processLine(std::string("SET SPEED=") + std::to_string(v), 0).rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(p.processLine(std::string("SET ACCEL=") + std::to_string(a), 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine(std::string("SET SPEED=") + std::to_string(v), 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine(std::string("SET ACCEL=") + std::to_string(a), 0).rfind("CTRL:DONE", 0) == 0);
   std::string cmd = std::string("MOVE:0,") + std::to_string(d);
   auto r1 = p.processLine(cmd, 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);

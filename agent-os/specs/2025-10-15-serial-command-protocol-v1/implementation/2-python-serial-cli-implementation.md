@@ -40,7 +40,7 @@ Provide a cross-platform Python CLI for issuing protocol commands over serial, p
 
 ### Serial Interface
 File Reference: `agent-os/standards/frontend/serial-interface.md`
-- Maps verbs 1:1 to the protocol, avoids payloads beyond grammar, and treats multi-line responses as pass-through.
+- Maps actions 1:1 to the protocol, avoids payloads beyond grammar, and treats multi-line responses as pass-through.
 
 ### Build Validation
 File Reference: `agent-os/standards/testing/build-validation.md`

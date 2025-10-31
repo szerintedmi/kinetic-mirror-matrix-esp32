@@ -56,7 +56,7 @@ Result: ✅ Spec aligns with requirements.
 - Specificity/traceability: tasks map directly to requirements and spec sections — yes.
 - Visual references: N/A (no visuals).
 - Numbering/order: Sequential and matches execution order — yes.
-- HELP acceptance: explicitly requires NET verbs and syntax to be listed — yes.
+- HELP acceptance: explicitly requires NET actions and syntax to be listed — yes.
 
 Result: ✅ Tasks are implementable and test‑limited. Minor enhancement suggested.
 

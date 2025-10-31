@@ -9,7 +9,7 @@ We're continuing our implementation of Wi‑Fi Onboarding via NVS by implementin
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 2.0 Extend `MotorCommandProcessor` HELP with NET verbs
+- [ ] 2.0 Extend `MotorCommandProcessor` HELP with NET actions
 - [ ] 2.1 Implement `NET:RESET` (clear creds + reboot into AP)
 - [ ] 2.2 Implement `NET:STATUS` (state/RSSI/IP)
 - [ ] 2.3 Implement `NET:SET,<ssid>,<pass>` with quoted fields and validation
@@ -18,8 +18,8 @@ We're continuing our implementation of Wi‑Fi Onboarding via NVS by implementin
 
 Acceptance
 
-- HELP output lists NET verbs (`NET:RESET`, `NET:STATUS`, `NET:SET`) with payload syntax (including quoting rules) and documents busy error `NET_BUSY_CONNECTING`.
-- Manual serial session exercises all NET verbs; responses match spec
+- HELP output lists NET actions (`NET:RESET`, `NET:STATUS`, `NET:SET`) with payload syntax (including quoting rules) and documents busy error `NET_BUSY_CONNECTING`.
+- Manual serial session exercises all NET actions; responses match spec
 
 Manual test
 

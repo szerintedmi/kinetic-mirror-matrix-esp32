@@ -7,7 +7,7 @@ Spec path: `agent-os/specs/2025-10-17-status-diagnostics`
 ### Check 1: Requirements Accuracy
 - Source: `agent-os/specs/2025-10-17-status-diagnostics/planning/requirements.md`
 - Findings:
-  - Keep a single STATUS verb; extend with new fields: ✅ captured
+  - Keep a single STATUS action; extend with new fields: ✅ captured
   - Add `steps_since_home` for drift-related rehoming later: ✅ captured
   - Focus only on thermal/runtime metrics now (no fault counters): ✅ captured
   - Per-motor thermal metrics only; in-memory only (no persistence): ✅ captured

@@ -4,7 +4,7 @@
 Establish a layered command-processing pipeline that replaces the monolithic `MotorCommandProcessor`, preserves all existing command semantics, and positions the firmware for future transports such as MQTT without duplicating logic.
 
 ## User Stories
-- As a firmware maintainer, I want command parsing, routing, and execution isolated into small units so that adding or modifying verbs no longer risks regressions across unrelated behavior.
+- As a firmware maintainer, I want command parsing, routing, and execution isolated into small units so that adding or modifying actions no longer risks regressions across unrelated behavior.
 - As a test engineer, I want injectable collaborators for CID and timing so unit tests can cover edge cases without touching hardware.
 - As a future MQTT implementer, I want a transport-agnostic entry point that returns structured results so new adapters can reuse the same command semantics.
 
@@ -13,7 +13,7 @@ Establish a layered command-processing pipeline that replaces the monolithic `Mo
 - Introduce a `CommandExecutionContext` that owns the single `MotorController` instance and exposes the minimal shared services (CID allocator, clock access, net onboarding helpers) needed by handlers; transports remain stateless.
 - Replace file-scope helper functions with reusable utilities (e.g., trim, CSV parsing, ID mask parsing) in a dedicated `motor::command_utils` module so all transports share validation logic.
 - Implement a `CommandParser` that converts raw lines into `ParsedCommand` objects, supporting single commands and batched payloads while reproducing today’s overlap detection, alias handling, and whitespace rules.
-- Provide a `CommandRouter` that maps verbs to dedicated handler classes (`MotorCommandHandler`, `QueryCommandHandler`, `NetCommandHandler`, etc.) and delegates execution using the shared context.
+- Provide a `CommandRouter` that maps actions to dedicated handler classes (`MotorCommandHandler`, `QueryCommandHandler`, `NetCommandHandler`, etc.) and delegates execution using the shared context.
 - Add a `BatchExecutor` that replicates current multi-command semantics (BUSY checks, CID reuse, aggregated `est_ms`, warning propagation) without relying on global flags.
 - Create a `CommandResult` structure (fields for CID, response lines, optional `est_ms`, optional warning lines) and a formatter that renders existing serial string responses exactly; no new metadata or severity levels yet.
 - Offer a façade object (retaining or replacing `MotorCommandProcessor::processLine` as needed) that coordinates parser, router, batch executor, and response formatter, guaranteeing identical observable behavior for serial consumers and tests.
@@ -29,7 +29,7 @@ No visual assets provided for this firmware-focused refactor.
 
 ## Reusable Components
 ### Existing Code to Leverage
-- `lib/MotorControl/src/MotorCommandProcessor.cpp` and `MotorCommandProcessor.h` for existing verb handling, validation rules, and response wording.
+- `lib/MotorControl/src/MotorCommandProcessor.cpp` and `MotorCommandProcessor.h` for existing action handling, validation rules, and response wording.
 - `MotorControl/MotorController.h`, `MotionKinematics.h`, and `MotorControlConstants.h` for motion execution and timing estimates.
 - `net_onboarding` modules (`NetOnboarding`, `NetSingleton`, `Cid`, `SerialImmediate`) for CID allocation and NET command behaviors.
 - Current unit tests under `test/test_MotorControl/` and `test/test_NetCommands/` to confirm behavior parity.

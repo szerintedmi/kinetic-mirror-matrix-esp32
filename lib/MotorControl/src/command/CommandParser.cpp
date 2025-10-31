@@ -22,13 +22,13 @@ std::vector<ParsedCommand> CommandParser::parse(const std::string &line) const {
     size_t space = cmd.find(' ');
     size_t colon = cmd.find(':');
     if (space != std::string::npos && (colon == std::string::npos || space < colon)) {
-      parsed.verb = ToUpperCopy(cmd.substr(0, space));
+      parsed.action = ToUpperCopy(cmd.substr(0, space));
       parsed.args = cmd.substr(space + 1);
     } else if (colon != std::string::npos) {
-      parsed.verb = ToUpperCopy(cmd.substr(0, colon));
+      parsed.action = ToUpperCopy(cmd.substr(0, colon));
       parsed.args = cmd.substr(colon + 1);
     } else {
-      parsed.verb = ToUpperCopy(cmd);
+      parsed.action = ToUpperCopy(cmd);
       parsed.args.clear();
     }
     out.push_back(parsed);
@@ -38,4 +38,3 @@ std::vector<ParsedCommand> CommandParser::parse(const std::string &line) const {
 
 } // namespace command
 } // namespace motor
-

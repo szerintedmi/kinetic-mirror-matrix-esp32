@@ -201,8 +201,8 @@ void test_home_with_params_acceptance() {
 
 void test_move_sets_speed_accel_in_status() {
   // Set globals then move, and verify status reflects them
-  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=5000", 0).rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=12000", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=5000", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=12000", 0).rfind("CTRL:DONE", 0) == 0);
   auto r1 = proto.processLine("MOVE:0,10", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st = proto.processLine("STATUS", 1);

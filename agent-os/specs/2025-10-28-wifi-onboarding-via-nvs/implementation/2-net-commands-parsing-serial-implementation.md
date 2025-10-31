@@ -1,7 +1,7 @@
 # 2. NET commands parsing (Serial) — Implementation (updated)
 
 ## Summary
-- Implemented NET serial verbs and integrated them with a shared `Net()` singleton:
+- Implemented NET serial actions and integrated them with a shared `Net()` singleton:
   - `NET:STATUS` returns state, RSSI, IP, and SSID.
   - `NET:RESET` clears creds and returns `CTRL:ACK`; AP activation is announced asynchronously.
   - `NET:SET,"<ssid>","<pass>"` supports quoted fields/escapes; returns immediate `CTRL:ACK`, then async progress events.
@@ -29,7 +29,7 @@
 ## Files Touched (high-level)
 - `lib/net_onboarding/include/net_onboarding/NetSingleton.h`, `lib/net_onboarding/src/NetSingleton.cpp` — Introduced `Net()` singleton.
 - `src/main.cpp` — Emits concise async NET events; fixed transition detection for `NET_CONNECT_FAILED`.
-- `lib/MotorControl/src/MotorCommandProcessor.cpp` — NET verb parsing, validation, `CTRL:ACK`, busy policy, `NET:STATUS` content.
+- `lib/MotorControl/src/MotorCommandProcessor.cpp` — NET action parsing, validation, `CTRL:ACK`, busy policy, `NET:STATUS` content.
 - `lib/net_onboarding/include/net_onboarding/Cid.h`, `lib/net_onboarding/src/Cid.cpp` — CID allocator and active-CID tracker.
 - `src/main.cpp` — Appends `CID=<id>` to async NET events when a command is active; clears CID on terminal events.
 - `lib/net_onboarding/include/net_onboarding/Platform.h`, `src/PlatformEsp32.cpp`, `src/PlatformStub.cpp` — add Wi‑Fi scan API and AP+STA mode.

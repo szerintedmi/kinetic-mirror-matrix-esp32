@@ -56,7 +56,7 @@ Manual tests
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [x] 2.0 Extend `MotorCommandProcessor` HELP with NET verbs
+- [x] 2.0 Extend `MotorCommandProcessor` HELP with NET actions
 - [x] 2.1 Implement `NET:RESET` (clear creds + reboot into AP)
 - [x] 2.2 Implement `NET:STATUS` (state/RSSI/IP)
 - [x] 2.3 Implement `NET:SET,<ssid>,<pass>` with quoted fields and validation
@@ -75,7 +75,7 @@ Manual tests
 Acceptance
 
 - Success token is `CTRL:ACK` (was `CTRL:OK`) across commands; tests updated
-- HELP lists NET verbs with quoted `NET:SET` grammar; busy error documented (`NET_BUSY_CONNECTING`)
+- HELP lists NET actions with quoted `NET:SET` grammar; busy error documented (`NET_BUSY_CONNECTING`)
 - `NET:SET` immediate `CTRL:ACK`, then async: `CTRL: NET:CONNECTING` → (`CTRL: NET:CONNECTED …` OR `CTRL:ERR NET_CONNECT_FAILED` then `CTRL: NET:AP_ACTIVE …`)
 - `NET:SET` with short pass (1–7) → `CTRL:ERR NET_BAD_PARAM PASS_TOO_SHORT`
 - `NET:RESET` immediate `CTRL:ACK`; exactly one `CTRL: NET:AP_ACTIVE …` follows

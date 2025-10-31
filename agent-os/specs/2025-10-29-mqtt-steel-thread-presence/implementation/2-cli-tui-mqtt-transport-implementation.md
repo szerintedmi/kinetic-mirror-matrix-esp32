@@ -7,7 +7,7 @@
 **Status:** ✅ Complete
 
 ### Task Description
-Deliver MQTT transport support in the host CLI/TUI so presence updates can be monitored over the broker while clearly signalling that command verbs remain serial-only. Implementation must cover argument parsing, runtime subscriptions, documentation, and focused host-side tests.
+Deliver MQTT transport support in the host CLI/TUI so presence updates can be monitored over the broker while clearly signalling that command actions remain serial-only. Implementation must cover argument parsing, runtime subscriptions, documentation, and focused host-side tests.
 
 ## Implementation Summary
 Extended the CLI to surface a first-class MQTT transport, sharing defaults with firmware and ensuring both the interactive TUI and one-shot invocations consume broker presence data. The new `MqttWorker` mirrors the serial worker surface, providing duplicate suppression, age tracking, and transport metadata while cleanly handling missing dependencies.
@@ -42,9 +42,9 @@ Implements a daemon thread around `paho-mqtt` that subscribes to `devices/+/stat
 ### CLI Routing & Rendering
 **Location:** `tools/serial_cli/__init__.py`
 
-Extends argument parsing to accept `--transport mqtt` everywhere, routes `status` to a lightweight MQTT subscriber, blocks other verbs with an explicit error, and normalizes presence table rendering with age columns. Maintains backwards compatibility for serial workflows while providing clear user feedback.
+Extends argument parsing to accept `--transport mqtt` everywhere, routes `status` to a lightweight MQTT subscriber, blocks other actions with an explicit error, and normalizes presence table rendering with age columns. Maintains backwards compatibility for serial workflows while providing clear user feedback.
 
-**Rationale:** Centralizing transport selection ensures both CLI commands and the interactive entry point respect user intent and simplifies future expansion once MQTT command verbs arrive.
+**Rationale:** Centralizing transport selection ensures both CLI commands and the interactive entry point respect user intent and simplifies future expansion once MQTT command actions arrive.
 
 ### Interactive TUI Adaptation
 **Location:** `tools/serial_cli/tui/textual_ui.py`
@@ -129,7 +129,7 @@ Detects column schemas from the current worker, updates status bars with MQTT br
 
 ### Issues
 1. **MQTT Command Execution**  
-   - Description: Command verbs remain unsupported over MQTT; worker surfaces explicit errors.  
+   - Description: Command actions remain unsupported over MQTT; worker surfaces explicit errors.  
    - Impact: Operators must continue using serial transport for command dispatch.  
    - Workaround: Switch back to `--transport serial` for motor control.  
    - Tracking: Covered by future roadmap items (see Deferred Follow-up task group).

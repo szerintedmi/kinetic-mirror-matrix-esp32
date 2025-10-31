@@ -82,7 +82,7 @@ Pending hardware run; curl checklist documented for the bench session.
 ### Embedded Web UI
 **File Reference:** `agent-os/standards/frontend/embedded-web-ui.md`
 
-**How Your Implementation Complies:** Delivers tiny JSON payloads, serves gzipped static assets from LittleFS via the existing gzip script, and keeps HTTP semantics aligned with serial verbs.
+**How Your Implementation Complies:** Delivers tiny JSON payloads, serves gzipped static assets from LittleFS via the existing gzip script, and keeps HTTP semantics aligned with serial actions.
 
 **Deviations (if any):** None.
 

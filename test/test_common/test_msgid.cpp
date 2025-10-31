@@ -2,10 +2,10 @@
 #include <unity.h>
 
 #include "MotorControl/MotorCommandProcessor.h"
-#include "net_onboarding/MessageId.h"
+#include "transport/MessageId.h"
 
 void test_status_msg_ids_unique() {
-  net_onboarding::SetMsgIdGenerator([]() mutable {
+  transport::message_id::SetGenerator([]() mutable {
     static uint64_t counter = 0;
     char buf[37];
     std::snprintf(buf, sizeof(buf),
@@ -25,7 +25,7 @@ void test_status_msg_ids_unique() {
                                        second.lines[0].c_str()) != 0,
                           "STATUS msg_id repeated");
 
-  net_onboarding::ResetMsgIdGenerator();
+  transport::message_id::ResetGenerator();
 }
 
 int main(int, char **) {

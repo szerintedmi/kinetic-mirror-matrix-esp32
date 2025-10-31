@@ -67,7 +67,7 @@ Define a simple, human-readable USB serial protocol to control 8 motors on an ES
 
 - Firmware (ESP32/Arduino):
   - Implement a robust line reader with max payload length.
-  - Command parser validates verb, addressing (`0–7|ALL`), numeric params, and ordering.
+  - Command parser validates action, addressing (`0–7|ALL`), numeric params, and ordering.
   - MOVE absolute: reject targets beyond `[-1200,+1200]` with `E07 POS_OUT_OF_RANGE`; otherwise apply defaults if missing.
   - HOME: execute bump‑stop sequence; accept overrides with no clamping; apply defaults if missing.
   - Auto‑WAKE before motion; auto‑SLEEP immediately after MOVE/HOME completes (later mapped to FastAccelStepper auto-enable).
@@ -88,7 +88,7 @@ Define a simple, human-readable USB serial protocol to control 8 motors on an ES
 
 ## Success Criteria
 
-- HELP lists all verbs with correct parameter grammar.
+- HELP lists all actions with correct parameter grammar.
 - MOVE accepts defaults, executes within limits, and rejects out-of-range with `E07 POS_OUT_OF_RANGE`.
 - HOME accepts overrides without clamping and completes with correct auto‑SLEEP behavior.
 - STATUS prints one line per motor including id, pos, speed, accel, moving, awake.

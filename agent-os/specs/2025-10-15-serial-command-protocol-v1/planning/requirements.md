@@ -8,7 +8,7 @@ let's create the spec for the first roadmap item
 
 ### First Round Questions
 
-**Q1:** I’m assuming commands use single-line, space-delimited, uppercase verbs with newline termination, like `MOVE 3 1200 500 800` and `HELP`. Is that correct, or should we support commas/JSON payloads?
+**Q1:** I’m assuming commands use single-line, space-delimited, uppercase actions with newline termination, like `MOVE 3 1200 500 800` and `HELP`. Is that correct, or should we support commas/JSON payloads?
 **Answer:** 1.  <CMD>:param1,param2 is easier to parse and read. Also it allows to ommit optional parameters to keep those at default
 
 **Q2:** For responses, I’m proposing `CTRL:OK` and `CTRL:ERR <code> <message>` (per serial-interface standards), one line per request. Is that acceptable, or do you prefer plain `OK`/`ERR <code>` without the `CTRL:` prefix?
@@ -80,7 +80,7 @@ None.
 ### Non-Functional Requirements
 
 - Serial: 115200 baud; follow guard parsing and payload length limits per `@agent-os/standards/frontend/serial-interface.md`.
-- Usability: `HELP` must list verbs and parameter grammar succinctly; readable multi-line formatting.
+- Usability: `HELP` must list actions and parameter grammar succinctly; readable multi-line formatting.
 - Robustness: Reject malformed payloads and out-of-range parameters with `CTRL:ERR` and appropriate codes.
 - Concurrency: No queuing; enforce single in-flight motion per motor set; commands are processed atomically.
 - Deterministic open-loop timing: Motion/homing completion uses a deterministic duration based on target delta and speed. This timing model is canonical (not a temporary stub) and remains valid for open-loop control; later phases may add a small start delay to mirror FastAccelStepper behavior.
@@ -114,4 +114,4 @@ None.
 - Response format: `CTRL:OK` and `CTRL:ERR <code> <message>`; multi-line blocks for `HELP` and `STATUS`.
 - Host CLI: Python 3 + `pyserial`; simple cross-platform usage and tiny E2E checks.
 - Motion duration calculation (canonical): `duration_ms = ceil(1000 * |target - current| / max(speed,1))`. Acceleration is ignored in v1 timing; a small fixed `start_delay_ms` may be added in later items to align with FastAccelStepper startup behavior.
-- WAKE/SLEEP mapping for hardware (future): With FastAccelStepper's auto-enable, `WAKE`/`SLEEP` may act as diagnostics/overrides rather than required flow controls. Protocol keeps these verbs for consistency.
+- WAKE/SLEEP mapping for hardware (future): With FastAccelStepper's auto-enable, `WAKE`/`SLEEP` may act as diagnostics/overrides rather than required flow controls. Protocol keeps these actions for consistency.

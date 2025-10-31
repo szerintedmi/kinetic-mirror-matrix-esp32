@@ -23,7 +23,7 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Reference: `agent-os/product/roadmap.md` (items 2–3), `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/standards/backend/task-structure.md`, `docs/esp32-74hc595-wiring.md`
 
 ## Command Protocols & Networking
-- USB Serial v1: Human-readable commands using `<VERB>[:payload]` grammar
+- USB Serial v1: Human-readable commands using `<ACTION>[:payload]` grammar
   - Core: `HELP`, `STATUS`, `WAKE:<id|ALL>`, `SLEEP:<id|ALL>`,
     `MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]`,
     `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]`
@@ -53,7 +53,7 @@ High-level choices for firmware, hardware control, host tooling, and validation 
 - Packaging: CLI module in repo (keeps serial and MQTT transports)
 - Libraries: `paho-mqtt` (MQTT), `pyserial` (serial), `argparse`
 - Transport default: MQTT from roadmap item 9; serial selectable as debug/backdoor
-- Deliverables: cross‑platform CLI with one‑shot verbs and an interactive TUI that subscribes to MQTT status/events and mirrors serial behavior
+- Deliverables: cross‑platform CLI with one‑shot actions and an interactive TUI that subscribes to MQTT status/events and mirrors serial behavior
 - Reference: `agent-os/product/roadmap.md` (items 8–11, 13–15), `@agent-os/standards/testing/build-validation.md`
 
 ## Testing & Validation

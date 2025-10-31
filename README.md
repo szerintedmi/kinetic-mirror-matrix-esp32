@@ -133,7 +133,7 @@ Host CLI
 - The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
 
-MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). When running with `--transport mqtt`, command verbs return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
+MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). When running with `--transport mqtt`, command actions return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
 
 Tests
 
@@ -149,7 +149,7 @@ Tests
 - Maintains a 1 Hz cadence while idle and 5 Hz while any motor is moving, with change-driven bursts between ticks.
 - On broker loss logs `CTRL: MQTT_DISCONNECTED …` once, schedules exponential-backoff retries with `CTRL: MQTT_RECONNECT delay=<ms>`, and resumes with `CTRL: MQTT_CONNECTED broker=…` upon success.
 - Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
-- Follow-up: add runtime SET/GET verbs for MQTT broker host/user/pass (tracked as a deferred implementation task).
+- Follow-up: add runtime SET/GET actions for MQTT broker host/user/pass (tracked as a deferred implementation task).
 
 ## Wi‑Fi Onboarding
 
@@ -164,7 +164,7 @@ The UI is built with Pico.css + Alpine.js and lives under [`data_src/net`](./dat
 
 ### Serial fallback commands
 
-When a USB cable is convenient, the existing `NET:*` verbs remain available:
+When a USB cable is convenient, the existing `NET:*` actions remain available:
 
 - `NET:STATUS` — prints current state, IP, and RSSI (when connected).
 - `NET:LIST` — scans nearby SSIDs (top 12) ordered by RSSI; available only while the device SoftAP is active.

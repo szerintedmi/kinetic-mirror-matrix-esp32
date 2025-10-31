@@ -9,7 +9,7 @@ Standards: `@agent-os/standards/testing/build-validation.md`, `@agent-os/standar
 
 - [ ] 3.0 Finalize HELP and STATUS outputs and validate build
   - [ ] 3.1 Write 2-8 focused unit tests (Unity)
-    - Validate HELP contains all verbs with correct param grammar (no error codes listed)
+    - Validate HELP contains all actions with correct param grammar (no error codes listed)
     - Validate STATUS has one line per motor including id, pos, speed, accel, moving, awake
     - Limit to 2-8 tests (target 4)
   - [ ] 3.2 Implement HELP generator and STATUS reporter

@@ -88,7 +88,7 @@ Pending – tracked in verification checklist (Scenarios A & D). Quick local san
 ### Embedded Web UI
 **File Reference:** `agent-os/standards/frontend/embedded-web-ui.md`
 
-**How Your Implementation Complies:** Ships gzipped static assets from LittleFS, keeps JSON payloads minimal, mirrors serial verbs, and leverages a lightweight JS helper (Alpine.js) as allowed.
+**How Your Implementation Complies:** Ships gzipped static assets from LittleFS, keeps JSON payloads minimal, mirrors serial actions, and leverages a lightweight JS helper (Alpine.js) as allowed.
 
 **Deviations (if any):** None.
 

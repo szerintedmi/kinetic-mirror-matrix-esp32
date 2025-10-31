@@ -26,7 +26,7 @@ Standards: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standa
     - New module, bounded buffers, newline-terminated commands
     - Enforce payload length per serial-interface standard
   - [x] 1.3 Implement command parser for `<CMD>:param1,param2` with optional params
-    - Validate verbs, comma-separated numeric params, strict ordering
+    - Validate actions, comma-separated numeric params, strict ordering
     - IDs: `0–7` or `ALL`
   - [x] 1.4 Define `MotorBackend` interface and `StubBackend` with in-memory state
     - State per motor: id, position, speed, accel, moving, awake
@@ -82,7 +82,7 @@ Standards: `@agent-os/standards/testing/build-validation.md`, `@agent-os/standar
 
 - [x] 3.0 Finalize HELP and STATUS outputs and validate build
   - [x] 3.1 Write 2-8 focused unit tests (Unity)
-    - Validate HELP contains all verbs with correct param grammar (no error codes listed)
+    - Validate HELP contains all actions with correct param grammar (no error codes listed)
     - Validate STATUS has one line per motor including id, pos, speed, accel, moving, awake
     - Limit to 2-8 tests (target 4)
   - [x] 3.2 Implement HELP generator and STATUS reporter

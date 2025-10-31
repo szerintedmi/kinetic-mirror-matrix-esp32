@@ -4,7 +4,7 @@
 #include "console/SerialConsole.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/NetSingleton.h"
-#include "net_onboarding/MessageId.h"
+#include "transport/MessageId.h"
 #include "boards/Esp32Dev.hpp"
 
 #include <string>
@@ -86,21 +86,21 @@ void setup() {
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
   if (g_last_state == State::AP_ACTIVE) {
     auto ip = WiFi.softAPIP();
-    if (net_onboarding::HasActiveMsgId()) {
-      std::string active = net_onboarding::ActiveMsgId();
+    if (transport::message_id::HasActive()) {
+      std::string active = transport::message_id::Active();
       String qssid = quote_str_(WiFi.softAPSSID().c_str());
       Serial.printf("CTRL: NET:AP_ACTIVE msg_id=%s ssid=%s ip=%u.%u.%u.%u\n",
                     active.c_str(), qssid.c_str(), ip[0], ip[1], ip[2], ip[3]);
       // RESET path may emit AP_ACTIVE immediately; if so, clear the correlation now
-      net_onboarding::ClearActiveMsgId();
+      transport::message_id::ClearActive();
     } else {
       String qssid = quote_str_(WiFi.softAPSSID().c_str());
       Serial.printf("CTRL: NET:AP_ACTIVE ssid=%s ip=%u.%u.%u.%u\n",
                     qssid.c_str(), ip[0], ip[1], ip[2], ip[3]);
     }
   } else if (g_last_state == State::CONNECTING) {
-    if (net_onboarding::HasActiveMsgId()) {
-      std::string active = net_onboarding::ActiveMsgId();
+    if (transport::message_id::HasActive()) {
+      std::string active = transport::message_id::Active();
       Serial.printf("CTRL: NET:CONNECTING msg_id=%s\n", active.c_str());
     } else {
       Serial.println("CTRL: NET:CONNECTING");
@@ -122,41 +122,41 @@ void loop() {
     if (s.state == State::AP_ACTIVE) {
       // If we fell back from CONNECTING → AP, surface connect failure
       if (prev == State::CONNECTING) {
-        if (net_onboarding::HasActiveMsgId()) {
-          std::string active = net_onboarding::ActiveMsgId();
+        if (transport::message_id::HasActive()) {
+          std::string active = transport::message_id::Active();
           Serial.printf("CTRL:ERR msg_id=%s NET_CONNECT_FAILED\n", active.c_str());
         } else {
           Serial.println("CTRL:ERR NET_CONNECT_FAILED");
         }
       }
       auto ip = WiFi.softAPIP();
-      if (net_onboarding::HasActiveMsgId()) {
-        std::string active = net_onboarding::ActiveMsgId();
+      if (transport::message_id::HasActive()) {
+        std::string active = transport::message_id::Active();
         String qssid = quote_str_(WiFi.softAPSSID().c_str());
         Serial.printf("CTRL: NET:AP_ACTIVE msg_id=%s ssid=%s ip=%u.%u.%u.%u\n",
                       active.c_str(), qssid.c_str(), ip[0], ip[1], ip[2], ip[3]);
         // AP_ACTIVE after a connect attempt (success or fallback) ends the flow
-        net_onboarding::ClearActiveMsgId();
+        transport::message_id::ClearActive();
       } else {
         String qssid = quote_str_(WiFi.softAPSSID().c_str());
         Serial.printf("CTRL: NET:AP_ACTIVE ssid=%s ip=%u.%u.%u.%u\n",
                       qssid.c_str(), ip[0], ip[1], ip[2], ip[3]);
       }
     } else if (s.state == State::CONNECTING) {
-      if (net_onboarding::HasActiveMsgId()) {
-        std::string active = net_onboarding::ActiveMsgId();
+      if (transport::message_id::HasActive()) {
+        std::string active = transport::message_id::Active();
         Serial.printf("CTRL: NET:CONNECTING msg_id=%s\n", active.c_str());
       } else {
         Serial.println("CTRL: NET:CONNECTING");
       }
     } else if (s.state == State::CONNECTED) {
-      if (net_onboarding::HasActiveMsgId()) {
-        std::string active = net_onboarding::ActiveMsgId();
+      if (transport::message_id::HasActive()) {
+        std::string active = transport::message_id::Active();
         String qssid = quote_str_(s.ssid.data());
         Serial.printf("CTRL: NET:CONNECTED msg_id=%s ssid=%s ip=%s rssi=%d\n",
                       active.c_str(), qssid.c_str(), s.ip.data(), s.rssi_dbm);
         // CONNECTED after a connect attempt ends the flow
-        net_onboarding::ClearActiveMsgId();
+        transport::message_id::ClearActive();
       } else {
         String qssid = quote_str_(s.ssid.data());
         Serial.printf("CTRL: NET:CONNECTED ssid=%s ip=%s rssi=%d\n", qssid.c_str(), s.ip.data(), s.rssi_dbm);

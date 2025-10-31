@@ -1,9 +1,14 @@
 #include "MotorControl/command/ResponseFormatter.h"
 
+#include "transport/CommandSchema.h"
+
 namespace motor {
 namespace command {
 
 std::string FormatForSerial(const CommandResult &result) {
+  if (result.hasStructuredResponse()) {
+    return transport::command::FormatSerialResponse(result.structuredResponse());
+  }
   if (result.is_error) {
     return result.lines.empty() ? std::string() : result.lines.front();
   }
@@ -12,4 +17,3 @@ std::string FormatForSerial(const CommandResult &result) {
 
 } // namespace command
 } // namespace motor
-

@@ -7,7 +7,7 @@
 
 ### First Round Questions
 
-**Q1:** I assume we keep the current one-line-per-motor STATUS format and append fields rather than change existing ones. Is that correct, or should we introduce a new verb (e.g., STATUSX) to preserve backward compatibility?
+**Q1:** I assume we keep the current one-line-per-motor STATUS format and append fields rather than change existing ones. Is that correct, or should we introduce a new action (e.g., STATUSX) to preserve backward compatibility?
 **Answer:** keep one STATUS command and we extend it with new fields. no need to worry about backward compatibility, no consumers yet
 
 **Q2:** I’m thinking we add homed=<0|1> where homed=1 means the last HOME completed successfully. Should this flag reset on reboot and after any MOVE before HOME, or persist across reboots?
@@ -47,7 +47,7 @@ No visual assets provided.
 ## Requirements Summary
 
 ### Functional Requirements
-- Extend `STATUS` (single verb) to include new per-motor fields (appended to existing order):
+- Extend `STATUS` (single action) to include new per-motor fields (appended to existing order):
   - `homed=<0|1>`: 1 after successful HOME; session-only (resets to 0 on reboot).
   - `steps_since_home=<steps>`: cumulative absolute steps since last successful HOME; resets to 0 on HOME and on reboot.
   - Thermal budget metrics (session-only, not persisted):

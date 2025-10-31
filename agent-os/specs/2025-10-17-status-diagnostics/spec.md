@@ -10,7 +10,7 @@ Extend STATUS to include homing state and thermal runtime budget metrics per mot
 
 ## Core Requirements
 ### Functional Requirements
-- Keep a single `STATUS` verb; return all motors, one line each.
+- Keep a single `STATUS` action; return all motors, one line each.
 - Append new fields (existing keys unchanged):
   - `homed=<0|1>`: 1 after successful HOME; resets to 0 on reboot.
   - `steps_since_home=<steps>`: absolute steps accumulated since last successful HOME; resets on HOME and reboot.

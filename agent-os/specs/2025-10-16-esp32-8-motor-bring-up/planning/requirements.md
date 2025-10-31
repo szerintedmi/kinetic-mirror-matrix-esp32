@@ -35,7 +35,7 @@ move on to next roadmap item
 **Answer:** 9. ok
 
 ### Follow-up Clarifications
-- SLEEP vs ENABLE: For DRV8825, keep `nENBL` pulled low (always enabled). Control low-power via `SLEEP` pin instead. WAKE/SLEEP protocol verbs remain as overrides (diagnostics); normal motion uses FastAccelStepper auto-sleep.
+- SLEEP vs ENABLE: For DRV8825, keep `nENBL` pulled low (always enabled). Control low-power via `SLEEP` pin instead. WAKE/SLEEP protocol actions remain as overrides (diagnostics); normal motion uses FastAccelStepper auto-sleep.
 - SPI usage: Use hardware SPI (VSPI) to shift 2×74HC595 (16 outputs). `OE` tied low, `MR` tied high; we drive `RCLK` (latch) via a GPIO.
 
 ## Visual Assets
@@ -59,7 +59,7 @@ None.
 
 ### Non-Functional Requirements
 - Full-step mode hard-wired (MS1..MS3 = 000); no MCU control of microstepping in v1.
-- WAKE/SLEEP protocol verbs act as diagnostic overrides; use FastAccelStepper’s auto-sleep in normal operation.
+- WAKE/SLEEP protocol actions act as diagnostic overrides; use FastAccelStepper’s auto-sleep in normal operation.
 - Keep STATUS minimal in v1 (id, pos, speed, accel, moving, awake).
 
 ### Proposed Pin Map (subject to wiring)

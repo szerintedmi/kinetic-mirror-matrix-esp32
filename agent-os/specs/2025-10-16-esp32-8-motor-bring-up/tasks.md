@@ -52,7 +52,7 @@ Standards: `@agent-os/standards/backend/hardware-abstraction.md`, `@agent-os/sta
   - [x] 2.3 Enforce sequencing per move
     - Arduino: FastAccelStepper external-pin callback sets DIR/SLEEP with proper timing; backend starts steppers
     - Native: emulate latch-before-start via mocked 74HC595 for unit tests
-  - [x] 2.4 Map WAKE/SLEEP protocol verbs as overrides
+  - [x] 2.4 Map WAKE/SLEEP protocol actions as overrides
     - Keep FastAccelStepper auto-enable; WAKE uses enableOutputs (forced awake), SLEEP returns to auto mode; callback reflects SLEEP
   - [x] 2.5 Integrate backend selection
     - Provide compile-time switch to choose `StubBackend` vs `HardwareBackend`

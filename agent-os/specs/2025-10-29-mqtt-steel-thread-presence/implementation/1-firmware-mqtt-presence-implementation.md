@@ -26,7 +26,7 @@ Introduced a hardware-seeded UUIDv4 generator so both serial acknowledgments and
 - `lib/MotorControl/include/MotorControl/command/CommandExecutionContext.h` - Replaces CID helpers with `msg_id` accessors.
 - `lib/MotorControl/src/command/CommandExecutionContext.cpp` - Binds the new message ID API.
 - `lib/MotorControl/src/command/CommandHandlers.cpp` - Emits `msg_id` on all CTRL responses and NET flows.
-- `lib/MotorControl/src/command/CommandRouter.cpp` - Returns `msg_id` in unknown-verb errors.
+- `lib/MotorControl/src/command/CommandRouter.cpp` - Returns `msg_id` in unknown-action errors.
 - `lib/MotorControl/src/command/CommandBatchExecutor.cpp` - Aggregates batch ACKs using UUID message IDs.
 - `src/console/SerialConsole.cpp` - Instantiates the MQTT presence client and feeds motion/power state into it.
 - `src/main.cpp` - Logs NET events with `msg_id` correlation instead of numeric CIDs.

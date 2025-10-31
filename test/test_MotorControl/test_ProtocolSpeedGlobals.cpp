@@ -10,7 +10,7 @@ void test_get_set_speed_ok() {
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" SPEED=") != std::string::npos);
   auto r2 = proto.processLine("SET SPEED=4500", 0);
-  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET SPEED", 0);
   TEST_ASSERT_TRUE(r3.find("SPEED=4500") != std::string::npos);
 }
@@ -21,7 +21,7 @@ void test_get_set_accel_ok() {
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" ACCEL=") != std::string::npos);
   auto r2 = proto.processLine("SET ACCEL=12345", 0);
-  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET ACCEL", 0);
   TEST_ASSERT_TRUE(r3.find("ACCEL=12345") != std::string::npos);
 }
@@ -32,15 +32,15 @@ void test_get_set_decel_ok() {
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" DECEL=") != std::string::npos);
   auto r2 = proto.processLine("SET DECEL=9000", 0);
-  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET DECEL", 0);
   TEST_ASSERT_TRUE(r3.find("DECEL=9000") != std::string::npos);
 }
 
 void test_set_decel_busy_reject() {
   MotorCommandProcessor proto;
-  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=4000", 0).rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=16000", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=4000", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=16000", 0).rfind("CTRL:DONE", 0) == 0);
   auto r1 = proto.processLine("MOVE:0,1000", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("SET DECEL=5000", 10);
@@ -51,8 +51,8 @@ void test_set_decel_busy_reject() {
 void test_set_speed_busy_reject() {
   // Start a long move, then attempt to change SPEED
   MotorCommandProcessor proto;
-  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=4000", 0).rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=16000", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=4000", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=16000", 0).rfind("CTRL:DONE", 0) == 0);
   auto r1 = proto.processLine("MOVE:0,1000", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto r2 = proto.processLine("SET SPEED=5000", 10);
@@ -72,8 +72,8 @@ static uint32_t parse_est_ms(const std::string& s) {
 void test_home_uses_speed_accel_globals() {
   MotorCommandProcessor proto;
   // Set globals to known values
-  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=2000", 0).rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=8000", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET SPEED=2000", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(proto.processLine("SET ACCEL=8000", 0).rfind("CTRL:DONE", 0) == 0);
   // Issue HOME with no explicit speed/accel params
   auto r = proto.processLine("HOME:0", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);

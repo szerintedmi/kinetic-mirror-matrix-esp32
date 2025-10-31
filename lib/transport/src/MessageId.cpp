@@ -1,10 +1,11 @@
-#include "net_onboarding/MessageId.h"
+#include "transport/MessageId.h"
 
 #include <array>
 #include <cstdio>
 #include <mutex>
 #include <random>
 #include <string>
+#include <utility>
 
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
 #include <esp_system.h>
@@ -25,6 +26,11 @@ std::function<std::string()> &Generator() {
 std::string &ActiveId() {
   static std::string active;
   return active;
+}
+
+std::string &LastIssuedId() {
+  static std::string last;
+  return last;
 }
 
 std::string GenerateUuidV4() {
@@ -49,7 +55,7 @@ std::string GenerateUuidV4() {
   }
 #endif
 
-  // RFC 4122 version 4 UUID
+  // RFC 4122 version 4 UUID formatting.
   bytes[6] = static_cast<uint8_t>((bytes[6] & 0x0F) | 0x40);
   bytes[8] = static_cast<uint8_t>((bytes[8] & 0x3F) | 0x80);
 
@@ -70,9 +76,10 @@ std::string DefaultUuidFactory() {
 
 } // namespace
 
-namespace net_onboarding {
+namespace transport {
+namespace message_id {
 
-std::string NextMsgId() {
+std::string Next() {
   std::lock_guard<std::mutex> lock(IdMutex());
   if (!Generator()) {
     Generator() = DefaultUuidFactory;
@@ -81,42 +88,43 @@ std::string NextMsgId() {
   do {
     next = Generator()();
   } while (!ActiveId().empty() && next == ActiveId());
-  static std::string last;
-  if (!last.empty() && next == last) {
+  if (!LastIssuedId().empty() && next == LastIssuedId()) {
     next = Generator()();
   }
-  last = next;
+  LastIssuedId() = next;
   return next;
 }
 
-void SetActiveMsgId(const std::string &msg_id) {
+void SetActive(const std::string &msg_id) {
   std::lock_guard<std::mutex> lock(IdMutex());
   ActiveId() = msg_id;
 }
 
-bool HasActiveMsgId() {
+bool HasActive() {
   std::lock_guard<std::mutex> lock(IdMutex());
   return !ActiveId().empty();
 }
 
-std::string ActiveMsgId() {
+std::string Active() {
   std::lock_guard<std::mutex> lock(IdMutex());
   return ActiveId();
 }
 
-void ClearActiveMsgId() {
+void ClearActive() {
   std::lock_guard<std::mutex> lock(IdMutex());
   ActiveId().clear();
 }
 
-void SetMsgIdGenerator(std::function<std::string()> generator) {
+void SetGenerator(std::function<std::string()> generator) {
   std::lock_guard<std::mutex> lock(IdMutex());
   Generator() = std::move(generator);
 }
 
-void ResetMsgIdGenerator() {
+void ResetGenerator() {
   std::lock_guard<std::mutex> lock(IdMutex());
   Generator() = DefaultUuidFactory;
 }
 
-} // namespace net_onboarding
+} // namespace message_id
+} // namespace transport
+

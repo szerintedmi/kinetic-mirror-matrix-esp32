@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstring>
 #include <deque>
+#include <vector>
 #include <utility>
 #include <string>
 
@@ -386,6 +387,17 @@ public:
     return true;
   }
 
+  bool subscribe(const std::string &topic, uint8_t qos, AsyncMqttPresenceClient::MessageCallback cb) {
+    if (topic.empty() || !cb) {
+      return false;
+    }
+    subscriptions_.emplace_back(topic, qos, std::move(cb));
+    if (client_.connected()) {
+      client_.subscribe(topic.c_str(), qos);
+    }
+    return true;
+  }
+
   const std::string &topic() const {
     return logic_.topic();
   }
@@ -457,6 +469,9 @@ private:
       }
       broker_info += ":" + std::to_string(broker_port_);
       logic_.handleConnected(millis(), broker_info);
+      for (const auto &sub : subscriptions_) {
+        client_.subscribe(sub.topic.c_str(), sub.qos);
+      }
     });
     client_.onDisconnect([this](AsyncMqttClientDisconnectReason reason) {
       bool was_connected = connect_succeeded_;
@@ -484,6 +499,23 @@ private:
       }
       (void)was_connected;
       logic_.handleConnectFailure(context);
+    });
+    client_.onMessage([this](char *topic,
+                             char *payload,
+                             AsyncMqttClientMessageProperties /*properties*/,
+                             size_t len,
+                             size_t index,
+                             size_t total) {
+      if (index + len != total) {
+        return; // wait for final chunk
+      }
+      std::string topic_str(topic ? topic : "");
+      std::string payload_str(payload && len ? std::string(payload, payload + len) : std::string());
+      for (const auto &sub : subscriptions_) {
+        if (topic_str == sub.topic && sub.callback) {
+          sub.callback(topic_str, payload_str);
+        }
+      }
     });
   }
 
@@ -593,6 +625,15 @@ private:
   AsyncMqttClient client_;
   MqttPresenceClient logic_;
   std::deque<PublishMessage> publish_queue_;
+  struct Subscription {
+    Subscription() = default;
+    Subscription(std::string t, uint8_t q, AsyncMqttPresenceClient::MessageCallback cb)
+        : topic(std::move(t)), qos(q), callback(std::move(cb)) {}
+    std::string topic;
+    uint8_t qos = 0;
+    AsyncMqttPresenceClient::MessageCallback callback;
+  };
+  std::vector<Subscription> subscriptions_;
   string last_will_topic_;
   string broker_host_;
   string broker_user_;
@@ -649,6 +690,13 @@ const std::string &AsyncMqttPresenceClient::offlinePayload() const {
     return kEmpty;
   }
   return impl_->offlinePayload();
+}
+
+bool AsyncMqttPresenceClient::subscribe(const std::string &topic, uint8_t qos, MessageCallback cb) {
+  if (!impl_) {
+    return false;
+  }
+  return impl_->subscribe(topic, qos, std::move(cb));
 }
 
 #endif // ARDUINO

@@ -15,11 +15,10 @@ public:
                         uint32_t now_ms);
 
 private:
-  bool isMotionVerb(const std::string &verb) const;
+  bool isMotionAction(const std::string &action) const;
   uint32_t maskFor(const ParsedCommand &command,
                    const CommandExecutionContext &context) const;
 };
 
 } // namespace command
 } // namespace motor
-

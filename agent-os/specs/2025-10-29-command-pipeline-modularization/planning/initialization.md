@@ -15,8 +15,8 @@ Move the CSV/trim/int parsing helpers and id-mask validation into a CommandParse
 
 2. Command Pipeline
 
-Introduce a lightweight ParsedCommand DTO produced by a CommandParser class: it should hold verb, argument tokens, and original raw text (for diagnostics). The parser also handles multi-command batches and overlap detection so transports just hand over raw lines.
-Split execution into a CommandRouter that maps verbs to handler objects implementing CommandHandler::execute(const ParsedCommand&, CommandExecutionContext&, uint32_t now_ms).
+Introduce a lightweight ParsedCommand DTO produced by a CommandParser class: it should hold action, argument tokens, and original raw text (for diagnostics). The parser also handles multi-command batches and overlap detection so transports just hand over raw lines.
+Split execution into a CommandRouter that maps actions to handler objects implementing CommandHandler::execute(const ParsedCommand&, CommandExecutionContext&, uint32_t now_ms).
 MotorCommandHandler covers MOVE/HOME/WAKE/SLEEP plus thermal checks; internally we can further split MOVE/HOME logic into helpers if needed.
 QueryCommandHandler deals with GET/STATUS/HELP and aggregates status formatting.
 NetCommandHandler encapsulates NET:* commands.
@@ -34,8 +34,8 @@ Incremental Path
 
 Extract helper utilities (trim, split, parseCsvQuoted, parseInt, parseIdMask) into a new motor/command_utils.* module and migrate call sites.
 Introduce CommandExecutionContext and thread it through the existing class, replacing direct global calls (net_onboarding::NextCid, etc.). This is mostly mechanical and unlocks unit testing.
-Implement CommandRouter + handler classes while keeping the old processLine as a thin wrapper delegating to the router. Start with read-only verbs (HELP/GET/STATUS) to prove the pattern, then migrate MOVE/HOME, and finally NET commands.
-Once all verbs live in handlers, rename the remaining shell to CommandProcessor and replace the global static batch flags with a small BatchExecutor.
+Implement CommandRouter + handler classes while keeping the old processLine as a thin wrapper delegating to the router. Start with read-only actions (HELP/GET/STATUS) to prove the pattern, then migrate MOVE/HOME, and finally NET commands.
+Once all actions live in handlers, rename the remaining shell to CommandProcessor and replace the global static batch flags with a small BatchExecutor.
 Add tests around the new parser/router to ensure serial and future MQTT share coverage; refer to agent-os/standards/testing/ for the required cases.
 
 first understand and validate the proposal. Suggest any improvements in approach , including implementation plan.

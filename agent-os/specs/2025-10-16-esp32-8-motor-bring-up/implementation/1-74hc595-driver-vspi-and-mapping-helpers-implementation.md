@@ -52,7 +52,7 @@
 ### Command processor rename (prep for TG2)
 **Location:** lib/MotorControl/src/MotorCommandProcessor.cpp:1
 
-- Renamed Protocol → MotorCommandProcessor; still backed by a pure stub controller for TG1. WAKE/SLEEP verbs are not yet wired to the driver (owned by TG2).
+- Renamed Protocol → MotorCommandProcessor; still backed by a pure stub controller for TG1. WAKE/SLEEP actions are not yet wired to the driver (owned by TG2).
 
 ## Testing
 
@@ -83,7 +83,7 @@
 **Compliance:** Host‑first tests use a stub HAL; device‑specific checks isolated; suites are fast and focused.
 
 ## Dependencies / Integration Points
-- Intended for TG2 HardwareMotorController to set DIR/SLEEP via `IShift595` before motion and for WAKE/SLEEP verbs.
+- Intended for TG2 HardwareMotorController to set DIR/SLEEP via `IShift595` before motion and for WAKE/SLEEP actions.
 - No external runtime deps beyond Arduino SPI on ESP32.
 
 ## Known Issues & Limitations
@@ -97,7 +97,7 @@
 - None beyond standard firmware concerns; no external inputs parsed at the driver level.
 
 ## Dependencies for Other Tasks
-- TG2: HardwareMotorController wiring (DIR/SLEEP latch‑before‑start, WAKE/SLEEP verbs, FastAccelStepper sequencing) builds directly on this HAL + driver.
+- TG2: HardwareMotorController wiring (DIR/SLEEP latch‑before‑start, WAKE/SLEEP actions, FastAccelStepper sequencing) builds directly on this HAL + driver.
 
 ## Notes
 - Driver byte order is intentional: DIR first, SLEEP second → SLEEP sits in the near 595; document this for wiring clarity.

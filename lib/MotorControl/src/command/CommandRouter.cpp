@@ -6,9 +6,9 @@ namespace command {
 CommandRouter::CommandRouter(std::vector<std::unique_ptr<CommandHandler>> handlers)
     : handlers_(std::move(handlers)) {}
 
-bool CommandRouter::knowsVerb(const std::string &verb) const {
+bool CommandRouter::knowsAction(const std::string &action) const {
   for (const auto &handler : handlers_) {
-    if (handler->canHandle(verb)) {
+    if (handler->canHandle(action)) {
       return true;
     }
   }
@@ -19,7 +19,7 @@ CommandResult CommandRouter::dispatch(const ParsedCommand &command,
                                       CommandExecutionContext &context,
                                       uint32_t now_ms) {
   for (auto &handler : handlers_) {
-    if (handler->canHandle(command.verb)) {
+    if (handler->canHandle(command.action)) {
       return handler->execute(command, context, now_ms);
     }
   }

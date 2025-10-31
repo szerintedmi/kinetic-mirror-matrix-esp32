@@ -16,7 +16,7 @@ Standards: `@agent-os/standards/frontend/serial-interface.md`, `@agent-os/standa
     - New module, bounded buffers, newline-terminated commands
     - Enforce payload length per serial-interface standard
   - [ ] 1.3 Implement command parser for `<CMD>:param1,param2` with optional params
-    - Validate verbs, comma-separated numeric params, strict ordering
+    - Validate actions, comma-separated numeric params, strict ordering
     - IDs: `0–7` or `ALL`
   - [ ] 1.4 Define `MotorBackend` interface and `StubBackend` with in-memory state
     - State per motor: id, position, speed, accel, moving, awake

@@ -16,6 +16,6 @@
 - Integrated into suite runner `test/test_MotorControl/test_Runner.cpp` (centralizes RUN_TEST order).
 
 ## Standards Compliance
-- Followed serial interface convention of `<verb>[:payload]` while also supporting space for GET/SET to match the spec wording.
+- Followed serial interface convention of `<action>[:payload]` while also supporting space for GET/SET to match the spec wording.
 - Kept response formatting prefixed with `CTRL:` per interface standards.
 - Maintained existing `STATUS` output keys and line structure (no meta/footer lines), per acceptance criteria.

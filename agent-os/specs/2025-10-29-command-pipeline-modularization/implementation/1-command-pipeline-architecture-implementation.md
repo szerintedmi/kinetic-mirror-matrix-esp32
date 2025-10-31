@@ -32,9 +32,9 @@
 ### Command Handlers and Router
 **Location:** `lib/MotorControl/include/MotorControl/command/CommandHandlers.h`, `lib/MotorControl/src/command/CommandHandlers.cpp`, `lib/MotorControl/include/MotorControl/command/CommandRouter.h`, `lib/MotorControl/src/command/CommandRouter.cpp`
 
-- Split command execution into dedicated handler classes for motor verbs, query verbs, and NET commands.
+- Split command execution into dedicated handler classes for motor actions, query actions, and NET commands.
 - Ported existing logic verbatim, now operating on the shared execution context.
-- Introduced router that dispatches to handlers and reports unknown verbs uniformly.
+- Introduced router that dispatches to handlers and reports unknown actions uniformly.
 
 **Rationale:** Shrinks individual units to targeted responsibilities and keeps command semantics identical while simplifying future handler additions.
 

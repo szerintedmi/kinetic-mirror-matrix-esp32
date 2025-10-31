@@ -19,7 +19,6 @@ using motor::command::CommandHandler;
 using motor::command::CommandParser;
 using motor::command::CommandResult;
 using motor::command::CommandRouter;
-using motor::command::JoinLines;
 using motor::command::ParsedCommand;
 
 MotorCommandProcessor::MotorCommandProcessor()

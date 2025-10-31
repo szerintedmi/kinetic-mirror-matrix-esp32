@@ -3,7 +3,7 @@
 ## Summary
 - Added `tools/bench/manual_sequence_runner.py`, a deterministic bench helper that replays a fixed series of MOVE/HOME commands with optional repetitions while echoing every serial response.
 - The script hard-codes setup commands (speed/accel/WAKE/HOME) separately from the repeated pattern so operators can run multi-cycle verification without editing files.
-- Instead of adding new firmware verbs, the workflow now captures MCU-tracked positions through the existing `STATUS` output after each command and at the end of the run, aligning with the updated scope.
+- Instead of adding new firmware actions, the workflow now captures MCU-tracked positions through the existing `STATUS` output after each command and at the end of the run, aligning with the updated scope.
 - Added a teardown sequence that parks all motors at `pos=0` and issues `SLEEP:ALL` after the repetitions finish, so the array always lands in a known idle state.
 - Documented a lab checklist that ties the script steps to required bench observations (shared-step smoke, physical markers vs. MCU position, and auto-sleep confirmation).
 
@@ -24,7 +24,7 @@
 ### Tasks list update
 **Location:** `agent-os/specs/2025-10-21-16-plus-motors-per-esp32-rd-spike/tasks.md`
 
-- Marked 7.0–7.3 as completed so downstream verification knows the bench assets exist and align with the revised scope (leveraging existing `STATUS` instead of a new GET verb as agreed).
+- Marked 7.0–7.3 as completed so downstream verification knows the bench assets exist and align with the revised scope (leveraging existing `STATUS` instead of a new GET action as agreed).
 
 ## Lab Checklist (Operator-Facing)
 
@@ -106,7 +106,7 @@
 ## Known Issues & Limitations
 
 1. **No dedicated device-side BENCH report**
-   - Description: As requested, we rely on STATUS snapshots instead of adding a new GET verb.
+   - Description: As requested, we rely on STATUS snapshots instead of adding a new GET action.
    - Impact: Operators must read positions from STATUS lines.
    - Future Consideration: If we later need multi-device aggregation, revisit a firmware-backed bench summary command.
 
