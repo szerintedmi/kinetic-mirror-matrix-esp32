@@ -39,8 +39,8 @@ void test_help_includes_net_actions() {
 
 void test_net_status_in_ap_mode() {
   std::string r = proto.processLine("NET:STATUS", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
-  TEST_ASSERT_TRUE(r.find("state=AP_ACTIVE") != std::string::npos);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:DONE cmd_id=", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" state=AP_ACTIVE") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" rssi=NA") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ip=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ssid=") != std::string::npos);

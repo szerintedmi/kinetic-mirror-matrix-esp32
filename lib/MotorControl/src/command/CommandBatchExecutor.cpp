@@ -2,28 +2,44 @@
 
 #include "MotorControl/command/CommandUtils.h"
 
-#include <sstream>
+#include "transport/CommandSchema.h"
+#include "transport/ResponseDispatcher.h"
+#include "transport/ResponseModel.h"
 
 namespace motor {
 namespace command {
 
 namespace {
 
-uint32_t parseEstMs(const std::string &line) {
-  size_t p = line.find("est_ms=");
-  if (p == std::string::npos) {
-    return 0;
+void EmitLineEvent(const transport::command::ResponseLine &line,
+                   const std::string &action = std::string()) {
+  transport::response::ResponseDispatcher::Instance().Emit(
+      transport::response::BuildEvent(line, action));
+}
+
+CommandResult MakeErrorResult(const transport::command::ResponseLine &line,
+                              const std::string &action = std::string()) {
+  EmitLineEvent(line, action);
+  CommandResult res;
+  res.is_error = true;
+  res.append(line);
+  return res;
+}
+
+bool ExtractUintField(const transport::command::ResponseLine &line,
+                      const std::string &key,
+                      uint32_t &out_value) {
+  for (const auto &field : line.fields) {
+    if (field.key == key) {
+      try {
+        out_value = static_cast<uint32_t>(std::stoul(field.value));
+        return true;
+      } catch (...) {
+        return false;
+      }
+    }
   }
-  p += 7;
-  while (p < line.size() && line[p] == ' ') ++p;
-  uint32_t acc = 0;
-  bool any = false;
-  while (p < line.size() && line[p] >= '0' && line[p] <= '9') {
-    acc = acc * 10u + static_cast<uint32_t>(line[p] - '0');
-    ++p;
-    any = true;
-  }
-  return any ? acc : 0;
+  return false;
 }
 
 } // namespace
@@ -37,9 +53,12 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   for (const auto &cmd : commands) {
     uint32_t mask = maskFor(cmd, context);
     if (mask != 0 && (mask & seen)) {
-      std::ostringstream eo;
-      eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E03 BAD_PARAM MULTI_CMD_CONFLICT";
-      return CommandResult::Error(eo.str());
+      auto line = transport::command::MakeErrorLine(
+          context.nextMsgId(),
+          "E03",
+          "BAD_PARAM MULTI_CMD_CONFLICT",
+          {});
+      return MakeErrorResult(line);
     }
     seen |= mask;
   }
@@ -47,9 +66,12 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   // Unknown action detection
   for (const auto &cmd : commands) {
     if (!router.knowsAction(cmd.action)) {
-      std::ostringstream eo;
-      eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E01 BAD_CMD";
-      return CommandResult::Error(eo.str());
+      auto line = transport::command::MakeErrorLine(
+          context.nextMsgId(),
+          "E01",
+          "BAD_CMD",
+          {});
+      return MakeErrorResult(line, cmd.action);
     }
   }
 
@@ -65,11 +87,9 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
   bool prev_initially_idle = context.batchInitiallyIdle();
   context.setBatchState(true, initially_idle);
 
-  std::vector<std::string> combined;
+  transport::command::Response aggregate;
   uint32_t agg_est_ms = 0;
   bool saw_est = false;
-  bool saw_err = false;
-  std::string first_err;
 
   for (const auto &cmd : commands) {
     CommandResult result = router.dispatch(cmd, context, now_ms);
@@ -77,40 +97,35 @@ CommandResult CommandBatchExecutor::execute(const std::vector<ParsedCommand> &co
       context.setBatchState(prev_in_batch, prev_initially_idle);
       return result;
     }
-    for (const auto &line : result.lines) {
-      if (line.empty()) continue;
-      if (line.rfind("CTRL:ERR", 0) == 0) {
-        if (!saw_err) {
-          saw_err = true;
-          first_err = line;
-        }
-        break;
-      }
-      if (line.rfind("CTRL:ACK", 0) == 0 && line.find("est_ms=") != std::string::npos) {
-        uint32_t value = parseEstMs(line);
+    if (!result.hasStructuredResponse()) {
+      continue;
+    }
+    const auto &response = result.structuredResponse();
+    for (const auto &line : response.lines) {
+      uint32_t value = 0;
+      if (line.type == transport::command::ResponseLineType::kAck &&
+          ExtractUintField(line, "est_ms", value)) {
         if (value > agg_est_ms) {
           agg_est_ms = value;
         }
         saw_est = true;
-      } else {
-        combined.push_back(line);
+        continue;
       }
+      aggregate.lines.push_back(line);
     }
-    if (saw_err) break;
   }
 
   context.setBatchState(prev_in_batch, prev_initially_idle);
 
-  if (saw_err) {
-    return CommandResult::Error(first_err);
-  }
   if (saw_est) {
-    std::ostringstream ok;
-    ok << "CTRL:ACK msg_id=" << context.nextMsgId() << " est_ms=" << agg_est_ms;
-    combined.push_back(ok.str());
+    auto ack_line = transport::command::MakeAckLine(
+        context.nextMsgId(),
+        {{"est_ms", std::to_string(agg_est_ms)}});
+    EmitLineEvent(ack_line);
+    aggregate.lines.push_back(ack_line);
   }
   CommandResult res;
-  res.lines = std::move(combined);
+  res.structured = std::move(aggregate);
   return res;
 }
 

@@ -7,7 +7,7 @@
 namespace transport {
 namespace command {
 
-enum class LineType {
+enum class ResponseLineType {
   kAck,
   kWarn,
   kError,
@@ -21,8 +21,8 @@ struct Field {
   std::string value;
 };
 
-struct Line {
-  LineType type = LineType::kUnknown;
+struct ResponseLine {
+  ResponseLineType type = ResponseLineType::kUnknown;
   std::string msg_id;
   std::string code;
   std::string reason;
@@ -32,7 +32,7 @@ struct Line {
 };
 
 struct Response {
-  std::vector<Line> lines;
+  std::vector<ResponseLine> lines;
 };
 
 enum class CompletionStatus {
@@ -51,33 +51,29 @@ struct ErrorDescriptor {
 const std::vector<ErrorDescriptor> &ErrorCatalog();
 const ErrorDescriptor *LookupError(const std::string &code);
 
-Line MakeAckLine(const std::string &msg_id,
-                 std::initializer_list<Field> fields = {});
-Line MakeWarnLine(const std::string &msg_id,
-                  const std::string &code,
-                  const std::string &reason,
-                  std::initializer_list<Field> fields = {});
-Line MakeInfoLine(const std::string &msg_id,
-                  const std::string &code,
-                  const std::string &reason,
-                  std::initializer_list<Field> fields = {});
-Line MakeErrorLine(const std::string &msg_id,
-                   const std::string &code,
-                   const std::string &reason,
-                   std::initializer_list<Field> fields = {});
-Line MakeDataLine(std::initializer_list<Field> fields = {});
-
-bool ParseCommandResponse(const std::vector<std::string> &lines,
-                          Response &out,
-                          std::string &error);
+ResponseLine MakeAckLine(const std::string &msg_id,
+                         std::initializer_list<Field> fields = {});
+ResponseLine MakeWarnLine(const std::string &msg_id,
+                          const std::string &code,
+                          const std::string &reason,
+                          std::initializer_list<Field> fields = {});
+ResponseLine MakeInfoLine(const std::string &msg_id,
+                          const std::string &code,
+                          const std::string &reason,
+                          std::initializer_list<Field> fields = {});
+ResponseLine MakeErrorLine(const std::string &msg_id,
+                           const std::string &code,
+                           const std::string &reason,
+                           std::initializer_list<Field> fields = {});
+ResponseLine MakeDataLine(std::initializer_list<Field> fields = {});
 
 std::string FormatSerialResponse(const Response &response);
-std::string SerializeLine(const Line &line);
+std::string SerializeLine(const ResponseLine &line);
 CompletionStatus DeriveCompletionStatus(const Response &response);
 
-const Line *FindAckLine(const Response &response);
-std::vector<Line> CollectWarnings(const Response &response);
-const Line *FindPrimaryError(const Response &response);
+const ResponseLine *FindAckLine(const Response &response);
+std::vector<ResponseLine> CollectWarnings(const Response &response);
+const ResponseLine *FindPrimaryError(const Response &response);
 
 } // namespace command
 } // namespace transport

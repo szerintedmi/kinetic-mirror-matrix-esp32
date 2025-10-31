@@ -13,6 +13,7 @@
 #include "MotorControl/command/CommandParser.h"
 #include "MotorControl/command/CommandUtils.h"
 #include "MotorControl/command/ResponseFormatter.h"
+#include "transport/CommandSchema.h"
 #include "transport/MessageId.h"
 
 using motor::command::CommandParser;
@@ -56,20 +57,22 @@ void test_execute_matches_serial_output() {
   MotorCommandProcessor proc;
   auto structured = proc.execute("HELP", 0);
   std::string formatted = motor::command::FormatForSerial(structured);
-  std::string legacy = proc.processLine("HELP", 0);
+  std::string serial_output = proc.processLine("HELP", 0);
   TEST_ASSERT_FALSE(structured.is_error);
-  TEST_ASSERT_EQUAL_STRING(legacy.c_str(), formatted.c_str());
-  TEST_ASSERT_TRUE(structured.lines.size() > 1);
+  TEST_ASSERT_EQUAL_STRING(serial_output.c_str(), formatted.c_str());
+  TEST_ASSERT_TRUE(structured.structuredResponse().lines.size() > 1);
 }
 
 void test_execute_reports_errors_structurally() {
   MotorCommandProcessor proc;
   auto structured = proc.execute("FOO", 0);
   TEST_ASSERT_TRUE(structured.is_error);
-  TEST_ASSERT_EQUAL_UINT32(1, structured.lines.size());
-  TEST_ASSERT_TRUE(structured.lines[0].find("E01 BAD_CMD") != std::string::npos);
+  const auto &lines = structured.structuredResponse().lines;
+  TEST_ASSERT_EQUAL_UINT32(1, lines.size());
+  std::string line_text = transport::command::SerializeLine(lines[0]);
+  TEST_ASSERT_TRUE(line_text.find("E01 BAD_CMD") != std::string::npos);
   std::string formatted = motor::command::FormatForSerial(structured);
-  TEST_ASSERT_EQUAL_STRING(formatted.c_str(), structured.lines[0].c_str());
+  TEST_ASSERT_EQUAL_STRING(formatted.c_str(), line_text.c_str());
 }
 
 static std::string msg_id_from(const std::string &line) {
@@ -93,9 +96,11 @@ void test_batch_aggregates_estimate() {
   MotorCommandProcessor proc;
   auto structured = proc.execute("MOVE:0,100;MOVE:1,200", 0);
   TEST_ASSERT_FALSE(structured.is_error);
-  TEST_ASSERT_EQUAL_UINT32(1, structured.lines.size());
-  TEST_ASSERT_TRUE(structured.lines[0].find("CTRL:ACK") == 0);
-  TEST_ASSERT_TRUE(structured.lines[0].find("est_ms=") != std::string::npos);
+  const auto &lines = structured.structuredResponse().lines;
+  TEST_ASSERT_EQUAL_UINT32(1, lines.size());
+  std::string line_text = transport::command::SerializeLine(lines[0]);
+  TEST_ASSERT_TRUE(line_text.find("CTRL:ACK") == 0);
+  TEST_ASSERT_TRUE(line_text.find("est_ms=") != std::string::npos);
 }
 
 void test_execute_cid_increments() {
@@ -110,11 +115,15 @@ void test_execute_cid_increments() {
   MotorCommandProcessor proc;
   auto first = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(first.is_error);
-  TEST_ASSERT_TRUE(first.lines.size() >= 1);
+  const auto &first_lines = first.structuredResponse().lines;
+  TEST_ASSERT_TRUE(first_lines.size() >= 1);
   auto second = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(second.is_error);
-  TEST_ASSERT_TRUE(second.lines.size() >= 1);
-  TEST_ASSERT_TRUE_MESSAGE(std::strcmp(first.lines[0].c_str(), second.lines[0].c_str()) != 0,
-                          ("duplicate msg_id first=" + first.lines[0] + " second=" + second.lines[0]).c_str());
+  const auto &second_lines = second.structuredResponse().lines;
+  TEST_ASSERT_TRUE(second_lines.size() >= 1);
+  std::string first_text = transport::command::SerializeLine(first_lines[0]);
+  std::string second_text = transport::command::SerializeLine(second_lines[0]);
+  TEST_ASSERT_TRUE_MESSAGE(std::strcmp(first_text.c_str(), second_text.c_str()) != 0,
+                          ("duplicate msg_id first=" + first_text + " second=" + second_text).c_str());
   transport::message_id::ResetGenerator();
 }

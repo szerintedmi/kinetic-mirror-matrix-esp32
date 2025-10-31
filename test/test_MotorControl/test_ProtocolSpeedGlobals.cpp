@@ -7,33 +7,36 @@
 void test_get_set_speed_ok() {
   MotorCommandProcessor proto;
   auto r1 = proto.processLine("GET SPEED", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" SPEED=") != std::string::npos);
   auto r2 = proto.processLine("SET SPEED=4500", 0);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET SPEED", 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r3.find("SPEED=4500") != std::string::npos);
 }
 
 void test_get_set_accel_ok() {
   MotorCommandProcessor proto;
   auto r1 = proto.processLine("GET ACCEL", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" ACCEL=") != std::string::npos);
   auto r2 = proto.processLine("SET ACCEL=12345", 0);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET ACCEL", 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r3.find("ACCEL=12345") != std::string::npos);
 }
 
 void test_get_set_decel_ok() {
   MotorCommandProcessor proto;
   auto r1 = proto.processLine("GET DECEL", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" DECEL=") != std::string::npos);
   auto r2 = proto.processLine("SET DECEL=9000", 0);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto r3 = proto.processLine("GET DECEL", 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r3.find("DECEL=9000") != std::string::npos);
 }
 

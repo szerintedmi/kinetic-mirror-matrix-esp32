@@ -38,15 +38,15 @@ struct CommandResponse {
   std::vector<Event> events;
 };
 
-// Build a structured CommandResponse from the legacy control-line response.
-CommandResponse BuildCommandResponse(const command::Response &legacy,
+// Build a structured CommandResponse from the response line collection emitted by handlers.
+CommandResponse BuildCommandResponse(const command::Response &response_lines,
                                      const std::string &action = std::string());
 
 // Build a single Event from a control line + action.
-Event BuildEvent(const command::Line &line, const std::string &action = std::string());
+Event BuildEvent(const command::ResponseLine &line, const std::string &action = std::string());
 
 // Convert an Event back into a control line for transport-specific rendering.
-command::Line EventToLine(const Event &event);
+command::ResponseLine EventToLine(const Event &event);
 
 } // namespace response
 } // namespace transport

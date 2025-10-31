@@ -1,63 +1,13 @@
 #include "transport/CommandSchema.h"
 
 #include <algorithm>
-#include <cctype>
-#include <sstream>
-#include <utility>
 #include <initializer_list>
+#include <sstream>
 
 namespace transport {
 namespace command {
 
 namespace {
-
-std::string Trim(const std::string &value) {
-  size_t start = 0;
-  while (start < value.size() && std::isspace(static_cast<unsigned char>(value[start]))) {
-    ++start;
-  }
-  size_t end = value.size();
-  while (end > start && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-    --end;
-  }
-  return value.substr(start, end - start);
-}
-
-std::vector<std::string> SplitTokens(const std::string &text) {
-  std::vector<std::string> tokens;
-  std::string current;
-  bool in_quotes = false;
-  bool escape_next = false;
-  for (char ch : text) {
-    if (escape_next) {
-      current.push_back(ch);
-      escape_next = false;
-      continue;
-    }
-    if (ch == '\\') {
-      escape_next = true;
-      current.push_back(ch);
-      continue;
-    }
-    if (ch == '"') {
-      in_quotes = !in_quotes;
-      current.push_back(ch);
-      continue;
-    }
-    if (std::isspace(static_cast<unsigned char>(ch)) && !in_quotes) {
-      if (!current.empty()) {
-        tokens.push_back(current);
-        current.clear();
-      }
-      continue;
-    }
-    current.push_back(ch);
-  }
-  if (!current.empty()) {
-    tokens.push_back(current);
-  }
-  return tokens;
-}
 
 const std::vector<ErrorDescriptor> &BuildCatalog() {
   static const std::vector<ErrorDescriptor> kCatalog = {
@@ -95,114 +45,12 @@ const std::vector<ErrorDescriptor> &BuildCatalog() {
   return kCatalog;
 }
 
-LineType DetermineType(const std::string &line) {
-  if (line.rfind("CTRL:ACK", 0) == 0) {
-    return LineType::kAck;
-  }
-  if (line.rfind("CTRL:WARN", 0) == 0) {
-    return LineType::kWarn;
-  }
-  if (line.rfind("CTRL:ERR", 0) == 0) {
-    return LineType::kError;
-  }
-  if (line.rfind("CTRL:INFO", 0) == 0) {
-    return LineType::kInfo;
-  }
-  if (line.rfind("CTRL:", 0) == 0) {
-    return LineType::kUnknown;
-  }
-  return LineType::kData;
-}
-
-void PushDetail(std::vector<Field> &fields, const std::string &value) {
-  if (value.empty()) {
-    return;
-  }
-  fields.push_back({"detail", value});
-}
-
-void ParseControlTokens(const std::vector<std::string> &tokens,
-                        Line &out,
-                        LineType type) {
-  out.tokens = tokens;
-  size_t idx = 0;
-  if (idx < tokens.size() && tokens[idx].rfind("msg_id=", 0) == 0) {
-    out.msg_id = tokens[idx].substr(7);
-    ++idx;
-  }
-
-  if (type == LineType::kError) {
-    if (idx < tokens.size()) {
-      out.code = tokens[idx++];
-    }
-    if (idx < tokens.size() && tokens[idx].find('=') == std::string::npos) {
-      out.reason = tokens[idx++];
-    }
-    for (; idx < tokens.size(); ++idx) {
-      const std::string &tok = tokens[idx];
-      auto pos = tok.find('=');
-      if (pos != std::string::npos) {
-        Field f{tok.substr(0, pos), tok.substr(pos + 1)};
-        out.fields.push_back(std::move(f));
-      } else {
-        PushDetail(out.fields, tok);
-      }
-    }
-    if (out.code.empty()) {
-      out.code = "UNKNOWN";
-    }
-  } else if (type == LineType::kWarn || type == LineType::kInfo) {
-    if (idx < tokens.size()) {
-      out.code = tokens[idx++];
-    }
-    if (idx < tokens.size() && tokens[idx].find('=') == std::string::npos) {
-      out.reason = tokens[idx++];
-    }
-    for (; idx < tokens.size(); ++idx) {
-      const std::string &tok = tokens[idx];
-      auto pos = tok.find('=');
-      if (pos != std::string::npos) {
-        Field f{tok.substr(0, pos), tok.substr(pos + 1)};
-        out.fields.push_back(std::move(f));
-      } else {
-        PushDetail(out.fields, tok);
-      }
-    }
-    if (out.code.empty()) {
-      out.code = type == LineType::kWarn ? "WARN" : "INFO";
-    }
-  } else if (type == LineType::kAck) {
-    for (; idx < tokens.size(); ++idx) {
-      const std::string &tok = tokens[idx];
-      auto pos = tok.find('=');
-      if (pos != std::string::npos) {
-        Field f{tok.substr(0, pos), tok.substr(pos + 1)};
-        out.fields.push_back(std::move(f));
-      } else {
-        PushDetail(out.fields, tok);
-      }
-    }
-  }
-}
-
-void ParseDataLine(const std::string &line, Line &out) {
-  auto tokens = SplitTokens(line);
-  out.tokens = tokens;
-  for (const auto &tok : tokens) {
-    auto pos = tok.find('=');
-    if (pos != std::string::npos) {
-      Field f{tok.substr(0, pos), tok.substr(pos + 1)};
-      out.fields.push_back(std::move(f));
-    }
-  }
-}
-
-Line MakeControlLine(LineType type,
-                     const std::string &msg_id,
-                     const std::string &code,
-                     const std::string &reason,
-                     std::initializer_list<Field> fields) {
-  Line line;
+ResponseLine MakeControlLine(ResponseLineType type,
+                             const std::string &msg_id,
+                             const std::string &code,
+                             const std::string &reason,
+                             std::initializer_list<Field> fields) {
+  ResponseLine line;
   line.type = type;
   line.msg_id = msg_id;
   line.code = code;
@@ -229,79 +77,42 @@ const ErrorDescriptor *LookupError(const std::string &code) {
   return nullptr;
 }
 
-Line MakeAckLine(const std::string &msg_id,
-                 std::initializer_list<Field> fields) {
-  Line line;
-  line.type = LineType::kAck;
+ResponseLine MakeAckLine(const std::string &msg_id,
+                         std::initializer_list<Field> fields) {
+  ResponseLine line;
+  line.type = ResponseLineType::kAck;
   line.msg_id = msg_id;
   line.fields.assign(fields.begin(), fields.end());
   return line;
 }
 
-Line MakeWarnLine(const std::string &msg_id,
-                  const std::string &code,
-                  const std::string &reason,
-                  std::initializer_list<Field> fields) {
-  return MakeControlLine(LineType::kWarn, msg_id, code, reason, fields);
+ResponseLine MakeWarnLine(const std::string &msg_id,
+                          const std::string &code,
+                          const std::string &reason,
+                          std::initializer_list<Field> fields) {
+  return MakeControlLine(ResponseLineType::kWarn, msg_id, code, reason, fields);
 }
 
-Line MakeInfoLine(const std::string &msg_id,
-                  const std::string &code,
-                  const std::string &reason,
-                  std::initializer_list<Field> fields) {
-  return MakeControlLine(LineType::kInfo, msg_id, code, reason, fields);
+ResponseLine MakeInfoLine(const std::string &msg_id,
+                          const std::string &code,
+                          const std::string &reason,
+                          std::initializer_list<Field> fields) {
+  return MakeControlLine(ResponseLineType::kInfo, msg_id, code, reason, fields);
 }
 
-Line MakeErrorLine(const std::string &msg_id,
-                   const std::string &code,
-                   const std::string &reason,
-                   std::initializer_list<Field> fields) {
-  Line line = MakeControlLine(LineType::kError, msg_id, code, reason, fields);
+ResponseLine MakeErrorLine(const std::string &msg_id,
+                           const std::string &code,
+                           const std::string &reason,
+                           std::initializer_list<Field> fields) {
+  ResponseLine line = MakeControlLine(ResponseLineType::kError, msg_id, code, reason, fields);
   return line;
 }
 
-Line MakeDataLine(std::initializer_list<Field> fields) {
-  Line line;
-  line.type = LineType::kData;
+ResponseLine MakeDataLine(std::initializer_list<Field> fields) {
+  ResponseLine line;
+  line.type = ResponseLineType::kData;
   line.fields.assign(fields.begin(), fields.end());
   return line;
-}
-
-bool ParseCommandResponse(const std::vector<std::string> &lines,
-                          Response &out,
-                          std::string &error) {
-  out.lines.clear();
-  error.clear();
-  for (const auto &raw_line : lines) {
-    if (raw_line.empty()) {
-      continue;
-    }
-    LineType type = DetermineType(raw_line);
-    Line parsed;
-    parsed.type = type;
-    parsed.raw = Trim(raw_line);
-
-    if (type == LineType::kData) {
-      ParseDataLine(parsed.raw, parsed);
-    } else {
-      size_t space = parsed.raw.find(' ');
-      std::string payload;
-      if (space != std::string::npos) {
-        payload = parsed.raw.substr(space + 1);
-      }
-      auto tokens = SplitTokens(payload);
-      ParseControlTokens(tokens, parsed, type);
-      if (parsed.msg_id.empty() &&
-          (type == LineType::kAck || type == LineType::kError || type == LineType::kWarn)) {
-        // Missing msg_id is a soft error; record the issue but continue.
-        if (error.empty()) {
-          error = "Missing msg_id in control line: " + raw_line;
-        }
-      }
-    }
-    out.lines.push_back(std::move(parsed));
-  }
-  return true;
 }
 
 std::string FormatSerialResponse(const Response &response) {
@@ -318,13 +129,13 @@ std::string FormatSerialResponse(const Response &response) {
   return oss.str();
 }
 
-std::string SerializeLine(const Line &line) {
+std::string SerializeLine(const ResponseLine &line) {
   if (!line.raw.empty()) {
     return line.raw;
   }
   std::ostringstream oss;
   switch (line.type) {
-  case LineType::kAck:
+  case ResponseLineType::kAck:
     oss << "CTRL:ACK";
     if (!line.msg_id.empty()) {
       oss << " msg_id=" << line.msg_id;
@@ -333,7 +144,7 @@ std::string SerializeLine(const Line &line) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
-  case LineType::kWarn:
+  case ResponseLineType::kWarn:
     oss << "CTRL:WARN";
     if (!line.msg_id.empty()) {
       oss << " msg_id=" << line.msg_id;
@@ -348,7 +159,7 @@ std::string SerializeLine(const Line &line) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
-  case LineType::kError:
+  case ResponseLineType::kError:
     oss << "CTRL:ERR";
     if (!line.msg_id.empty()) {
       oss << " msg_id=" << line.msg_id;
@@ -363,7 +174,7 @@ std::string SerializeLine(const Line &line) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
-  case LineType::kInfo:
+  case ResponseLineType::kInfo:
     oss << "CTRL:INFO";
     if (!line.msg_id.empty()) {
       oss << " msg_id=" << line.msg_id;
@@ -378,8 +189,8 @@ std::string SerializeLine(const Line &line) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
-  case LineType::kData:
-  case LineType::kUnknown:
+  case ResponseLineType::kData:
+  case ResponseLineType::kUnknown:
   default:
     for (size_t i = 0; i < line.fields.size(); ++i) {
       if (i > 0) {
@@ -392,28 +203,28 @@ std::string SerializeLine(const Line &line) {
   return oss.str();
 }
 
-const Line *FindAckLine(const Response &response) {
+const ResponseLine *FindAckLine(const Response &response) {
   for (const auto &line : response.lines) {
-    if (line.type == LineType::kAck) {
+    if (line.type == ResponseLineType::kAck) {
       return &line;
     }
   }
   return nullptr;
 }
 
-const Line *FindPrimaryError(const Response &response) {
+const ResponseLine *FindPrimaryError(const Response &response) {
   for (const auto &line : response.lines) {
-    if (line.type == LineType::kError) {
+    if (line.type == ResponseLineType::kError) {
       return &line;
     }
   }
   return nullptr;
 }
 
-std::vector<Line> CollectWarnings(const Response &response) {
-  std::vector<Line> warnings;
+std::vector<ResponseLine> CollectWarnings(const Response &response) {
+  std::vector<ResponseLine> warnings;
   for (const auto &line : response.lines) {
-    if (line.type == LineType::kWarn) {
+    if (line.type == ResponseLineType::kWarn) {
       warnings.push_back(line);
     }
   }
@@ -421,7 +232,7 @@ std::vector<Line> CollectWarnings(const Response &response) {
 }
 
 CompletionStatus DeriveCompletionStatus(const Response &response) {
-  if (const Line *err = FindPrimaryError(response)) {
+  if (const ResponseLine *err = FindPrimaryError(response)) {
     if (!err->code.empty()) {
       if (const ErrorDescriptor *desc = LookupError(err->code)) {
         return desc->status;

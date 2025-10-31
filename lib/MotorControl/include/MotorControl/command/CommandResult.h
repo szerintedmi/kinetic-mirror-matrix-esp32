@@ -10,18 +10,26 @@ namespace command {
 
 struct CommandResult {
   bool is_error = false;
-  std::vector<std::string> lines;
-  bool has_structured = false;
   transport::command::Response structured;
 
-  void append(const transport::command::Line &line) {
-    lines.push_back(transport::command::SerializeLine(line));
+  void append(const transport::command::ResponseLine &line) {
     structured.lines.push_back(line);
-    has_structured = true;
+  }
+
+  void mergeFrom(const CommandResult &other) {
+    if (&other == this) {
+      return;
+    }
+    for (const auto &line : other.structured.lines) {
+      append(line);
+    }
+    if (other.is_error) {
+      is_error = true;
+    }
   }
 
   bool hasStructuredResponse() const {
-    return has_structured;
+    return !structured.lines.empty();
   }
 
   const transport::command::Response &structuredResponse() const {
@@ -29,39 +37,23 @@ struct CommandResult {
   }
 
   void clearStructured() {
-    has_structured = false;
     structured.lines.clear();
   }
 
   // Convenience helpers
-  static CommandResult Error(const std::string &line) {
-    CommandResult r;
-    r.is_error = true;
-    r.lines.push_back(line);
-    return r;
-  }
-
-  static CommandResult Error(const transport::command::Line &line) {
+  static CommandResult Error(const transport::command::ResponseLine &line) {
     CommandResult r;
     r.is_error = true;
     r.append(line);
     return r;
   }
 
-  static CommandResult SingleLine(const std::string &line) {
-    CommandResult r;
-    r.lines.push_back(line);
-    return r;
-  }
-
-  static CommandResult SingleLine(const transport::command::Line &line) {
+  static CommandResult SingleLine(const transport::command::ResponseLine &line) {
     CommandResult r;
     r.append(line);
     return r;
   }
 };
-
-std::string JoinLines(const std::vector<std::string> &lines);
 
 } // namespace command
 } // namespace motor

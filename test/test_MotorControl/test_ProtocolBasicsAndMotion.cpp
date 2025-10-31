@@ -71,7 +71,8 @@ void test_help_format() {
 
 void test_get_all_settings_single_line() {
   std::string r = proto.processLine("GET", 0);
-  TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(r.find(" cmd_id=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
@@ -114,7 +115,7 @@ void test_move_out_of_range() {
 
 void test_all_addressing_and_status_awake() {
   auto r1 = proto.processLine("WAKE:ALL", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   auto st = proto.processLine("STATUS", 0);
   TEST_ASSERT_TRUE_MESSAGE(st.find("awake=1") != std::string::npos, "Expected awake=1 in STATUS");
 }
@@ -157,7 +158,7 @@ void test_sleep_busy_then_ok() {
   TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
   proto.tick(1100);
   auto r3 = proto.processLine("SLEEP:0", 1200);
-  TEST_ASSERT_TRUE(r3.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:DONE", 0) == 0);
 }
 
 void test_move_all_out_of_range() {
@@ -169,7 +170,7 @@ void test_move_all_out_of_range() {
 
 void test_wake_sleep_single_and_status() {
   auto r1 = proto.processLine("WAKE:1", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   auto st1 = proto.processLine("STATUS", 1);
   auto lines1 = split_lines(st1);
   bool found_awake = false;
@@ -181,7 +182,7 @@ void test_wake_sleep_single_and_status() {
   }
   TEST_ASSERT_TRUE(found_awake);
   auto r2 = proto.processLine("SLEEP:1", 2);
-  TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto st2 = proto.processLine("STATUS", 3);
   auto lines2 = split_lines(st2);
   bool found_asleep = false;
@@ -222,8 +223,8 @@ void test_multi_cmd_accept_disjoint() {
   auto r = proto.processLine("WAKE:0;WAKE:1", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_EQUAL_INT(2, (int)lines.size());
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK", 0) == 0);
-  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(lines[1].rfind("CTRL:DONE", 0) == 0);
 }
 
 void test_multi_cmd_reject_overlap_simple() {
@@ -243,7 +244,7 @@ void test_multi_cmd_sequence_responses() {
   auto r = proto.processLine("WAKE:0;MOVE:1,10", 0);
   auto lines = split_lines(r);
   TEST_ASSERT_TRUE(lines.size() >= 2);
-  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(lines[0].rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
 }
 

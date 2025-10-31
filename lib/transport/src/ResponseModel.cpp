@@ -8,19 +8,19 @@ namespace response {
 
 namespace {
 
-EventType MapLineType(command::LineType type) {
+EventType MapLineType(command::ResponseLineType type) {
   switch (type) {
-  case command::LineType::kAck:
+  case command::ResponseLineType::kAck:
     return EventType::kAck;
-  case command::LineType::kWarn:
+  case command::ResponseLineType::kWarn:
     return EventType::kWarn;
-  case command::LineType::kError:
+  case command::ResponseLineType::kError:
     return EventType::kError;
-  case command::LineType::kInfo:
+  case command::ResponseLineType::kInfo:
     return EventType::kInfo;
-  case command::LineType::kData:
+  case command::ResponseLineType::kData:
     return EventType::kData;
-  case command::LineType::kUnknown:
+  case command::ResponseLineType::kUnknown:
   default:
     return EventType::kInfo;
   }
@@ -49,32 +49,32 @@ bool ExtractInt(const std::map<std::string, std::string> &fields,
   }
 }
 
-command::LineType MapEventType(EventType type) {
+command::ResponseLineType MapEventType(EventType type) {
   switch (type) {
   case EventType::kAck:
-    return command::LineType::kAck;
+    return command::ResponseLineType::kAck;
   case EventType::kWarn:
-    return command::LineType::kWarn;
+    return command::ResponseLineType::kWarn;
   case EventType::kError:
-    return command::LineType::kError;
+    return command::ResponseLineType::kError;
   case EventType::kInfo:
-    return command::LineType::kInfo;
+    return command::ResponseLineType::kInfo;
   case EventType::kData:
-    return command::LineType::kData;
+    return command::ResponseLineType::kData;
   case EventType::kDone:
-    return command::LineType::kInfo;
+    return command::ResponseLineType::kInfo;
   }
-  return command::LineType::kInfo;
+  return command::ResponseLineType::kInfo;
 }
 
 } // namespace
 
-CommandResponse BuildCommandResponse(const command::Response &legacy,
+CommandResponse BuildCommandResponse(const command::Response &response_lines,
                                      const std::string &action) {
   CommandResponse out;
   out.action = action;
 
-  for (const auto &line : legacy.lines) {
+  for (const auto &line : response_lines.lines) {
     Event evt = BuildEvent(line, action);
     if (evt.type == EventType::kAck) {
       if (!out.cmd_id.empty() && out.cmd_id != evt.cmd_id && !evt.cmd_id.empty()) {
@@ -115,7 +115,7 @@ CommandResponse BuildCommandResponse(const command::Response &legacy,
   return out;
 }
 
-Event BuildEvent(const command::Line &line, const std::string &action) {
+Event BuildEvent(const command::ResponseLine &line, const std::string &action) {
   Event evt;
   evt.type = MapLineType(line.type);
   evt.cmd_id = line.msg_id;
@@ -123,11 +123,21 @@ Event BuildEvent(const command::Line &line, const std::string &action) {
   evt.code = line.code;
   evt.reason = line.reason;
   evt.attributes = FieldsToMap(line.fields);
+  auto status_it = evt.attributes.find("status");
+  if (status_it != evt.attributes.end()) {
+    const std::string &status = status_it->second;
+    if (status == "done" || status == "DONE") {
+      evt.type = EventType::kDone;
+    }
+  }
+  if (evt.type == EventType::kInfo && !line.raw.empty() && line.raw.rfind("CTRL:DONE", 0) == 0) {
+    evt.type = EventType::kDone;
+  }
   return evt;
 }
 
-command::Line EventToLine(const Event &event) {
-  command::Line line;
+command::ResponseLine EventToLine(const Event &event) {
+  command::ResponseLine line;
   line.type = MapEventType(event.type);
   line.msg_id = event.cmd_id;
   line.code = event.code;

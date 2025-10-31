@@ -135,6 +135,59 @@ std::string makeSetPayload(const std::string &cmd_id,
   return out;
 }
 
+std::string makeWakePayload(const std::string &cmd_id,
+                            const std::string &target = "ALL") {
+  ArduinoJson::JsonDocument doc;
+  if (!cmd_id.empty()) {
+    doc["cmd_id"] = cmd_id;
+  }
+  doc["action"] = "WAKE";
+  auto params = doc["params"].to<ArduinoJson::JsonObject>();
+  if (target == "ALL") {
+    params["target_ids"] = "ALL";
+  } else {
+    params["target_ids"] = std::atoi(target.c_str());
+  }
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
+std::string makeSleepPayload(const std::string &cmd_id,
+                             const std::string &target = "ALL") {
+  ArduinoJson::JsonDocument doc;
+  if (!cmd_id.empty()) {
+    doc["cmd_id"] = cmd_id;
+  }
+  doc["action"] = "SLEEP";
+  auto params = doc["params"].to<ArduinoJson::JsonObject>();
+  if (target == "ALL") {
+    params["target_ids"] = "ALL";
+  } else {
+    params["target_ids"] = std::atoi(target.c_str());
+  }
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
+std::string makeNetPayload(const std::string &cmd_id,
+                           const std::string &net_action,
+                           std::function<void(ArduinoJson::JsonObject &)> builder = {}) {
+  ArduinoJson::JsonDocument doc;
+  if (!cmd_id.empty()) {
+    doc["cmd_id"] = cmd_id;
+  }
+  doc["action"] = net_action;
+  if (builder) {
+    auto params = doc["params"].to<ArduinoJson::JsonObject>();
+    builder(params);
+  }
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
 } // namespace
 
 void tearDown() {
@@ -239,11 +292,11 @@ void test_get_all_command_success() {
   h.send(makeGetPayload("cmd-get-all", "all"));
 
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
-  auto ack = h.parse(0);
-  TEST_ASSERT_EQUAL_STRING("ack", ack["status"]);
-  TEST_ASSERT_TRUE(ack["result"]["SPEED"].is<long>());
-  TEST_ASSERT_TRUE(ack["result"]["ACCEL"].is<long>());
-  TEST_ASSERT_TRUE(ack["result"]["THERMAL_LIMITING"].is<const char *>());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_TRUE(completion["result"]["SPEED"].is<long>());
+  TEST_ASSERT_TRUE(completion["result"]["ACCEL"].is<long>());
+  TEST_ASSERT_TRUE(completion["result"]["THERMAL_LIMITING"].is<const char *>());
 }
 
 void test_get_last_op_single_command_success() {
@@ -253,10 +306,10 @@ void test_get_last_op_single_command_success() {
   }));
 
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
-  auto ack = h.parse(0);
-  TEST_ASSERT_EQUAL_STRING("ack", ack["status"]);
-  TEST_ASSERT_FALSE(ack["result"]["LAST_OP_TIMING"].isNull());
-  TEST_ASSERT_FALSE(ack["result"]["id"].isNull());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_FALSE(completion["result"]["LAST_OP_TIMING"].isNull());
+  TEST_ASSERT_FALSE(completion["result"]["id"].isNull());
 }
 
 void test_set_speed_command_success() {
@@ -273,9 +326,9 @@ void test_set_speed_command_success() {
   h.clearMessages();
   h.send(makeGetPayload("cmd-get-speed", "speed"));
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
-  auto get_ack = h.parse(0);
-  TEST_ASSERT_EQUAL_STRING("ack", get_ack["status"]);
-  TEST_ASSERT_EQUAL(1500, get_ack["result"]["SPEED"].as<long>());
+  auto get_completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", get_completion["status"]);
+  TEST_ASSERT_EQUAL(1500, get_completion["result"]["SPEED"].as<long>());
 }
 
 void test_missing_cmd_id_generates_uuid() {
@@ -320,6 +373,72 @@ void test_missing_cmd_id_generates_uuid() {
   TEST_ASSERT_EQUAL_UINT(2, h.messages.size());
   auto completion_replay = h.parse(1);
   TEST_ASSERT_EQUAL_STRING(second_id.c_str(), completion_replay["cmd_id"]);
+}
+
+void test_wake_command_success() {
+  Harness h;
+  h.send(makeWakePayload("cmd-wake"));
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_EQUAL_STRING("WAKE", completion["action"]);
+}
+
+void test_wake_missing_target_ids() {
+  Harness h;
+  ArduinoJson::JsonDocument doc;
+  doc["cmd_id"] = "cmd-wake-missing";
+  doc["action"] = "WAKE";
+  doc["params"].to<ArduinoJson::JsonObject>();
+  std::string payload;
+  serializeJson(doc, payload);
+  h.send(payload);
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("error", completion["status"]);
+  auto errors = completion["errors"].as<ArduinoJson::JsonArray>();
+  TEST_ASSERT_FALSE(errors.isNull());
+  TEST_ASSERT_TRUE(errors.size() > 0);
+  TEST_ASSERT_EQUAL_STRING("MQTT_BAD_PAYLOAD", errors[0]["code"]);
+}
+
+void test_sleep_command_success() {
+  Harness h;
+  h.send(makeWakePayload("cmd-prewake"));
+  h.advance(0);
+  h.clearMessages();
+
+  h.send(makeSleepPayload("cmd-sleep"));
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_EQUAL_STRING("SLEEP", completion["action"]);
+}
+
+void test_net_status_command_success() {
+  Harness h;
+  h.send(makeNetPayload("cmd-net-status", "NET:STATUS"));
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_EQUAL_STRING("NET:STATUS", completion["action"]);
+  TEST_ASSERT_TRUE(completion["result"]["state"].is<const char *>());
+}
+
+void test_net_set_command_success() {
+  Harness h;
+  h.send(makeNetPayload("cmd-net-set", "NET:SET", [](ArduinoJson::JsonObject &obj) {
+    obj["ssid"] = "TestNet";
+    obj["pass"] = "password123";
+  }));
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto ack = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("ack", ack["status"]);
+  TEST_ASSERT_EQUAL_STRING("NET:SET", ack["action"]);
 }
 
 void test_duplicate_command_logs() {
@@ -370,6 +489,11 @@ int main(int, char **) {
   RUN_TEST(test_get_last_op_single_command_success);
   RUN_TEST(test_set_speed_command_success);
   RUN_TEST(test_missing_cmd_id_generates_uuid);
+  RUN_TEST(test_wake_command_success);
+  RUN_TEST(test_wake_missing_target_ids);
+  RUN_TEST(test_sleep_command_success);
+  RUN_TEST(test_net_status_command_success);
+  RUN_TEST(test_net_set_command_success);
   RUN_TEST(test_duplicate_command_logs);
   RUN_TEST(test_busy_rejection);
   return UNITY_END();

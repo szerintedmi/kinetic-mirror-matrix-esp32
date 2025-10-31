@@ -1,5 +1,9 @@
 #include "MotorControl/command/CommandRouter.h"
 
+#include "transport/CommandSchema.h"
+#include "transport/ResponseDispatcher.h"
+#include "transport/ResponseModel.h"
+
 namespace motor {
 namespace command {
 
@@ -24,7 +28,16 @@ CommandResult CommandRouter::dispatch(const ParsedCommand &command,
     }
   }
   std::string msg_id = context.nextMsgId();
-  return CommandResult::Error("CTRL:ERR msg_id=" + msg_id + " E01 BAD_CMD");
+  auto line = transport::command::MakeErrorLine(msg_id,
+                                                "E01",
+                                                "BAD_CMD",
+                                                {});
+  transport::response::ResponseDispatcher::Instance().Emit(
+      transport::response::BuildEvent(line, command.action));
+  CommandResult res;
+  res.is_error = true;
+  res.append(line);
+  return res;
 }
 
 } // namespace command

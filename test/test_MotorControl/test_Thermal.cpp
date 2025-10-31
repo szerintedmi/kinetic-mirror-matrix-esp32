@@ -17,13 +17,14 @@ void test_help_includes_thermal_get_set() {
 void test_get_thermal_runtime_limiting_default_on_and_max_budget() {
   MotorCommandProcessor p;
   std::string r1 = p.processLine("GET THERMAL_LIMITING", 0);
-  TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK ", 0) == 0);
+  TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" THERMAL_LIMITING=ON") != std::string::npos);
   std::string exp = std::string("max_budget_s=") + std::to_string((int)MotorControlConstants::MAX_RUNNING_TIME_S);
   TEST_ASSERT_TRUE(r1.find(exp) != std::string::npos);
   std::string s = p.processLine("SET THERMAL_LIMITING=OFF", 0);
   TEST_ASSERT_TRUE(s.rfind("CTRL:DONE", 0) == 0);
   std::string r2 = p.processLine("GET THERMAL_LIMITING", 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r2.find("THERMAL_LIMITING=OFF") != std::string::npos);
 }
 
@@ -41,7 +42,7 @@ void test_preflight_e10_move_enabled_err() {
 void test_preflight_e11_move_enabled_err() {
   MotorCommandProcessor p;
   // Drain budget by staying awake for a long time
-  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:DONE", 0) == 0);
   // After 100s, budget will be <= 0
   (void)p.processLine("STATUS", 100000);
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=4000", 0).rfind("CTRL:DONE", 0) == 0);
@@ -68,7 +69,7 @@ void test_preflight_warn_when_disabled_then_ok() {
 
   // Drain budget and try a small move -> expect WARN then OK
   // Use a different motor id (1) to avoid BUSY from the long-running move on id=0
-  TEST_ASSERT_TRUE(p.processLine("WAKE:1", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("WAKE:1", 0).rfind("CTRL:DONE", 0) == 0);
   (void)p.processLine("STATUS", 100000);
   std::string r2 = p.processLine("MOVE:1,10", 100000);
   bool r2_warn = (r2.rfind("CTRL:WARN ", 0) == 0) && (r2.find(" THERMAL_NO_BUDGET") != std::string::npos);
@@ -135,10 +136,10 @@ void test_last_op_timing_home() {
 void test_wake_reject_enabled_no_budget() {
   MotorCommandProcessor p;
   // Drain budget by being awake
-  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:DONE", 0) == 0);
   (void)p.processLine("STATUS", 100000); // 100s later -> no budget
   // Go to sleep to allow WAKE command
-  TEST_ASSERT_TRUE(p.processLine("SLEEP:0", 100000).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("SLEEP:0", 100000).rfind("CTRL:DONE", 0) == 0);
   std::string r = p.processLine("WAKE:0", 100001);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" E12 THERMAL_NO_BUDGET_WAKE") != std::string::npos);
@@ -147,13 +148,13 @@ void test_wake_reject_enabled_no_budget() {
 void test_wake_warn_disabled_no_budget_then_ok() {
   MotorCommandProcessor p;
   TEST_ASSERT_TRUE(p.processLine("SET THERMAL_LIMITING=OFF", 0).rfind("CTRL:DONE", 0) == 0);
-  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:DONE", 0) == 0);
   (void)p.processLine("STATUS", 100000);
-  TEST_ASSERT_TRUE(p.processLine("SLEEP:0", 100000).rfind("CTRL:ACK", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("SLEEP:0", 100000).rfind("CTRL:DONE", 0) == 0);
   std::string r = p.processLine("WAKE:0", 100001);
   TEST_ASSERT_TRUE(r.rfind("CTRL:WARN ", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" THERMAL_NO_BUDGET_WAKE") != std::string::npos);
-  TEST_ASSERT_TRUE(r.find("\nCTRL:ACK") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("\nCTRL:DONE") != std::string::npos);
 }
 
 void test_auto_sleep_overrun_cancels_move_and_awake() {

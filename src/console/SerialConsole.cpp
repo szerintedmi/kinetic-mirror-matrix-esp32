@@ -2,7 +2,6 @@
 #if defined(ARDUINO)
 #include <Arduino.h>
 #include "MotorControl/MotorCommandProcessor.h"
-#include "MotorControl/command/ResponseFormatter.h"
 #include "mqtt/MqttPresenceClient.h"
 #include "mqtt/MqttStatusPublisher.h"
 #include "mqtt/MqttCommandServer.h"
@@ -16,7 +15,6 @@
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
 #include "transport/CompletionTracker.h"
-#include "MotorControl/command/CommandResult.h"
 
 // Defer heavy backend initialization until setup() runs, to avoid
 // hardware init during static construction before Arduino core is ready.
@@ -97,10 +95,6 @@ void serial_console_setup()
   {
     serialSinkToken = transport::response::ResponseDispatcher::Instance().RegisterSink(
         [](const transport::response::Event &evt) {
-          if (evt.type == transport::response::EventType::kData)
-          {
-            return;
-          }
           auto line = transport::response::EventToLine(evt);
           std::string text = line.raw.empty() ? transport::command::SerializeLine(line) : line.raw;
           if (!text.empty())
@@ -178,12 +172,7 @@ void serial_console_tick()
       inputBuf[inputLen] = '\0';
       if (!commandProcessor)
         return; // not ready
-      motor::command::CommandResult result = commandProcessor->execute(std::string(inputBuf), millis());
-      std::string resp = motor::command::FormatForSerial(result);
-      if (!result.hasStructuredResponse() && !resp.empty())
-      {
-        Serial.println(resp.c_str());
-      }
+      (void)commandProcessor->execute(std::string(inputBuf), millis());
       inputLen = 0;
     }
     else

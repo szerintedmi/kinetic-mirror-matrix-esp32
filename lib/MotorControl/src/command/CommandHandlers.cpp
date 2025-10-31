@@ -11,6 +11,7 @@
 #include "transport/CommandSchema.h"
 
 #include <array>
+#include <utility>
 #include <sstream>
 #include <vector>
 #include <algorithm>
@@ -65,12 +66,12 @@ inline const char *BoolToFlag(bool value) {
   return value ? "1" : "0";
 }
 
-void EmitResponseEvent(const char *action, const transport::command::Line &line) {
+void EmitResponseEvent(const char *action, const transport::command::ResponseLine &line) {
   transport::response::ResponseDispatcher::Instance().Emit(
       transport::response::BuildEvent(line, action ? action : std::string()));
 }
 
-CommandResult MakeResultWithLine(const char *action, transport::command::Line line) {
+CommandResult MakeResultWithLine(const char *action, transport::command::ResponseLine line) {
   EmitResponseEvent(action, line);
   CommandResult res;
   res.append(line);
@@ -79,7 +80,7 @@ CommandResult MakeResultWithLine(const char *action, transport::command::Line li
 
 CommandResult MakeDoneResult(const char *action,
                              const std::string &msg_id,
-                             std::initializer_list<transport::command::Field> fields = {}) {
+                             const std::vector<transport::command::Field> &fields = {}) {
   transport::response::Event event;
   event.type = transport::response::EventType::kDone;
   event.cmd_id = msg_id;
@@ -91,10 +92,33 @@ CommandResult MakeDoneResult(const char *action,
     event.attributes[field.key] = field.value;
   }
   transport::response::ResponseDispatcher::Instance().Emit(event);
-  transport::command::Line line = transport::response::EventToLine(event);
+  transport::command::ResponseLine line = transport::response::EventToLine(event);
   CommandResult res;
   res.append(line);
   return res;
+}
+
+CommandResult AppendDoneResult(CommandResult res,
+                               const char *action,
+                               const std::string &msg_id,
+                               const std::vector<transport::command::Field> &fields = {}) {
+  CommandResult done = MakeDoneResult(action, msg_id, fields);
+  res.mergeFrom(done);
+  return res;
+}
+
+const char *NetStateToString(net_onboarding::State state) {
+  using net_onboarding::State;
+  switch (state) {
+  case State::AP_ACTIVE:
+    return "AP_ACTIVE";
+  case State::CONNECTING:
+    return "CONNECTING";
+  case State::CONNECTED:
+    return "CONNECTED";
+  default:
+    return "UNKNOWN";
+  }
 }
 
 } // namespace
@@ -124,50 +148,58 @@ CommandResult MotorCommandHandler::execute(const ParsedCommand &command,
   if (command.action == "HOME" || command.action == "H") {
     return handleHome(command.args, context, now_ms);
   }
-  return CommandResult::Error("CTRL:ERR msg_id=" + context.nextMsgId() + " E01 BAD_CMD");
+  auto err_line = transport::command::MakeErrorLine(
+      context.nextMsgId(),
+      "E01",
+      "BAD_CMD",
+      {});
+  return MakeResultWithLine(command.action.c_str(), err_line);
 }
 
 CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandExecutionContext &context) {
+  constexpr const char *kAction = "WAKE";
   std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
-    return CommandResult::Error(eo.str());
+    auto err_line = transport::command::MakeErrorLine(msg_id, "E02", "BAD_ID", {});
+    return MakeResultWithLine(kAction, err_line);
   }
   for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
-    if ((mask & (1u << id)) == 0) continue;
+    if ((mask & (1u << id)) == 0) {
+      continue;
+    }
     const MotorState &s = context.controller().state(id);
     int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
     if (avail_s <= 0) {
       if (context.thermalLimitsEnabled()) {
-        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E12 THERMAL_NO_BUDGET_WAKE";
-        return CommandResult::Error(eo.str());
-      } else {
-        context.controller().wakeMask(mask);
-        std::ostringstream out;
-        out << "CTRL:WARN msg_id=" << msg_id << " THERMAL_NO_BUDGET_WAKE\nCTRL:ACK msg_id=" << msg_id;
-        CommandResult res;
-        res.lines = Split(out.str(), '\n');
-        return res;
+        auto err_line = transport::command::MakeErrorLine(msg_id, "E12", "THERMAL_NO_BUDGET_WAKE", {});
+        return MakeResultWithLine(kAction, err_line);
       }
+      context.controller().wakeMask(mask);
+      CommandResult res;
+      auto warn_line = transport::command::MakeWarnLine(msg_id, "THERMAL_NO_BUDGET_WAKE", "", {});
+      EmitResponseEvent(kAction, warn_line);
+      res.append(warn_line);
+      return AppendDoneResult(std::move(res), kAction, msg_id);
     }
   }
   context.controller().wakeMask(mask);
-  return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
+  return MakeDoneResult(kAction, msg_id);
 }
 
 CommandResult MotorCommandHandler::handleSleep(const std::string &args, CommandExecutionContext &context) {
+  constexpr const char *kAction = "SLEEP";
   std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
-    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E02 BAD_ID";
-    return CommandResult::Error(eo.str());
+    auto err_line = transport::command::MakeErrorLine(msg_id, "E02", "BAD_ID", {});
+    return MakeResultWithLine(kAction, err_line);
   }
   if (!context.controller().sleepMask(mask)) {
-    std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " E04 BUSY";
-    return CommandResult::Error(eo.str());
+    auto err_line = transport::command::MakeErrorLine(msg_id, "E04", "BUSY", {});
+    return MakeResultWithLine(kAction, err_line);
   }
-  return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
+  return MakeDoneResult(kAction, msg_id);
 }
 
 CommandResult MotorCommandHandler::handleMove(const std::string &args,
@@ -176,7 +208,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
   using motor::command::Split;
   std::string msg_id = context.nextMsgId();
   using transport::command::Field;
-  auto emitLine = [&](const transport::command::Line &line) {
+  auto emitLine = [&](const transport::command::ResponseLine &line) {
     auto event = transport::response::BuildEvent(line, "MOVE");
     transport::response::ResponseDispatcher::Instance().Emit(event);
   };
@@ -187,7 +219,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
     emitLine(line);
     return CommandResult::Error(line);
   };
-  auto appendLine = [&](CommandResult &res, const transport::command::Line &line) {
+  auto appendLine = [&](CommandResult &res, const transport::command::ResponseLine &line) {
     emitLine(line);
     res.append(line);
   };
@@ -353,7 +385,7 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
   auto parts = Split(args, ',');
   std::string msg_id = context.nextMsgId();
   using transport::command::Field;
-  auto emitLine = [&](const transport::command::Line &line) {
+  auto emitLine = [&](const transport::command::ResponseLine &line) {
     auto event = transport::response::BuildEvent(line, "HOME");
     transport::response::ResponseDispatcher::Instance().Emit(event);
   };
@@ -364,7 +396,7 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
     emitLine(line);
     return CommandResult::Error(line);
   };
-  auto appendLine = [&](CommandResult &res, const transport::command::Line &line) {
+  auto appendLine = [&](CommandResult &res, const transport::command::ResponseLine &line) {
     emitLine(line);
     res.append(line);
   };
@@ -568,10 +600,16 @@ CommandResult QueryCommandHandler::execute(const ParsedCommand &command,
     context.controller().tick(now_ms);
     return handleSet(command.args, context);
   }
-  return CommandResult::Error("CTRL:ERR msg_id=" + context.nextMsgId() + " E01 BAD_CMD");
+  auto err_line = transport::command::MakeErrorLine(
+      context.nextMsgId(),
+      "E01",
+      "BAD_CMD",
+      {});
+  return MakeResultWithLine(command.action.c_str(), err_line);
 }
 
 CommandResult QueryCommandHandler::handleHelp() const {
+  constexpr const char *kAction = "HELP";
   std::ostringstream os;
   os << "HELP\n";
   os << "MOVE:<id|ALL>,<abs_steps>\n";
@@ -601,7 +639,13 @@ CommandResult QueryCommandHandler::handleHelp() const {
   os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS\n";
   os << "Multicommand: <cmd1>;<cmd2> note: no cmd queuing; only distinct motors allowed";
   CommandResult res;
-  res.lines = Split(os.str(), '\n');
+  for (const auto &line : Split(os.str(), '\n')) {
+    transport::command::ResponseLine info_line;
+    info_line.type = transport::command::ResponseLineType::kInfo;
+    info_line.raw = line;
+    EmitResponseEvent(kAction, info_line);
+    res.append(info_line);
+  }
   return res;
 }
 
@@ -631,8 +675,8 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context
       ttfc_tenths = kTtfcMaxTenths;
     }
 
-    transport::command::Line data_line;
-    data_line.type = transport::command::LineType::kData;
+    transport::command::ResponseLine data_line;
+    data_line.type = transport::command::ResponseLineType::kData;
     data_line.fields.push_back({"id", std::to_string(static_cast<int>(s.id))});
     data_line.fields.push_back({"pos", std::to_string(s.position)});
     data_line.fields.push_back({"moving", BoolToFlag(s.moving)});
@@ -660,33 +704,29 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
   std::string msg_id = context.nextMsgId();
   std::string key = ToUpperCopy(Trim(args));
   if (key.empty() || key == "ALL") {
-    auto line = transport::command::MakeAckLine(msg_id, {});
-    line.fields.push_back({"SPEED", std::to_string(context.defaultSpeed())});
-    line.fields.push_back({"ACCEL", std::to_string(context.defaultAccel())});
-    line.fields.push_back({"DECEL", std::to_string(context.defaultDecel())});
-    line.fields.push_back({"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"});
-    line.fields.push_back({"max_budget_s",
-                           std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))});
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction,
+                          msg_id,
+                          {{"SPEED", std::to_string(context.defaultSpeed())},
+                           {"ACCEL", std::to_string(context.defaultAccel())},
+                           {"DECEL", std::to_string(context.defaultDecel())},
+                           {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
+                           {"max_budget_s",
+                            std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
   }
   if (key == "SPEED") {
-    auto line = transport::command::MakeAckLine(msg_id, {{"SPEED", std::to_string(context.defaultSpeed())}});
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction, msg_id, {{"SPEED", std::to_string(context.defaultSpeed())}});
   }
   if (key == "ACCEL") {
-    auto line = transport::command::MakeAckLine(msg_id, {{"ACCEL", std::to_string(context.defaultAccel())}});
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction, msg_id, {{"ACCEL", std::to_string(context.defaultAccel())}});
   }
   if (key == "DECEL") {
-    auto line = transport::command::MakeAckLine(msg_id, {{"DECEL", std::to_string(context.defaultDecel())}});
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction, msg_id, {{"DECEL", std::to_string(context.defaultDecel())}});
   }
   if (key == "THERMAL_LIMITING") {
-    auto line = transport::command::MakeAckLine(
-        msg_id,
-        {{"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
-         {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction,
+                          msg_id,
+                          {{"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
+                           {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
   }
   if (key.rfind("LAST_OP_TIMING", 0) == 0) {
     std::string rest;
@@ -699,8 +739,8 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
       EmitResponseEvent(kAction, ack_line);
       res.append(ack_line);
 
-      transport::command::Line section_line;
-      section_line.type = transport::command::LineType::kInfo;
+      transport::command::ResponseLine section_line;
+      section_line.type = transport::command::ResponseLineType::kInfo;
       section_line.msg_id = list_cid;
       section_line.code = "LAST_OP_TIMING";
       section_line.raw = "LAST_OP_TIMING";
@@ -709,8 +749,8 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
 
       for (uint8_t i = 0; i < context.controller().motorCount(); ++i) {
         const MotorState &s = context.controller().state(i);
-        transport::command::Line data_line;
-        data_line.type = transport::command::LineType::kData;
+        transport::command::ResponseLine data_line;
+        data_line.type = transport::command::ResponseLineType::kData;
         data_line.fields.push_back({"id", std::to_string(static_cast<int>(i))});
         data_line.fields.push_back({"ongoing", BoolToFlag(s.last_op_ongoing)});
         data_line.fields.push_back({"est_ms", std::to_string(s.last_op_est_ms)});
@@ -721,6 +761,8 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
         EmitResponseEvent(kAction, data_line);
         res.append(data_line);
       }
+      auto done = MakeDoneResult(kAction, list_cid);
+      res.mergeFrom(done);
       return res;
     }
     uint32_t mask;
@@ -735,27 +777,16 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
       return MakeResultWithLine(kAction, err_line);
     }
     const MotorState &s = context.controller().state(id);
-    auto line = transport::command::MakeAckLine(
-        msg_id,
-        {{"LAST_OP_TIMING", "1"},
-         {"ongoing", BoolToFlag(s.last_op_ongoing)},
-         {"id", std::to_string(static_cast<int>(id))},
-         {"est_ms", std::to_string(s.last_op_est_ms)},
-         {"started_ms", std::to_string(s.last_op_started_ms)}});
+    std::vector<transport::command::Field> fields = {
+        {"LAST_OP_TIMING", "1"},
+        {"ongoing", BoolToFlag(s.last_op_ongoing)},
+        {"id", std::to_string(static_cast<int>(id))},
+        {"est_ms", std::to_string(s.last_op_est_ms)},
+        {"started_ms", std::to_string(s.last_op_started_ms)}};
     if (!s.last_op_ongoing) {
-      line.fields.push_back({"actual_ms", std::to_string(s.last_op_last_ms)});
+      fields.push_back({"actual_ms", std::to_string(s.last_op_last_ms)});
     }
-    std::ostringstream legacy;
-    legacy << "CTRL:ACK msg_id=" << msg_id << " LAST_OP_TIMING"
-           << " ongoing=" << (s.last_op_ongoing ? 1 : 0)
-           << " id=" << static_cast<int>(id)
-           << " est_ms=" << s.last_op_est_ms
-           << " started_ms=" << s.last_op_started_ms;
-    if (!s.last_op_ongoing) {
-      legacy << " actual_ms=" << s.last_op_last_ms;
-    }
-    line.raw = legacy.str();
-    return MakeResultWithLine(kAction, line);
+    return MakeDoneResult(kAction, msg_id, fields);
   }
   auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
   return MakeResultWithLine(kAction, err_line);
@@ -844,6 +875,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
                                          CommandExecutionContext &context,
                                          uint32_t /*now_ms*/) {
   using net_onboarding::State;
+  constexpr const char *kAction = "NET";
 
   std::string a = Trim(command.args);
   std::string up = ToUpperCopy(a);
@@ -851,133 +883,164 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
   size_t comma = up.find(',');
   if (comma != std::string::npos) sub = Trim(up.substr(0, comma));
 
+  auto sub_field = [](const char *value) -> transport::command::Field {
+    return {"sub_action", value};
+  };
+
   if (sub == "RESET") {
     auto before = context.net().status().state;
     std::string msg_id = context.nextMsgId();
     if (before == State::CONNECTING) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BUSY_CONNECTING";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("RESET")});
+      return MakeResultWithLine(kAction, err_line);
     }
     context.setActiveMsgId(msg_id);
     context.net().resetCredentials();
     auto after = context.net().status();
     if (before == State::AP_ACTIVE) {
-      std::ostringstream os;
-      os << "CTRL:ACK msg_id=" << msg_id << "\n";
-      os << "CTRL: NET:AP_ACTIVE msg_id=" << msg_id
-         << " ssid=" << after.ssid.data()
-         << " ip=" << after.ip.data();
       context.clearActiveMsgId();
       CommandResult res;
-      res.lines = Split(os.str(), '\n');
-      return res;
+      std::string ssid = std::string(after.ssid.data());
+      std::string ip = std::string(after.ip.data());
+      transport::command::ResponseLine info_line;
+      info_line.type = transport::command::ResponseLineType::kInfo;
+      info_line.msg_id = msg_id;
+      info_line.code = "NET:AP_ACTIVE";
+      info_line.fields.push_back(sub_field("RESET"));
+      info_line.fields.push_back({"state", "AP_ACTIVE"});
+      info_line.fields.push_back({"ssid", QuoteString(ssid)});
+      info_line.fields.push_back({"ip", ip});
+      info_line.raw = "CTRL: NET:AP_ACTIVE msg_id=" + msg_id +
+                      " ssid=" + QuoteString(ssid) +
+                      " ip=" + ip;
+      EmitResponseEvent(kAction, info_line);
+      res.append(info_line);
+      return AppendDoneResult(std::move(res),
+                              kAction,
+                              msg_id,
+                              {sub_field("RESET"),
+                               {"state", "AP_ACTIVE"},
+                               {"ssid", QuoteString(ssid)},
+                               {"ip", ip}});
     }
-    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
+    auto ack_line = transport::command::MakeAckLine(msg_id,
+                                                    {sub_field("RESET"),
+                                                     {"state", NetStateToString(before)}});
+    return MakeResultWithLine(kAction, ack_line);
   }
 
   if (sub == "STATUS") {
     auto s = context.net().status();
     std::string msg_id = context.nextMsgId();
-    std::ostringstream os;
-    os << "CTRL:ACK msg_id=" << msg_id << ' ' << "state=";
-    if (s.state == State::AP_ACTIVE) os << "AP_ACTIVE";
-    else if (s.state == State::CONNECTING) os << "CONNECTING";
-    else if (s.state == State::CONNECTED) os << "CONNECTED";
-    os << " rssi=";
-    if (s.state == State::CONNECTED) os << s.rssi_dbm; else os << "NA";
-    os << " ip=" << s.ip.data();
-    os << " ssid=" << QuoteString(std::string(s.ssid.data()));
+    std::vector<transport::command::Field> fields = {
+        sub_field("STATUS"),
+        {"state", NetStateToString(s.state)},
+        {"rssi", (s.state == State::CONNECTED) ? std::to_string(s.rssi_dbm) : "NA"},
+        {"ip", s.ip.data()},
+        {"ssid", QuoteString(std::string(s.ssid.data()))}};
     if (s.state == State::AP_ACTIVE) {
-      std::array<char,65> pass; context.net().apPassword(pass);
-      os << " pass=" << QuoteString(std::string(pass.data()));
+      std::array<char,65> pass;
+      context.net().apPassword(pass);
+      fields.push_back({"pass", QuoteString(std::string(pass.data()))});
     } else {
-      os << " pass=" << QuoteString("********");
+      fields.push_back({"pass", QuoteString("********")});
     }
-    return CommandResult::SingleLine(os.str());
+    return MakeDoneResult(kAction, msg_id, fields);
   }
 
   if (sub == "SET") {
     std::string msg_id = context.nextMsgId();
     if (context.net().status().state == State::CONNECTING) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BUSY_CONNECTING";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("SET")});
+      return MakeResultWithLine(kAction, err_line);
     }
     auto toks = ParseCsvQuoted(a);
     if (toks.size() != 3) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      return MakeResultWithLine(kAction, err_line);
     }
     const std::string &ssid = toks[1];
     const std::string &pass = toks[2];
     if (ssid.empty() || ssid.size() > 32) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      return MakeResultWithLine(kAction, err_line);
     }
     if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
       if (pass.size() > 0 && pass.size() < 8) {
-        std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM PASS_TOO_SHORT";
-        return CommandResult::Error(eo.str());
+        auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                          "NET_BAD_PARAM",
+                                                          "PASS_TOO_SHORT",
+                                                          {sub_field("SET")});
+        return MakeResultWithLine(kAction, err_line);
       }
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_BAD_PARAM";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      return MakeResultWithLine(kAction, err_line);
     }
     context.setActiveMsgId(msg_id);
     bool ok = context.net().setCredentials(ssid.c_str(), pass.c_str());
     if (!ok) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_SAVE_FAILED";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_SAVE_FAILED", "", {sub_field("SET")});
+      return MakeResultWithLine(kAction, err_line);
     }
-    return CommandResult::SingleLine("CTRL:ACK msg_id=" + msg_id);
+    auto ack_line = transport::command::MakeAckLine(msg_id, {sub_field("SET")});
+    return MakeResultWithLine(kAction, ack_line);
   }
 
   if (sub == "LIST") {
     std::string msg_id = context.nextMsgId();
     if (context.net().status().state != State::AP_ACTIVE) {
-      std::ostringstream eo; eo << "CTRL:ERR msg_id=" << msg_id << " NET_SCAN_AP_ONLY";
-      return CommandResult::Error(eo.str());
+      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_SCAN_AP_ONLY", "", {sub_field("LIST")});
+      return MakeResultWithLine(kAction, err_line);
     }
     CommandResult res;
-    bool need_newline = false;
-
-    std::ostringstream ack;
-    ack << "CTRL:ACK msg_id=" << msg_id << " scanning=1";
-    if (!context.printCtrlLineImmediate(ack.str())) {
-      res.lines.push_back(ack.str());
-      need_newline = true;
-    }
-
+    auto append_line = [&](transport::command::ResponseLine line) {
+      EmitResponseEvent(kAction, line);
+      res.append(line);
+    };
+    append_line(transport::command::MakeAckLine(msg_id,
+                                                {sub_field("LIST"),
+                                                 {"scanning", "1"}}));
     std::vector<net_onboarding::WifiScanResult> nets;
     int n = context.net().scanNetworks(nets, 12, true);
-
-    std::ostringstream header;
-    header << "NET:LIST msg_id=" << msg_id;
-    if (!context.printCtrlLineImmediate(header.str())) {
-      res.lines.push_back(header.str());
-      need_newline = true;
+    if (n < 0) {
+      n = 0;
     }
+    transport::command::ResponseLine header;
+    header.type = transport::command::ResponseLineType::kInfo;
+    header.msg_id = msg_id;
+    header.code = "NET:LIST";
+    header.fields.push_back(sub_field("LIST"));
+    header.fields.push_back({"count", std::to_string(n)});
+    header.raw = "NET:LIST msg_id=" + msg_id;
+    append_line(header);
 
     for (int i = 0; i < n; ++i) {
       const auto &r = nets[static_cast<size_t>(i)];
-      std::ostringstream line;
-      line << "SSID=" << QuoteString(r.ssid)
-           << " rssi=" << r.rssi
-           << " secure=" << (r.secure ? 1 : 0)
-           << " channel=" << r.channel;
-      if (!context.printCtrlLineImmediate(line.str())) {
-        res.lines.push_back(line.str());
-        need_newline = true;
-      }
+      transport::command::ResponseLine data_line;
+      data_line.type = transport::command::ResponseLineType::kData;
+      data_line.fields.push_back({"SSID", QuoteString(r.ssid)});
+      data_line.fields.push_back({"rssi", std::to_string(r.rssi)});
+      data_line.fields.push_back({"secure", r.secure ? "1" : "0"});
+      data_line.fields.push_back({"channel", std::to_string(r.channel)});
+      std::ostringstream raw;
+      raw << "SSID=" << QuoteString(r.ssid)
+          << " rssi=" << r.rssi
+          << " secure=" << (r.secure ? 1 : 0)
+          << " channel=" << r.channel;
+      data_line.raw = raw.str();
+      append_line(data_line);
     }
-    if (!need_newline && res.lines.empty()) {
-      // Ensure at least an empty payload to preserve original semantics.
-      res.lines.emplace_back();
-      res.lines.clear();
-    }
-    return res;
+    return AppendDoneResult(std::move(res),
+                            kAction,
+                            msg_id,
+                            {sub_field("LIST"),
+                             {"count", std::to_string(n)}});
   }
 
-  std::ostringstream eo; eo << "CTRL:ERR msg_id=" << context.nextMsgId() << " E03 BAD_PARAM";
-  return CommandResult::Error(eo.str());
+  std::string msg_id = context.nextMsgId();
+  auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM",
+                                                    {{"requested", sub}});
+  return MakeResultWithLine(kAction, err_line);
 }
 
 } // namespace command
