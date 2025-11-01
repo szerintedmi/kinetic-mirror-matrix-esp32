@@ -109,7 +109,104 @@ class MqttRuntimeTests(unittest.TestCase):
         devices: List[str] = [row["device"] for row in rows]
         self.assertEqual(sorted(devices), devices)
 
+    def test_ingest_response_updates_pending(self) -> None:
+        class StubClient:
+            def __init__(self) -> None:
+                self.published = []
+
+            def loop_start(self) -> None:
+                pass
+
+            def loop_stop(self) -> None:
+                pass
+
+            def disconnect(self) -> None:
+                pass
+
+            def subscribe(self, *args, **kwargs) -> None:
+                pass
+
+            def publish(self, topic, payload, qos=1):
+                self.published.append((topic, payload, qos))
+
+                class _Info:
+                    rc = 0
+
+                return _Info()
+
+        ids = iter(["cli-0001", "cli-0002"])
+
+        worker = MqttWorker(
+            client_factory=lambda: StubClient(),
+            node_id="aa",
+            cmd_id_factory=lambda: next(ids),
+        )
+        client = worker._client_factory()  # type: ignore[attr-defined]
+        worker._client = client
+        with worker._lock:
+            worker._connected = True
+
+        handles = worker.queue_cmd("MOVE:0,100")
+        self.assertTrue(handles)
+        self.assertEqual(len(client.published), 1)  # type: ignore[attr-defined]
+        topic, payload, qos = client.published[0]  # type: ignore[index]
+        self.assertEqual(topic, "devices/aa/cmd")
+        self.assertEqual(qos, 1)
+        payload_obj = json.loads(payload)
+        self.assertIn("cmd_id", payload_obj)
+        host_cmd_id = payload_obj["cmd_id"]
+        self.assertIsInstance(host_cmd_id, str)
+
+        ack_payload = json.dumps(
+            {
+                "cmd_id": host_cmd_id,
+                "action": "MOVE",
+                "status": "ack",
+                "result": {"est_ms": 150},
+            }
+        )
+        done_payload = json.dumps(
+            {
+                "cmd_id": host_cmd_id,
+                "action": "MOVE",
+                "status": "done",
+                "result": {"actual_ms": 140},
+            }
+        )
+        worker.ingest_response("devices/aa/cmd/resp", ack_payload)
+        worker.ingest_response("devices/aa/cmd/resp", done_payload)
+
+        pending_map = worker.wait_for_completion(handles, timeout=0.1)
+        pending = pending_map.get(handles[0])
+        self.assertIsNotNone(pending)
+        self.assertTrue(pending.completed)  # type: ignore[union-attr]
+        self.assertEqual(pending.cmd_id, host_cmd_id)  # type: ignore[union-attr]
+        self.assertGreaterEqual(len(pending.events), 2)  # type: ignore[union-attr]
+
+        net_payload = json.dumps(
+            {
+                "cmd_id": "net123",
+                "action": "NET:STATUS",
+                "status": "done",
+                "result": {
+                    "state": "AP_ACTIVE",
+                    "ssid": "DeviceAP",
+                    "ip": "192.168.4.1",
+                },
+            }
+        )
+        worker.ingest_response("devices/aa/cmd/resp", net_payload)
+
+        net_info = worker.get_net_info()
+        self.assertEqual(net_info.get("state"), "AP_ACTIVE")
+        self.assertEqual(net_info.get("ssid"), "DeviceAP")
+        self.assertEqual(net_info.get("ip"), "192.168.4.1")
+
+        _, log, _, _, _ = worker.get_state()
+        joined = "\n".join(log)
+        self.assertIn("[ACK]", joined)
+        self.assertIn("[DONE]", joined)
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
-

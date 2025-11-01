@@ -5,13 +5,28 @@ import os
 import re
 import threading
 import time
+import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional, Callable, List
+from typing import Callable, Dict, List, Optional, Sequence
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
 except Exception:  # pragma: no cover - dependency handled at runtime
     mqtt = None  # type: ignore
+
+from .command_builder import (
+    CommandParseError,
+    CommandRequest,
+    UnsupportedCommandError,
+    build_requests,
+)
+from .response_events import EventType, ResponseEvent, format_event, parse_mqtt_payload
+
+
+def _default_cmd_id() -> str:
+    """Generate a UUIDv4 string compatible with firmware transport IDs."""
+    return str(uuid.uuid4())
 
 
 def load_mqtt_defaults() -> Dict[str, str]:
@@ -50,6 +65,25 @@ def load_mqtt_defaults() -> Dict[str, str]:
     return defaults
 
 
+@dataclass
+class PendingCommand:
+    local_id: int
+    node_id: str
+    request: CommandRequest
+    raw: str
+    enqueued_at: float
+    enqueued_monotonic: float
+    cmd_id: Optional[str] = None
+    ack_event: Optional[ResponseEvent] = None
+    done_event: Optional[ResponseEvent] = None
+    ack_latency_ms: Optional[float] = None
+    completion_latency_ms: Optional[float] = None
+    completed: bool = False
+    events: List[ResponseEvent] = field(default_factory=list)
+    completed_at: float = 0.0
+    completed_monotonic: float = 0.0
+
+
 class MqttWorker(threading.Thread):
     """MQTT telemetry subscriber that mirrors SerialWorker's interface."""
 
@@ -58,6 +92,8 @@ class MqttWorker(threading.Thread):
         *,
         broker: Optional[Dict[str, str]] = None,
         client_factory: Optional[Callable[[], "mqtt.Client"]] = None,
+        node_id: Optional[str] = None,
+        cmd_id_factory: Optional[Callable[[], str]] = None,
     ) -> None:
         super().__init__(daemon=True)
         self._broker = dict(broker or load_mqtt_defaults())
@@ -72,6 +108,8 @@ class MqttWorker(threading.Thread):
         self._connected = False
         self._reconnect_backoff = 1.0
         self._next_connect_ts = 0.0
+        self._node_id = node_id
+        self._condition = threading.Condition(self._lock)
         self._columns = (
             ("id", "id", 4),
             ("pos", "pos", 8),
@@ -85,6 +123,14 @@ class MqttWorker(threading.Thread):
             ("started_ms", "started_ms", 12),
             ("actual_ms", "actual_ms", 12),
         )
+
+        self._pending_by_cmd: Dict[str, PendingCommand] = {}
+        self._pending_handles: Dict[int, PendingCommand] = {}
+        self._pending_order: List[PendingCommand] = []
+        self._next_local_id: int = 1
+        self._net_state: Dict[str, str] = {}
+        self._requested_net_status = False
+        self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
 
         if client_factory is not None:
             self._client_factory = client_factory
@@ -179,11 +225,87 @@ class MqttWorker(threading.Thread):
     # ------------------------------------------------------------------
     # Control/compatibility helpers (mirrors SerialWorker)
     # ------------------------------------------------------------------
-    def queue_cmd(self, cmd: str) -> None:
+    def queue_cmd(self, cmd: str, *, silent: bool = False) -> List[int]:
         stripped = cmd.strip()
-        if stripped:
-            self._append_log(f"> {stripped}")
-        self._append_log("error: MQTT transport not implemented yet")
+        if not stripped:
+            return []
+
+        try:
+            requests = build_requests(stripped)
+        except UnsupportedCommandError as exc:
+            self._append_log(f"error: {exc}")
+            return []
+        except CommandParseError as exc:
+            self._append_log(f"error: {exc}")
+            return []
+
+        node_id = self._resolve_node_id()
+        if not node_id:
+            if not silent:
+                self._append_log("error: specify --node <id> or wait for telemetry")
+            return []
+
+        handles: List[int] = []
+        published = False
+        for request in requests:
+            cmd_id = request.cmd_id or self._cmd_id_factory()
+            request.cmd_id = cmd_id
+            if not silent:
+                self._append_log(f"> {request.raw} (mqtt cmd_id={cmd_id})")
+            with self._lock:
+                connected = self._connected and self._client is not None
+            if not connected or self._client is None:
+                if not silent:
+                    self._append_log("error: mqtt broker not connected")
+                continue
+
+            payload = {
+                "action": request.action,
+                "params": request.params if request.params else {},
+            }
+            payload["cmd_id"] = cmd_id
+            try:
+                data = json.dumps(payload, separators=(",", ":"), sort_keys=False)
+            except (TypeError, ValueError) as exc:
+                if not silent:
+                    self._append_log(f"error: unable to encode payload: {exc}")
+                continue
+
+            topic = f"devices/{node_id}/cmd"
+            publish_ok = False
+            try:
+                info = self._client.publish(topic, data, qos=1)  # type: ignore[union-attr]
+                rc = getattr(info, "rc", 0) if info is not None else 0
+                publish_ok = (rc == 0)
+            except Exception as exc:
+                if not silent:
+                    self._append_log(f"[mqtt] publish error: {exc}")
+                publish_ok = False
+            if not publish_ok:
+                if not silent:
+                    self._append_log(f"[mqtt] publish failed topic={topic}")
+                continue
+            published = True
+
+            if silent:
+                continue
+
+            pending = PendingCommand(
+                local_id=self._next_local_id,
+                node_id=node_id,
+                request=request,
+                raw=request.raw,
+                enqueued_at=time.time(),
+                enqueued_monotonic=time.monotonic(),
+                cmd_id=cmd_id,
+            )
+            self._next_local_id += 1
+            handles.append(pending.local_id)
+            with self._lock:
+                self._pending_handles[pending.local_id] = pending
+                self._pending_order.append(pending)
+                self._pending_by_cmd[cmd_id] = pending
+        return handles
 
     def get_state(self) -> tuple:
         with self._lock:
@@ -222,6 +344,10 @@ class MqttWorker(threading.Thread):
                 "transport": "mqtt",
                 "host": str(self._broker.get("host", "")),
                 "port": str(self._broker.get("port", "")),
+                "state": self._net_state.get("state", ""),
+                "ssid": self._net_state.get("ssid", ""),
+                "ip": self._net_state.get("ip", ""),
+                "device": self._net_state.get("device", ""),
             }
 
     def get_thermal_state(self):  # pragma: no cover - compatibility stub
@@ -230,21 +356,76 @@ class MqttWorker(threading.Thread):
     def get_thermal_status_text(self) -> str:  # pragma: no cover - compatibility stub
         return ""
 
+    def _resolve_node_id(self) -> Optional[str]:
+        if self._node_id:
+            return self._node_id
+        with self._lock:
+            if not self._devices:
+                return None
+            if len(self._devices) == 1:
+                return next(iter(self._devices.keys()))
+            # Prefer the device with freshest telemetry
+            freshest = sorted(
+                self._devices.items(),
+                key=lambda item: float(item[1].get("last_seen", 0.0)),
+                reverse=True,
+            )
+            return freshest[0][0] if freshest else None
+
+    def wait_for_completion(self, handles: Sequence[int], timeout: float = 5.0) -> Dict[int, PendingCommand]:
+        deadline = time.time() + max(0.0, timeout)
+        handles = list(handles)
+        with self._condition:
+            while True:
+                now = time.time()
+                pending_map = {h: self._pending_handles.get(h) for h in handles}
+                incomplete = []
+                for handle, pending in pending_map.items():
+                    if not pending:
+                        continue
+                    if pending.completed:
+                        continue
+                    incomplete.append(handle)
+                if not incomplete or now >= deadline:
+                    break
+                remaining = deadline - now
+                if remaining <= 0:
+                    break
+                self._condition.wait(remaining)
+            return {
+                h: self._pending_handles.get(h)
+                for h in handles
+                if self._pending_handles.get(h) is not None
+            }
+
+    def wait_until_connected(self, timeout: float = 5.0) -> bool:
+        deadline = time.time() + max(0.0, timeout)
+        with self._condition:
+            while not self._connected:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    return False
+                self._condition.wait(remaining)
+        return True
+
     # ------------------------------------------------------------------
     # MQTT callbacks
     # ------------------------------------------------------------------
     def _on_connect(self, client, userdata, flags, rc):
-        topic = "devices/+/status"
-        client.subscribe(topic, qos=0)
+        topics = [("devices/+/status", 0), ("devices/+/cmd/resp", 1)]
+        for topic, qos in topics:
+            client.subscribe(topic, qos=qos)
         with self._lock:
             self._connected = True
             self._reconnect_backoff = 1.0
             self._next_connect_ts = float("inf")
-        self._append_log(f"[mqtt] connected; subscribed to {topic}")
+            self._condition.notify_all()
+        self._append_log("[mqtt] connected; subscribed to devices/+/status, devices/+/cmd/resp")
 
     def _on_disconnect(self, client, userdata, rc):
         with self._lock:
             self._connected = False
+            self._condition.notify_all()
         if not self._stop_event.is_set():
             self._append_log("[mqtt] disconnected")
             with self._lock:
@@ -254,8 +435,14 @@ class MqttWorker(threading.Thread):
             self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
 
     def _on_message(self, client, userdata, msg):
-        payload = msg.payload.decode(errors="ignore") if isinstance(msg.payload, bytes) else str(msg.payload)
-        self.ingest_message(msg.topic, payload)
+        payload_text = msg.payload.decode(errors="ignore") if isinstance(msg.payload, bytes) else str(msg.payload)
+        if msg.topic.endswith("/status"):
+            self.ingest_message(msg.topic, payload_text)
+            return
+        if msg.topic.endswith("/cmd/resp"):
+            self.ingest_response(msg.topic, payload_text)
+            return
+        self._append_log(f"[mqtt] ignored topic {msg.topic}")
 
     # ------------------------------------------------------------------
     def ingest_message(self, topic: str, payload: str, timestamp: Optional[float] = None) -> None:
@@ -312,6 +499,7 @@ class MqttWorker(threading.Thread):
                 motor_row["actual_ms"] = ""
             motors[motor_row["id"]] = motor_row
 
+        should_request_net = False
         with self._lock:
             entry = self._devices.get(mac, {})
             entry["node_state"] = str(obj.get("node_state", ""))
@@ -320,6 +508,129 @@ class MqttWorker(threading.Thread):
             entry["last_seen"] = ts
             self._devices[mac] = entry
             self._last_update_ts = ts
+            if not self._node_id:
+                self._node_id = mac
+            if not self._requested_net_status and self._node_id:
+                self._requested_net_status = True
+                should_request_net = True
+        if should_request_net:
+            handles = self.queue_cmd("NET:STATUS")
+            if not handles:
+                with self._lock:
+                    self._requested_net_status = False
+
+    def ingest_response(self, topic: str, payload: str) -> None:
+        node_id = topic.split("/")[1] if topic.startswith("devices/") else ""
+        try:
+            obj = json.loads(payload)
+        except (ValueError, TypeError, json.JSONDecodeError):
+            self._append_log(f"[mqtt] unable to parse command response from {topic}")
+            return
+
+        event = parse_mqtt_payload(obj)
+        if event is None:
+            self._append_log(f"[mqtt] unrecognized response payload from {topic}")
+            return
+        event.raw = payload
+        if not event.action:
+            event.action = obj.get("action") or None
+        self._handle_event(node_id, event)
+
+    def _handle_event(self, node_id: str, event: ResponseEvent) -> None:
+        now_wall = time.time()
+        now_mono = time.monotonic()
+        latency = None
+        with self._lock:
+            pending = None
+            if event.cmd_id and event.cmd_id in self._pending_by_cmd:
+                pending = self._pending_by_cmd[event.cmd_id]
+            else:
+                # Try to match against earliest pending without cmd_id for this node
+                for candidate in self._pending_order:
+                    if candidate.completed:
+                        continue
+                    if candidate.cmd_id and event.cmd_id and candidate.cmd_id != event.cmd_id:
+                        continue
+                    if node_id and candidate.node_id != node_id:
+                        continue
+                    pending = candidate
+                    break
+
+            if pending:
+                if event.cmd_id and pending.cmd_id is None:
+                    pending.cmd_id = event.cmd_id
+                    self._pending_by_cmd[event.cmd_id] = pending
+                pending.events.append(event)
+                if event.event_type == EventType.ACK:
+                    pending.ack_event = event
+                    pending.ack_latency_ms = max(0.0, (now_mono - pending.enqueued_monotonic) * 1000.0)
+                    latency = pending.ack_latency_ms
+                if event.event_type in (EventType.DONE, EventType.ERROR):
+                    pending.done_event = event
+                    pending.completion_latency_ms = max(0.0, (now_mono - pending.enqueued_monotonic) * 1000.0)
+                    latency = pending.completion_latency_ms
+                    pending.completed = True
+                    pending.completed_at = now_wall
+                    pending.completed_monotonic = now_mono
+            self._maybe_update_net_state(event)
+            formatted = format_event(event, latency_ms=latency)
+            self._log.append(formatted)
+            if len(self._log) > 800:
+                del self._log[: len(self._log) - 800]
+
+            # Clean up completed commands
+            if pending and pending.completed:
+                if pending.cmd_id and pending.cmd_id in self._pending_by_cmd:
+                    self._pending_by_cmd.pop(pending.cmd_id, None)
+                self._pending_order = [p for p in self._pending_order if p.local_id != pending.local_id]
+                self._cleanup_completed_locked(now_mono)
+
+            self._condition.notify_all()
+
+    def _cleanup_completed_locked(self, now_mono: float) -> None:
+        stale_handles = [
+            local_id
+            for local_id, pending in list(self._pending_handles.items())
+            if pending.completed and pending.completed_monotonic and pending.completed_monotonic < now_mono - 30.0
+        ]
+        for local_id in stale_handles:
+            self._pending_handles.pop(local_id, None)
+
+    def _maybe_update_net_state(self, event: ResponseEvent) -> None:
+        attrs = event.attributes or {}
+        state = attrs.get("state") or attrs.get("STATE")
+        ssid = attrs.get("ssid") or attrs.get("SSID")
+        ip = attrs.get("ip") or attrs.get("IP")
+        device = attrs.get("device") or attrs.get("DEVICE")
+        if not (state or ssid or ip or device):
+            raw = event.raw or ""
+            if raw:
+                raw_upper = raw.upper()
+                if "STATE=" in raw_upper or "SSID=" in raw_upper or " IP=" in raw_upper or "DEVICE=" in raw_upper:
+                    tokens = {tok.split("=", 1)[0].upper(): tok.split("=", 1)[1] for tok in raw.split() if "=" in tok}
+                    state = tokens.get("STATE", state)
+                    ssid = tokens.get("SSID", ssid)
+                    ip = tokens.get("IP", ip)
+                    device = tokens.get("DEVICE", device)
+
+        def _trim(value: Optional[str]) -> Optional[str]:
+            if value is None:
+                return None
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] == '"':
+                value = value[1:-1]
+            return value
+
+        if state or ssid or ip:
+            if state:
+                self._net_state["state"] = _trim(state) or ""
+            if ssid:
+                self._net_state["ssid"] = _trim(ssid) or ""
+            if ip:
+                self._net_state["ip"] = _trim(ip) or ""
+            if device:
+                self._net_state["device"] = _trim(device) or ""
+            self._requested_net_status = True
 
     # ------------------------------------------------------------------
     def _append_log(self, line: str) -> None:

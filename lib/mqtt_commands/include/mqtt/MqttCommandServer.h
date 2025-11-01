@@ -204,6 +204,7 @@ private:
   transport::response::ResponseDispatcher::SinkToken dispatcher_token_ = 0;
   std::unordered_map<std::string, DispatchStream> streams_;
   std::unordered_map<std::string, std::vector<transport::response::Event>> orphan_events_;
+  std::deque<std::string> orphan_order_;
 
   void bindStreamToMessageId(DispatchStream &stream, const std::string &msg_id);
   void processStreamEvent(DispatchStream &stream, const transport::response::Event &event);

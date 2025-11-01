@@ -48,7 +48,7 @@ void CompletionTracker::Tick(uint32_t /*now_ms*/) {
     int32_t actual_ms = -1;
     size_t count = it->controller->motorCount();
     for (size_t idx = 0; idx < count; ++idx) {
-      if (!(it->mask & (1u << idx))) {
+      if (idx >= 32 || !(it->mask & (1u << idx))) {
         continue;
       }
       const MotorState &state = it->controller->state(idx);

@@ -59,16 +59,16 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 1
 
-- [ ] 3.0 Update MQTT worker
-  - [ ] 3.1 Add 2-6 focused tests around new command client helpers (mock MQTT)
-  - [ ] 3.2 Implement command publish helper that emits single-action messages (expand `;`-delimited input into sequential publishes)
-  - [ ] 3.3 Track pending commands, surface ACK latency and BUSY/ERROR states in logs
-  - [ ] 3.4 Respect duplicate notice (`CTRL:INFO MQTT_DUPLICATE`) without retrying
-- [ ] 3.5 Integrate with TUI/CLI interfaces
-  - [ ] 3.5.1 Wire command queue UI to display MQTT status updates (no auto serial fallback)
-  - [ ] 3.5.2 Ensure telemetry polling cadence (1 Hz / 5 Hz) remains unaffected
+- [x] 3.0 Update MQTT worker
+  - [x] 3.1 Add 2-6 focused tests around new command client helpers (mock MQTT)
+  - [x] 3.2 Implement command publish helper that emits single-action messages (expand `;`-delimited input into sequential publishes)
+  - [x] 3.3 Track pending commands, surface ACK latency and BUSY/ERROR states in logs
+  - [x] 3.4 Respect duplicate notice (`CTRL:INFO MQTT_DUPLICATE`) without retrying
+- [x] 3.5 Integrate with TUI/CLI interfaces
+  - [x] 3.5.1 Wire command queue UI to display MQTT status updates (no auto serial fallback)
+  - [x] 3.5.2 Ensure telemetry polling cadence (1 Hz / 5 Hz) remains unaffected
 - [ ] 3.6 Update CLI help text / documentation referencing new JSON schema and config commands
-- [ ] 3.7 Run only the new focused Python tests (`pytest tools/serial_cli/tests/test_mqtt_commands.py -k new_cases`)
+- [x] 3.7 Run only the new focused Python tests (`pytest tools/serial_cli/tests/test_mqtt_commands.py -k new_cases`)
 
 **Acceptance Criteria:**
 - MQTT mode sends single-action commands and logs ACK/completion states analogous to serial mode

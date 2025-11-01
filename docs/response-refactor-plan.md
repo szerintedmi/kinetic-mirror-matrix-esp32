@@ -48,17 +48,17 @@ Goal: eliminate protocol-specific response handling, support async serial comple
 - [x] Add builder-focused unit coverage.  
   *Result:* Added `test_wake_missing_target_ids` to ensure validation errors surface via the new builder flow; existing suites continue to exercise the happy paths.
 
-## Phase 6 — Update Tooling, Tests, and Docs *(Status: ⏳ Not Started)*
-- [ ] Refresh `tools/serial_cli` to consume dispatcher events directly.  
-  *Focus:* surface ACK/DONE transitions, streaming INFO/DATA payloads, and response metadata (msg_id, action, status) instead of assuming single-line `CTRL:*` strings.
-- [ ] Extend CLI command coverage to match firmware parity.  
-  *Focus:* ensure MOVE/HOME batches, NET actions, GET/SET variants, and motion completion tracking work identically over serial and MQTT transports.
-- [ ] Add host-side regression coverage for the new CLI flows.  
-  *Focus:* snapshot tests or golden transcripts that validate ACK/DONE sequencing, async completions, error propagation, and duplicate replay handling.
-- [ ] Update host MQTT clients / TUI tooling to leverage structured responses.  
-  *Focus:* replace string parsing with structured payload handling and expose dispatcher-derived fields (est_ms, actual_ms, warnings/errors).
-- [ ] Refresh documentation/specs to describe the unified response flow and updated tooling expectations.  
-  *Docs:* `docs/mqtt-command-schema.md`, CLI usage guides, relevant `agent-os/specs/*` entries.
+## Phase 6 — Update Tooling, Tests, and Docs *(Status: ✅ Complete)*
+- [x] Refresh `tools/serial_cli` to consume dispatcher events directly.  
+  *Implemented:* `tools/serial_cli/runtime.py`, `tools/serial_cli/response_events.py`, and `tools/serial_cli/__init__.py` parse dispatcher-driven ACK/DONE/INFO traffic, track command latency, and stream events without legacy string assumptions.
+- [x] Extend CLI command coverage to match firmware parity.  
+  *Result:* Updated builders in `tools/serial_cli/command_builder.py` and transport switches now cover MOVE/HOME batches, NET actions, GET/SET variants, and shared completion tracking on serial and MQTT.
+- [x] Add host-side regression coverage for the new CLI flows.  
+  *Tests:* `tools/serial_cli/tests/test_command_builder.py` and `tools/serial_cli/tests/test_mqtt_runtime.py` assert batch parsing, NET payload handling, ACK/DONE sequencing, and duplicate replay behaviour.
+- [x] Update host MQTT clients / TUI tooling to leverage structured responses.  
+  *Outcome:* `tools/serial_cli/mqtt_runtime.py` aggregates dispatcher events into structured state/log output, and `tools/serial_cli/tui/textual_ui.py` renders latency, net, and thermal metadata sourced from those events.
+- [x] Refresh documentation/specs to describe the unified response flow and updated tooling expectations.  
+  *Docs:* `docs/mqtt-command-schema.md` and `docs/response-dispatcher-design.md` now document the unified dispatcher lifecycle, structured payloads, and CLI/MQTT client expectations.
 
 ## Execution Notes
 - Focus next on eliminating the last legacy formatting pathways (`CommandResult` string mode, `FormatForSerial`) so the dispatcher contract becomes the lone source of truth.

@@ -17,6 +17,29 @@ uint32_t clampInterval(uint32_t value, uint32_t fallback) {
   return value == 0 ? fallback : value;
 }
 
+void AppendUnsignedDigits(std::string &out, unsigned long long value) {
+  char buffer[21];
+  size_t len = 0;
+  do {
+    buffer[len++] = static_cast<char>('0' + (value % 10ULL));
+    value /= 10ULL;
+  } while (value != 0ULL);
+  while (len > 0) {
+    out.push_back(buffer[--len]);
+  }
+}
+
+void AppendSignedDigits(std::string &out, long long value) {
+  unsigned long long magnitude;
+  if (value < 0) {
+    out.push_back('-');
+    magnitude = static_cast<unsigned long long>(- (value + 1LL)) + 1ULL;
+  } else {
+    magnitude = static_cast<unsigned long long>(value);
+  }
+  AppendUnsignedDigits(out, magnitude);
+}
+
 } // namespace
 
 MqttStatusPublisher::MqttStatusPublisher(PublishFn publish,
@@ -120,7 +143,7 @@ bool MqttStatusPublisher::buildSnapshot(const MotorController &controller,
     }
 
     scratch_.push_back('\"');
-    scratch_.append(std::to_string(static_cast<int>(state.id)));
+    AppendUnsignedDigits(scratch_, static_cast<unsigned long long>(state.id));
     scratch_.append("\":{");
     appendMotorJson(state, budget_t, ttfc_tenths, !state.last_op_ongoing, scratch_);
     scratch_.push_back('}');
@@ -160,7 +183,7 @@ void MqttStatusPublisher::appendMotorJson(const MotorState &state,
     out.push_back('\"');
     out.append(key);
     out.append("\":");
-    out.append(std::to_string(value));
+    AppendSignedDigits(out, static_cast<long long>(value));
     out.push_back(',');
   };
 
@@ -191,7 +214,7 @@ void MqttStatusPublisher::appendMotorJson(const MotorState &state,
     out.push_back('\"');
     out.append("actual_ms");
     out.append("\":");
-    out.append(std::to_string(state.last_op_last_ms));
+    AppendSignedDigits(out, static_cast<long long>(state.last_op_last_ms));
     out.push_back(',');
   }
   if (!out.empty() && out.back() == ',') {
@@ -207,7 +230,7 @@ void MqttStatusPublisher::appendFixedTenths(int32_t tenths, std::string &out) {
   if (neg) {
     out.push_back('-');
   }
-  out.append(std::to_string(whole));
+  AppendUnsignedDigits(out, static_cast<unsigned long long>(whole));
   out.push_back('.');
   out.push_back(static_cast<char>('0' + frac));
 }

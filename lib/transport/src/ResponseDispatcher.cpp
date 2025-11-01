@@ -3,6 +3,12 @@
 namespace transport {
 namespace response {
 
+namespace {
+
+constexpr std::size_t kMaxCachedResponses = 0;
+
+}
+
 ResponseDispatcher &ResponseDispatcher::Instance() {
   static ResponseDispatcher instance;
   return instance;
@@ -22,13 +28,26 @@ void ResponseDispatcher::UnregisterSink(SinkToken token) {
 }
 
 void ResponseDispatcher::Emit(const Event &event) {
-  if (!event.cmd_id.empty()) {
-    CacheEntry &entry = cache_[event.cmd_id];
+  if (!event.cmd_id.empty() && kMaxCachedResponses > 0) {
+    auto emplace_result = cache_.emplace(event.cmd_id, CacheEntry{});
+    if (emplace_result.second) {
+      order_.push_back(event.cmd_id);
+      while (order_.size() > kMaxCachedResponses) {
+        const std::string &oldest = order_.front();
+        cache_.erase(oldest);
+        order_.pop_front();
+      }
+    }
+    CacheEntry &entry = emplace_result.first->second;
     if (event.type == EventType::kAck) {
-      entry.ack.event = event;
+      entry.ack.line = EventToLine(event);
+      entry.ack.action = event.action;
+      entry.ack.type = event.type;
       entry.ack.valid = true;
     } else if (event.type == EventType::kDone) {
-      entry.done.event = event;
+      entry.done.line = EventToLine(event);
+      entry.done.action = event.action;
+      entry.done.type = event.type;
       entry.done.valid = true;
     }
   }
@@ -40,6 +59,7 @@ void ResponseDispatcher::Emit(const Event &event) {
 
 void ResponseDispatcher::Clear() {
   cache_.clear();
+  order_.clear();
 }
 
 bool ResponseDispatcher::Replay(const std::string &cmd_id,
@@ -53,14 +73,22 @@ bool ResponseDispatcher::Replay(const std::string &cmd_id,
   }
   bool emitted = false;
   if (it->second.ack.valid) {
-    cb(it->second.ack.event);
+    Event evt = BuildEvent(it->second.ack.line, it->second.ack.action);
+    evt.type = it->second.ack.type;
+    cb(evt);
     emitted = true;
   }
   if (it->second.done.valid) {
-    cb(it->second.done.event);
+    Event evt = BuildEvent(it->second.done.line, it->second.done.action);
+    evt.type = it->second.done.type;
+    cb(evt);
     emitted = true;
   }
   return emitted;
+}
+
+std::size_t ResponseDispatcher::CachedCommandCount() const {
+  return cache_.size();
 }
 
 } // namespace response

@@ -1,4 +1,5 @@
 import argparse
+import shlex
 import sys
 import time
 import threading
@@ -10,6 +11,7 @@ except Exception:
     serial = None
 
 from .runtime import SerialWorker
+from .response_events import EventType, format_event
 
 
 def _join_home_with_placeholders(id_token: str, overshoot, backoff, full_range) -> str:
@@ -133,8 +135,9 @@ def _add_common(sub):
     sub.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)")
     sub.add_argument("--timeout", "-t", type=float, default=2.0, help="Read timeout seconds (default 2.0)")
     sub.add_argument("--dry-run", action="store_true", help="Print command only; do not open serial")
-    sub.add_argument("--transport", choices=("serial", "mqtt"), default="serial",
-                     help="Transport to use (serial or mqtt). Default serial.")
+    sub.add_argument("--transport", choices=("serial", "mqtt"), default="mqtt",
+                     help="Transport to use (serial or mqtt). Default mqtt.")
+    sub.add_argument("--node", help="Target node id (MQTT transport)")
     return sub
 
 
@@ -227,8 +230,12 @@ def parse_kv_line(text: str) -> Dict[str, str]:
     if not lines:
         return out
     ln = lines[-1]
-    if ln.upper().startswith("CTRL:ACK") or ln.upper().startswith("CTRL:OK"):
-        parts = ln.split()
+    upper = ln.upper()
+    if upper.startswith("CTRL:"):
+        try:
+            parts = shlex.split(ln)
+        except ValueError:
+            parts = ln.split()
         for tok in parts[1:]:
             if "=" in tok:
                 k, v = tok.split("=", 1)
@@ -299,19 +306,19 @@ def render_table(rows: List[Dict[str, str]]) -> str:
 
 
 
-def _make_mqtt_worker(*, broker_overrides: Optional[Dict[str, str]] = None, **kwargs):
+def _make_mqtt_worker(*, broker_overrides: Optional[Dict[str, str]] = None, node: Optional[str] = None, **kwargs):
     from .mqtt_runtime import MqttWorker, load_mqtt_defaults
 
     broker = load_mqtt_defaults()
     if broker_overrides:
         broker.update(broker_overrides)
-    return MqttWorker(broker=broker, **kwargs)
+    return MqttWorker(broker=broker, node_id=node, **kwargs)
 
 
 def _run_status_mqtt(ns) -> int:
     wait_seconds = max(0.5, float(getattr(ns, "timeout", 1.0)))
     try:
-        worker = _make_mqtt_worker()
+        worker = _make_mqtt_worker(node=getattr(ns, "node", None))
     except RuntimeError as exc:
         print(exc, file=sys.stderr)
         return 2
@@ -337,6 +344,53 @@ def _run_status_mqtt(ns) -> int:
     return 0
 
 
+def run_command_mqtt(worker, ns) -> int:
+    cmd = build_command(ns).strip()
+    if ns.dry_run:
+        sys.stdout.write(cmd + "\n")
+        return 0
+
+    timeout = max(1.0, float(getattr(ns, "timeout", 3.0)))
+    worker.start()
+    try:
+        if not worker.wait_until_connected(timeout):
+            print("error: mqtt broker not connected", file=sys.stderr)
+            return 1
+
+        handles = worker.queue_cmd(cmd)
+        if not handles:
+            print("error: unable to publish command", file=sys.stderr)
+            return 1
+
+        summary = worker.wait_for_completion(handles, timeout)
+        exit_code = 0
+        lines: List[str] = []
+        for handle in handles:
+            pending = summary.get(handle)
+            if not pending:
+                lines.append("warning: no response received")
+                exit_code = max(exit_code, 1)
+                continue
+            events = pending.events
+            if not events:
+                lines.append("warning: command produced no events")
+                exit_code = max(exit_code, 1)
+                continue
+            for event in events:
+                lines.append(format_event(event))
+            has_error = any(ev.event_type == EventType.ERROR for ev in events)
+            if has_error:
+                exit_code = max(exit_code, 1)
+
+        output = "\n".join(lines)
+        if output:
+            print(output)
+        return exit_code
+    finally:
+        worker.stop()
+        worker.join(timeout=1.0)
+
+
 def main(argv=None) -> int:
     ns = make_parser().parse_args(argv)
     if ns.command in ("status", "st") and ns.transport == "mqtt":
@@ -344,8 +398,12 @@ def main(argv=None) -> int:
     if ns.command == "interactive":
         return run_interactive(ns)
     if ns.transport == "mqtt":
-        print("error: MQTT transport not implemented yet")
-        return 1
+        try:
+            worker = _make_mqtt_worker(node=getattr(ns, "node", None))
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            return 2
+        return run_command_mqtt(worker, ns)
 
     # Estimation + measurement utilities
     if ns.command in ("check-move", "check-home"):
@@ -478,8 +536,9 @@ def run_interactive(ns: argparse.Namespace) -> int:
         print(f"Import error: {e}", file=sys.stderr)
         return 2
     if ns.transport == "mqtt":
+        node_id = getattr(ns, "node", None)
         try:
-            worker = _make_mqtt_worker()
+            worker = _make_mqtt_worker(node=node_id)
         except RuntimeError as exc:
             print(exc, file=sys.stderr)
             return 2
@@ -505,6 +564,11 @@ def run_interactive(ns: argparse.Namespace) -> int:
         )
     worker.start()
     try:
+        if ns.transport == "mqtt" and node_id:
+            try:
+                worker.queue_cmd("NET:STATUS")
+            except Exception as exc:
+                worker._log.append(f"error: failed to queue NET:STATUS ({exc})")  # type: ignore[attr-defined]
         ui = UIClass(worker, render_table)  # type: ignore[call-arg]
         rc = ui.run()
     finally:

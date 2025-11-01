@@ -10,6 +10,14 @@
 #include "transport/CompletionTracker.h"
 #include "transport/CommandSchema.h"
 
+#if defined(ARDUINO) && defined(ESP32)
+#include <Arduino.h>
+#elif defined(ESP_PLATFORM)
+extern "C" {
+#include "esp_system.h"
+}
+#endif
+
 #include <array>
 #include <utility>
 #include <sstream>
@@ -64,6 +72,16 @@ std::string FormatTenths(int32_t tenths) {
 
 inline const char *BoolToFlag(bool value) {
   return value ? "1" : "0";
+}
+
+long GetFreeHeapBytes() {
+#if defined(ARDUINO) && defined(ESP32)
+  return static_cast<long>(ESP.getFreeHeap());
+#elif defined(ESP_PLATFORM)
+  return static_cast<long>(esp_get_free_heap_size());
+#else
+  return -1;
+#endif
 }
 
 void EmitResponseEvent(const char *action, const transport::command::ResponseLine &line) {
@@ -704,14 +722,20 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
   std::string msg_id = context.nextMsgId();
   std::string key = ToUpperCopy(Trim(args));
   if (key.empty() || key == "ALL") {
-    return MakeDoneResult(kAction,
-                          msg_id,
-                          {{"SPEED", std::to_string(context.defaultSpeed())},
-                           {"ACCEL", std::to_string(context.defaultAccel())},
-                           {"DECEL", std::to_string(context.defaultDecel())},
-                           {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
-                           {"max_budget_s",
-                            std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
+    long free_heap = GetFreeHeapBytes();
+    std::vector<transport::command::Field> fields = {
+        {"SPEED", std::to_string(context.defaultSpeed())},
+        {"ACCEL", std::to_string(context.defaultAccel())},
+        {"DECEL", std::to_string(context.defaultDecel())},
+        {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
+        {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))},
+    };
+    if (free_heap >= 0) {
+      fields.push_back({"free_heap_bytes", std::to_string(free_heap)});
+    } else {
+      fields.push_back({"free_heap_bytes", "unknown"});
+    }
+    return MakeDoneResult(kAction, msg_id, fields);
   }
   if (key == "SPEED") {
     return MakeDoneResult(kAction, msg_id, {{"SPEED", std::to_string(context.defaultSpeed())}});

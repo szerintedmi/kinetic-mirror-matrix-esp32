@@ -123,17 +123,19 @@ Host CLI
   - MQTT presence transport / TUI: `pip install paho-mqtt textual rich`
 
 - Examples:
-  - `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
-  - `python -m serial_cli interactive --transport mqtt`  # subscribes to aggregate MQTT status snapshots and renders the STATUS table (commands disabled)
-  - `python -m serial_cli help --port /dev/ttyUSB0`
-  - `python -m serial_cli status --port /dev/ttyUSB0`
-  - `python -m serial_cli status --transport mqtt --timeout 1.5`
-  - `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
-  - `python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800 --backoff 150`
+- `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
+- `python -m serial_cli interactive --transport mqtt`  # subscribes to aggregate MQTT status snapshots and issues commands over MQTT (use --node to target a device)
+- `python -m serial_cli help --port /dev/ttyUSB0`
+- `python -m serial_cli status --port /dev/ttyUSB0`
+- `python -m serial_cli status --transport mqtt --timeout 1.5`
+- `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
+- `python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800 --backoff 150`
+- `python -m serial_cli move --transport mqtt --node <mac> 0 800`
+- `python -m serial_cli home --transport mqtt --node <mac> 0 --overshoot 800`
 - The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
 
-MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). When running with `--transport mqtt`, command actions return `error: MQTT transport not implemented yet` while the log pane focuses on control-plane events (connect/disconnect) and automatic reconnect notices.
+MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). Command requests published with `--transport mqtt` now translate familiar serial syntax (e.g., `MOVE:0,1200`) into the unified dispatcher JSON envelope, publish to `devices/<mac>/cmd`, and stream ACK/DONE events back to the CLI/TUI log with correlated `cmd_id` metadata. Duplicate QoS1 deliveries are collapsed automatically via the dispatcher cache; host tools surface `[ACK]` and `[DONE]` entries with latency annotations instead of legacy `CTRL:*` strings.
 
 Tests
 
@@ -214,7 +216,7 @@ All endpoints respond with compact JSON (`Content-Type: application/json`) and s
 Runtime Controls (device)
 
 - `GET THERMAL_LIMITING` → `CTRL:ACK THERMAL_LIMITING=ON|OFF max_budget_s=N`
-- `GET` or `GET ALL` → `CTRL:ACK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N>`
+- `GET` or `GET ALL` → `CTRL:ACK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N> free_heap_bytes=<N>`
 - `SET THERMAL_LIMITING=OFF|ON`
 - `GET LAST_OP_TIMING[:<id|ALL>]` to validate estimates (`est_ms`) and actual durations
 

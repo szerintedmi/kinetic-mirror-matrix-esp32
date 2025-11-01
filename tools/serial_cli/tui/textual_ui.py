@@ -72,6 +72,130 @@ class TextualUI(BaseUI):
             columns_from_worker if columns_from_worker else STATUS_COLS
         )
 
+        def _color(value: str, swatch: Optional[str]) -> str:
+            if not value:
+                return "-"
+            if not swatch:
+                return value
+            return f"[{swatch}]{value}[/]"
+
+        def _fmt_age(age_val: float) -> str:
+            if age_val is None or age_val == float("inf"):
+                return "age=unknown"
+            color = None
+            if age_val > 2.0:
+                color = "red"
+            elif age_val > 1.0:
+                color = "yellow"
+            return f"age={_color(f"{age_val:.1f}s", color)}"
+
+        base_transport = transport.lower()
+
+        def _render_status_line(rows, net, last_ts) -> str:
+            import time as _time
+
+            parts: List[str] = []
+            transport_mode = (net.get("transport") or base_transport or "serial").lower()
+            if transport_mode == "mqtt":
+                host = net.get("host") or "-"
+                port = net.get("port") or "-"
+                parts.append(f"transport=mqtt")
+                parts.append(f"host={host}:{port}")
+            else:
+                parts.append("transport=serial")
+                port_val = getattr(worker, "port", "-")
+                parts.append(f"port={port_val}")
+
+            summaries: Dict[str, Dict[str, object]] = {}
+            if hasattr(worker, "get_device_summaries"):
+                try:
+                    summaries = worker.get_device_summaries()  # type: ignore[attr-defined]
+                except Exception:
+                    summaries = {}
+
+            if not summaries:
+                for r in rows or []:
+                    dev = str(r.get("device", "") or "")
+                    if not dev:
+                        continue
+                    summaries.setdefault(dev, {
+                        "node_state": r.get("node_state", ""),
+                        "ip": r.get("ip", ""),
+                        "age_s": float(r.get("age_s", 0.0) or 0.0),
+                    })
+
+            device_id = net.get("device")
+            if not device_id and summaries:
+                device_id = sorted(summaries.keys())[0]
+            if not device_id:
+                device_id = "-"
+            parts.append(f"device={device_id}")
+
+            # Determine primary state/ip/age from summaries or net info
+            primary = {}
+            if device_id and device_id in summaries:
+                primary = summaries[device_id]
+            elif summaries:
+                primary = summaries[sorted(summaries.keys())[0]]
+
+            state_val = str(primary.get("node_state", "") or net.get("node_state") or "")
+            ip_val = str(primary.get("ip", "") or net.get("ip", "") or "-")
+            parts.append(f"ip={ip_val}")
+
+            state_color = None
+            if state_val:
+                lower = state_val.lower()
+                if lower == "ready":
+                    state_color = "green"
+                elif lower in {"offline", "error", "disconnected"}:
+                    state_color = "red"
+                else:
+                    state_color = "yellow"
+            parts.append(f"state={_color(state_val or '-', state_color)}")
+
+            wifi_state = (net.get("state") or "").upper()
+            ssid = net.get("ssid") or ""
+            ssid_color = None
+            if wifi_state == "CONNECTED":
+                ssid_color = "green"
+            elif wifi_state == "AP_ACTIVE":
+                ssid_color = "yellow"
+            elif wifi_state:
+                ssid_color = "red"
+            parts.append(f"SSID: {_color(ssid or '-', ssid_color)}")
+
+            thermal = None
+            if hasattr(worker, "get_thermal_state"):
+                try:
+                    thermal = worker.get_thermal_state()
+                except Exception:
+                    thermal = None
+            if isinstance(thermal, tuple) and len(thermal) == 2:
+                enabled, max_budget = thermal
+                color = "green" if enabled else "red"
+                text = "ON" if enabled else "OFF"
+                if isinstance(max_budget, int):
+                    parts.append(f"thermal limiting={_color(text, color)} (max={max_budget}s)")
+                else:
+                    parts.append(f"thermal limiting={_color(text, color)}")
+            else:
+                parts.append("thermal limiting=-")
+
+            if transport_mode == "mqtt" and summaries:
+                ages = [float(info.get("age_s", float("inf")) or float("inf")) for info in summaries.values()]
+                min_age = min(ages) if ages else float("inf")
+                parts.append(_fmt_age(min_age))
+            else:
+                age = None
+                if last_ts:
+                    try:
+                        age = max(0.0, _time.time() - last_ts)
+                    except Exception:
+                        age = None
+                parts.append(_fmt_age(age if age is not None else float("inf")))
+
+            return "  ".join(parts)
+
         class HelpOverlay(ModalScreen[None]):
             """Modal help overlay with keys and device HELP text."""
 
@@ -222,7 +346,7 @@ class TextualUI(BaseUI):
                 # we restore this text instead of clearing the field.
                 self._hist_buffer: Optional[str] = None
                 self._columns: List[Tuple[str, str, int]] = list(TABLE_COLS)
-                self._transport = transport.lower()
+                self._transport = base_transport
 
             def compose(self) -> ComposeResult:  # type: ignore[override]
                 yield Header(show_clock=False)
@@ -361,107 +485,19 @@ class TextualUI(BaseUI):
                     event.stop()
 
             def _refresh(self) -> None:
-                rows, log, err, last_ts, _help_text = worker.get_state()
-
-                # Update status bar
-                net: Dict[str, str] = {}
-                if hasattr(worker, "get_net_info"):
-                    try:
-                        net = worker.get_net_info() or {}
-                    except Exception:
-                        net = {}
-
-                transport = (net.get("transport") or self._transport or "").lower()
-                status_text = ""
-                if transport == "mqtt":
-                    host = net.get("host") or "-"
-                    port = net.get("port") or "-"
-                    status_text = f"transport=mqtt broker={host}:{port}"
-                    device_info: Dict[str, Dict[str, object]] = {}
-                    if hasattr(worker, "get_device_summaries"):
-                        try:
-                            device_info = worker.get_device_summaries()  # type: ignore[attr-defined]
-                        except Exception:
-                            device_info = {}
-                    if not device_info:
-                        for r in rows:
-                            dev = str(r.get("device", "") or "")
-                            if not dev:
-                                continue
-                            age_val = float(r.get("age_s", 0.0) or 0.0)
-                            entry = device_info.get(dev)
-                            if entry is None or age_val < float(entry.get("age_s", float("inf"))):
-                                device_info[dev] = {
-                                    "node_state": r.get("node_state", ""),
-                                    "ip": r.get("ip", ""),
-                                    "age_s": age_val,
-                                }
-                    summaries: List[str] = []
-                    for dev in sorted(device_info.keys()):
-                        info = device_info[dev]
-                        age_val = float(info.get("age_s", float("inf")) or float("inf"))
-                        if age_val == float("inf"):
-                            age_fmt = "[red]unknown[/]"
-                        elif age_val > 5.0:
-                            age_fmt = f"[red]{age_val:.1f}s[/]"
-                        elif age_val > 2.0:
-                            age_fmt = f"[yellow]{age_val:.1f}s[/]"
-                        else:
-                            age_fmt = f"{age_val:.1f}s"
-                        state_val = str(info.get("node_state", "") or "")
-                        state_lower = state_val.lower()
-                        if state_lower and state_lower != "ready":
-                            color = "red" if state_lower == "offline" else "yellow"
-                            state_fmt = f"[{color}]{state_val}[/]"
-                        else:
-                            state_fmt = state_val or "-"
-                        ip_val = str(info.get("ip", "") or "-")
-                        label = dev or "(unknown)"
-                        summaries.append(f"{label} state={state_fmt} ip={ip_val} age={age_fmt}")
-                    if summaries:
-                        status_text += "  " + " | ".join(summaries)
-                    else:
-                        status_text += "  no telemetry yet"
+                state = worker.get_state()
+                if len(state) >= 6:
+                    rows, log, err, last_ts, _help_text, net = state[:6]
                 else:
-                    try:
-                        import time as _t
-
-                        age = max(0.0, _t.time() - last_ts) if last_ts else 0.0
-                    except Exception:
-                        age = 0.0
-
-                    thermal_text = ""
-                    if hasattr(worker, "get_thermal_state"):
+                    rows, log, err, last_ts, _help_text = state
+                    net = {}
+                    if hasattr(worker, "get_net_info"):
                         try:
-                            t_state = worker.get_thermal_state()
+                            net = worker.get_net_info() or {}
                         except Exception:
-                            t_state = None
-                        if t_state is not None:
-                            enabled, max_budget = t_state
-                            thermal_text = (
-                                f"thermal limiting=[green]ON[/]"
-                                if enabled
-                                else f"thermal limiting=[red]OFF[/]"
-                            )
-                            if isinstance(max_budget, int):
-                                thermal_text += f" (max={max_budget}s)"
-                    wifi_banner = ""
-                    state = (net.get("state") or "").upper()
-                    ssid = net.get("ssid") or ""
-                    ip = net.get("ip") or ""
-                    if state == "CONNECTED":
-                        wifi_banner = f"SSID: [green]{ssid}[/] connected [green]({ip})[/]"
-                    elif state == "AP_ACTIVE":
-                        wifi_banner = f"SSID: [yellow]{ssid}[/] AP mode [yellow]({ip})[/]"
-                    elif state:
-                        wifi_banner = f"SSID: [red]{ssid or 'N/A'}[/] disconnected"
-                    port_val = getattr(worker, "port", "-")
-                    baud_val = getattr(worker, "baud", "-")
-                    status_text = f"port={port_val} baud={baud_val} age={age:.1f}s"
-                    if thermal_text:
-                        status_text += f"  {thermal_text}"
-                    if wifi_banner:
-                        status_text += f"  {wifi_banner}"
+                            net = {}
+
+                status_text = _render_status_line(rows, net, last_ts)
                 if err:
                     status_text += f"  error={err}"
                 self.query_one("#status_bar", Static).update(status_text.strip())

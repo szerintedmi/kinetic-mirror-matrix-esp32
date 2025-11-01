@@ -143,8 +143,15 @@ transport::command::ResponseLine MakeErrorLine(const std::string &code,
 
 std::vector<uint8_t> TargetsFromMask(uint32_t mask, size_t limit) {
   std::vector<uint8_t> targets;
-  for (size_t idx = 0; idx < limit; ++idx) {
-    if (mask & (1u << idx)) {
+  const size_t kMaskBitWidth = sizeof(mask) * 8;
+  const size_t capped_limit = std::min(limit, kMaskBitWidth);
+  for (size_t idx = 0; idx < capped_limit; ++idx) {
+    if ((mask >> idx) & 0x1u) {
+      targets.push_back(static_cast<uint8_t>(idx));
+    }
+  }
+  if (limit > kMaskBitWidth && mask == 0xFFFFFFFFu) {
+    for (size_t idx = kMaskBitWidth; idx < limit; ++idx) {
       targets.push_back(static_cast<uint8_t>(idx));
     }
   }
@@ -452,9 +459,6 @@ bool MqttCommandServer::streamConsumesResponse(DispatchStream *stream_ptr,
   }
   if (stream_ptr->action.empty()) {
     stream_ptr->action = dispatch.action;
-  }
-  if (stream_ptr->response.lines.empty() && !response.lines.empty()) {
-    stream_ptr->response = response;
   }
   if (ack_line && !ack_line->msg_id.empty() && stream_ptr->msg_id.empty()) {
     bindStreamToMessageId(*stream_ptr, ack_line->msg_id);
@@ -998,7 +1002,12 @@ uint32_t MqttCommandServer::maskForTargets(const std::vector<uint8_t> &targets) 
   }
   uint32_t mask = 0;
   for (uint8_t id : targets) {
-    mask |= (1u << id);
+    if (id < 32) {
+      mask |= (1u << id);
+    } else {
+      mask = 0xFFFFFFFFu;
+      break;
+    }
   }
   return mask;
 }
@@ -1024,6 +1033,7 @@ void MqttCommandServer::handleDispatcherEvent(const transport::response::Event &
   if (event.cmd_id.empty()) {
     return;
   }
+  constexpr std::size_t kMaxOrphanCommands = 4;
   DispatchStream *stream = nullptr;
   std::string key;
   auto direct = streams_.find(event.cmd_id);
@@ -1040,7 +1050,16 @@ void MqttCommandServer::handleDispatcherEvent(const transport::response::Event &
     }
   }
   if (!stream) {
-    orphan_events_[event.cmd_id].push_back(event);
+    auto emplace = orphan_events_.emplace(event.cmd_id, std::vector<transport::response::Event>{});
+    if (emplace.second) {
+      orphan_order_.push_back(event.cmd_id);
+      while (orphan_order_.size() > kMaxOrphanCommands) {
+        const std::string &oldest = orphan_order_.front();
+        orphan_events_.erase(oldest);
+        orphan_order_.pop_front();
+      }
+    }
+    emplace.first->second.push_back(event);
     return;
   }
   processStreamEvent(*stream, event);
@@ -1054,6 +1073,9 @@ void MqttCommandServer::publishAckFromStream(DispatchStream &stream) {
     return;
   }
   if (stream.response.lines.empty()) {
+    return;
+  }
+  if (transport::command::FindAckLine(stream.response) == nullptr) {
     return;
   }
   std::string action = stream.action.empty() ? "UNKNOWN" : stream.action;
@@ -1137,6 +1159,8 @@ void MqttCommandServer::bindStreamToMessageId(DispatchStream &stream,
     streams_.erase(stream.cmd_id);
   }
   orphan_events_.erase(it);
+  orphan_order_.erase(std::remove(orphan_order_.begin(), orphan_order_.end(), msg_id),
+                      orphan_order_.end());
 }
 
 void MqttCommandServer::processStreamEvent(DispatchStream &stream,
@@ -1202,7 +1226,7 @@ void MqttCommandServer::finalizeCompleted(uint32_t now_ms) {
       bool any_actual = false;
       size_t count = processor_.controller().motorCount();
       for (size_t idx = 0; idx < count; ++idx) {
-        if (!(it->mask & (1u << idx))) {
+        if (idx >= 32 || !(it->mask & (1u << idx))) {
           continue;
         }
         const MotorState &state = processor_.controller().state(idx);

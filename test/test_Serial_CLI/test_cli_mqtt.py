@@ -12,6 +12,7 @@ import tools.serial_cli
 import serial_cli
 from serial_cli import render_table, main as cli_main
 from tools.serial_cli.mqtt_runtime import MqttWorker
+from tools.serial_cli.response_events import ResponseEvent, EventType
 
 
 def test_render_status_table():
@@ -162,21 +163,69 @@ def test_mqtt_worker_ingest_snapshot():
     assert rows_updated[1]["actual_ms"] == ""
 
 
-def test_cli_mqtt_command_error():
-    buf = io.StringIO()
-    with redirect_stdout(buf):
-        rc = cli_main(["move", "0", "100", "--transport", "mqtt"])
-    output = buf.getvalue()
-    assert rc == 1
-    assert "error: MQTT transport not implemented yet" in output
+def test_cli_mqtt_move_command_outputs_events():
+    ack = ResponseEvent(
+        source="mqtt",
+        raw="",
+        event_type=EventType.ACK,
+        action="MOVE",
+        cmd_id="abc",
+        attributes={"est_ms": "150"},
+    )
+    done = ResponseEvent(
+        source="mqtt",
+        raw="",
+        event_type=EventType.DONE,
+        action="MOVE",
+        cmd_id="abc",
+        attributes={"actual_ms": "140"},
+    )
+
+    class StubWorker:
+        def __init__(self):
+            self.commands = []
+            self.started = False
+            self.stopped = False
+
+        def start(self):
+            self.started = True
+
+        def stop(self):
+            self.stopped = True
+
+        def join(self, timeout=None):
+            pass
+
+        def wait_until_connected(self, timeout):
+            return True
+
+        def queue_cmd(self, cmd, *, silent=False):
+            self.commands.append(cmd)
+            return [1]
+
+        def wait_for_completion(self, handles, timeout):
+            pending = type("Pending", (), {"events": [ack, done], "completed": True})()
+            return {1: pending}
+
+    stub = StubWorker()
+    with mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cli_main(["move", "0", "100", "--transport", "mqtt"])
+    output = buf.getvalue().strip().splitlines()
+    assert rc == 0
+    assert stub.commands == ["MOVE:0,100"]
+    assert any("[ACK]" in line for line in output)
+    assert any("[DONE]" in line for line in output)
 
 
 def test_mqtt_worker_queue_cmd_logs_error():
     worker = MqttWorker(broker={}, client_factory=lambda: None)
-    worker.queue_cmd("STATUS")
+    worker.ingest_message("devices/aa/status", json.dumps({"motors": {}, "node_state": "ready", "ip": "1.2.3.4"}), timestamp=0.0)
+    worker.queue_cmd("MOVE:0,100")
     _, log, _, _, _ = worker.get_state()
-    assert log[-2] == "> STATUS"
-    assert log[-1] == "error: MQTT transport not implemented yet"
+    assert log[-2].startswith("> MOVE:0,100 (mqtt")
+    assert log[-1] == "error: mqtt broker not connected"
 
 
 def test_status_mqtt_uses_worker():
@@ -266,7 +315,11 @@ def test_mqtt_worker_integration_latency_and_debounce():
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
         rows_dup, log_dup, _, _, _ = worker.get_state()
-        assert log_dup == log
+        assert len(log_dup) >= len(log)
+        for left, right in zip(log_dup[: len(log)], log):
+            if left == right:
+                continue
+            assert left.startswith(right + " cmd_id=")
 
         payload2 = _sample_payload(actual_ms=False)
         stub.emit_message(topic, payload2)
@@ -276,22 +329,22 @@ def test_mqtt_worker_integration_latency_and_debounce():
     finally:
         worker.stop()
         worker.join(timeout=1)
-
-
-def main():
-    try:
-        test_render_status_table()
-        test_mqtt_worker_ingest_snapshot()
-        test_cli_mqtt_command_error()
-        test_mqtt_worker_queue_cmd_logs_error()
-        test_status_mqtt_uses_worker()
-        test_mqtt_worker_integration_latency_and_debounce()
-    except AssertionError:
-        print("Tests failed.")
-        return 1
-    print("All MQTT CLI tests passed.")
-    return 0
-
-
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        import pytest  # type: ignore
+    except ImportError:
+        exit_code = 0
+        try:
+            test_render_status_table()
+            test_mqtt_worker_ingest_snapshot()
+            test_cli_mqtt_move_command_outputs_events()
+            test_mqtt_worker_queue_cmd_logs_error()
+            test_status_mqtt_uses_worker()
+            test_mqtt_worker_integration_latency_and_debounce()
+        except AssertionError:
+            print("Tests failed.")
+            exit_code = 1
+        else:
+            print("All MQTT CLI tests passed.")
+        sys.exit(exit_code)
+    sys.exit(pytest.main([__file__]))

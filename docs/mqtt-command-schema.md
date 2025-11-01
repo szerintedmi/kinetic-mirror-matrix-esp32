@@ -235,7 +235,7 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 | Aspect | Serial |
 |--------|--------|
 | Request | `GET ALL` |
-| Completion | `CTRL:DONE cmd_id=d8... action=GET ACCEL=16000 DECEL=0 SPEED=4000 THERMAL_LIMITING=ON max_budget_s=90 status=done` |
+| Completion | `CTRL:DONE cmd_id=d8... action=GET ACCEL=16000 DECEL=0 SPEED=4000 THERMAL_LIMITING=ON max_budget_s=90 free_heap_bytes=51264 status=done` |
 
 #### MQTT request
 
@@ -261,7 +261,8 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
     "DECEL": 0,
     "SPEED": 4000,
     "THERMAL_LIMITING": "ON",
-    "max_budget_s": 90
+    "max_budget_s": 90,
+    "free_heap_bytes": 51264
   }
 }
 ```
@@ -515,3 +516,4 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 - Warnings provide additional context (e.g., thermal budget) without affecting success/failure state.
 - Serial supports multi-command batches (`MOVE:0,100;MOVE:1,200`); MQTT clients should submit individual JSON commands.
 - Firmware normalises action/resource casing; clients may send lower-case tokens if desired.
+- Host CLI/TUI tooling accepts traditional serial command syntax (`MOVE:0,1200`, `NET:RESET`) even when connected over MQTT. The client maps those lines into the JSON envelope described here, publishes to `devices/<node_id>/cmd`, and logs `[ACK]` / `[DONE]` entries derived from dispatcher events (including `cmd_id`, warnings, and timing metadata). The CLI never synthesises `cmd_id` values; if omitted in the request the firmware allocates one and echoes it in subsequent responses.
