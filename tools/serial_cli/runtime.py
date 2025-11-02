@@ -332,6 +332,9 @@ class SerialWorker(threading.Thread):
             )
 
         should_log = True
+        # Suppress noisy payload logging for built-in HELP; content is shown in Help overlay
+        if pending.name.upper().startswith("HELP") and not upper.startswith("CTRL:"):
+            should_log = False
         if pending.is_poll:
             # Keep NET async state changes, drop simple ACKs/data rows
             if not (
@@ -494,6 +497,9 @@ class SerialWorker(threading.Thread):
         msg_id = event.msg_id or event.cmd_id
         self._maybe_track_background_id(msg_id)
         latency = None
+        # Hide DATA events while HELP is active to avoid cluttering the log
+        if pending and pending.name.upper().startswith("HELP") and event.event_type == EventType.DATA:
+            return
         if pending and pending.is_poll:
             if event.event_type == EventType.DATA:
                 return

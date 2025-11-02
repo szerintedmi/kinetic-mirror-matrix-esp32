@@ -212,10 +212,18 @@ def format_event(event: ResponseEvent, *, latency_ms: Optional[float] = None) ->
         parts.append(f"code={event.code}")
     if event.reason:
         parts.append(event.reason)
-    if event.attributes:
-        for key in sorted(event.attributes.keys()):
-            value = event.attributes[key]
+    extra_block: Optional[str] = None
+    attrs = dict(event.attributes) if event.attributes else {}
+    text_value = attrs.pop("text", None)
+
+    if attrs:
+        for key in sorted(attrs.keys()):
+            value = attrs[key]
             parts.append(f"{key}={value}")
+    if text_value:
+        lines = text_value.splitlines()
+        if lines:
+            extra_block = "\n".join(f"  {line}" for line in lines)
     if event.warnings:
         formatted = ",".join(
             f"{w.get('code', 'WARN')}:{w.get('reason', w.get('message', ''))}".strip(":")
@@ -232,7 +240,10 @@ def format_event(event: ResponseEvent, *, latency_ms: Optional[float] = None) ->
             parts.append(f"errors=[{formatted}]")
     if latency_ms is not None:
         parts.append(f"latency_ms={latency_ms:.0f}")
-    return " ".join(parts)
+    base = " ".join(parts)
+    if extra_block:
+        return f"{base}\n{extra_block}"
+    return base
 
 
 __all__ = [

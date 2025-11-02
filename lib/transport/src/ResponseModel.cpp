@@ -122,6 +122,8 @@ Event BuildEvent(const command::ResponseLine &line, const std::string &action) {
   evt.action = action;
   evt.code = line.code;
   evt.reason = line.reason;
+  // Preserve any preformatted raw text for transports that want to print it.
+  evt.raw = line.raw;
   evt.attributes = FieldsToMap(line.fields);
   auto status_it = evt.attributes.find("status");
   if (status_it != evt.attributes.end()) {
@@ -146,7 +148,10 @@ command::ResponseLine EventToLine(const Event &event) {
     line.fields.push_back({kv.first, kv.second});
   }
 
-  if (event.type == EventType::kDone) {
+  // If the event carried a raw representation, preserve it.
+  if (!event.raw.empty()) {
+    line.raw = event.raw;
+  } else if (event.type == EventType::kDone) {
     std::ostringstream oss;
     oss << "CTRL:DONE";
     if (!event.cmd_id.empty()) {

@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "MotorControl/MotorCommandProcessor.h"
+#include "MotorControl/command/HelpText.h"
 #include "mqtt/MqttCommandServer.h"
 #include "transport/MessageId.h"
 
@@ -96,6 +97,15 @@ std::string makeHomePayload(const std::string &cmd_id, const std::string &target
   } else {
     doc["params"]["target_ids"] = std::atoi(target.c_str());
   }
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
+std::string makeHelpPayload(const std::string &cmd_id) {
+  ArduinoJson::JsonDocument doc;
+  doc["cmd_id"] = cmd_id;
+  doc["action"] = "HELP";
   std::string out;
   serializeJson(doc, out);
   return out;
@@ -312,6 +322,19 @@ void test_get_last_op_single_command_success() {
   TEST_ASSERT_FALSE(completion["result"]["id"].isNull());
 }
 
+void test_help_command_success() {
+  Harness h;
+  h.send(makeHelpPayload("cmd-help"));
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
+  TEST_ASSERT_EQUAL_STRING("HELP", completion["action"]);
+  const char *text = completion["result"]["text"].as<const char *>();
+  TEST_ASSERT_NOT_NULL(text);
+  TEST_ASSERT_EQUAL_STRING(motor::command::HelpText().c_str(), text);
+}
+
 void test_set_speed_command_success() {
   Harness h;
   h.send(makeSetPayload("cmd-set-speed", [](ArduinoJson::JsonObject &obj) {
@@ -487,6 +510,7 @@ int main(int, char **) {
   RUN_TEST(test_home_command_success);
   RUN_TEST(test_get_all_command_success);
   RUN_TEST(test_get_last_op_single_command_success);
+  RUN_TEST(test_help_command_success);
   RUN_TEST(test_set_speed_command_success);
   RUN_TEST(test_missing_cmd_id_generates_uuid);
   RUN_TEST(test_wake_command_success);

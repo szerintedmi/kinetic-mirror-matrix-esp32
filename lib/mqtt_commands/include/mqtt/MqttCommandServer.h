@@ -144,6 +144,7 @@ private:
                         const std::string &action,
                         const transport::command::ResponseLine &error_line,
                         uint32_t now_ms);
+  void respondWithHelp(const std::string &cmd_id, uint32_t now_ms);
   void executeDispatch(const CommandDispatch &dispatch,
                        const transport::command::Response &response,
                        const transport::response::CommandResponse &contract,

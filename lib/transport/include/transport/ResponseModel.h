@@ -25,6 +25,9 @@ struct Event {
   std::string action;
   std::string code;
   std::string reason;
+  // Optional raw rendering for transports that should print a preformatted line.
+  // When set, sinks that convert Event->ResponseLine can preserve this text.
+  std::string raw;
   std::map<std::string, std::string> attributes;
 };
 

@@ -8,7 +8,7 @@ The serial console and MQTT transport now emit the same dispatcher-backed respon
 2. **ACK (optional)** – long-running commands send an `ack` event once execution starts. Short commands skip this.
 3. **Completion** – every command ends with either `status="done"` or `status="error"` plus result fields (`actual_ms`, NET state, etc.).
 
-Serial sinks render dispatcher events as `CTRL:*` lines. MQTT publishes JSON on `devices/<node_id>/cmd/resp` with matching content. Duplicate requests replay cached responses.
+Serial sinks render dispatcher events as `CTRL:*` lines. MQTT publishes JSON on `devices/<node_id>/cmd/resp` with matching content. `<node_id>` is the device MAC address rendered in lowercase without separators.
 
 ### MQTT Request Envelope
 
@@ -221,7 +221,7 @@ Warnings reuse the same codes and appear alongside `ack`/`done` without changing
 
 See [mqtt-status-schema.md](mqtt-status-schema).
 
-STATUS streams a snapshot in the ACK and does not emit a DONE.
+STATUS command streams a snapshot in the ACK and does not emit a DONE.
 
 | Aspect | Serial |
 |--------|--------|
@@ -230,7 +230,7 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 
 #### MQTT request
 
- STATUS is not supported via MQTT but MQTT emmits status in devices/<mac>/status topic.
+ STATUS command is not supported via MQTT, but telemetry is emitted on `devices/<node_id>/status`.
 
 ### GET ALL
 
@@ -600,10 +600,71 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 ## Client Guidance
 
 - Prefer the MQTT JSON payload for machine consumption; serial output remains useful for diagnostics or manual control.
-- Commands that emit only a completion (`WAKE`, `SLEEP`, `GET`, `SET`, `NET:STATUS`, `NET:SET`) can be considered complete after the first `status:"done"` payload.
+- Commands that emit only a completion (`HELP`, `WAKE`, `SLEEP`, `GET`, `SET`, `NET:STATUS`, `NET:SET`) can be considered complete after the first `status:"done"` payload.
 - STATUS and NET:LIST stream their payload in the ACK and do not send DONE.
 - Warnings provide additional context (e.g., thermal budget) without affecting success/failure state.
 - Serial supports multi-command batches (`MOVE:0,100;MOVE:1,200`); MQTT clients should submit individual JSON commands.
 - Firmware normalises action/resource casing; clients may send lower-case tokens if desired.
 - Broker overrides persist in Preferences; use `MQTT:GET_CONFIG` to inspect active settings and `MQTT:SET_CONFIG` with either specific fields or `reset:true` to update or revert them.
 - Host CLI/TUI tooling accepts traditional serial command syntax (`MOVE:0,1200`, `NET:RESET`) even when connected over MQTT. The client maps those lines into the JSON envelope described here, publishes to `devices/<node_id>/cmd`, and logs `[ACK]` / `[DONE]` entries derived from dispatcher events (including `cmd_id`, warnings, and timing metadata). The CLI never synthesises `cmd_id` values; if omitted in the request the firmware allocates one and echoes it in subsequent responses.
+
+### HELP
+
+| Aspect | Serial |
+|--------|--------|
+| Request | `HELP` |
+| Completion | multiple human‑readable lines, followed by `CTRL:DONE action=HELP status=done` |
+
+#### MQTT request
+
+```json
+{
+  "cmd_id": "aa...",
+  "action": "HELP"
+}
+```
+
+#### MQTT completion
+
+```json
+{
+  "cmd_id": "aa...",
+  "action": "HELP",
+  "status": "done",
+  "result": {
+    "lines": [
+      "HELP",
+      "MOVE:<id|ALL>,<abs_steps>",
+      "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]",
+      "NET:RESET",
+      "NET:STATUS",
+      "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)",
+      "NET:LIST (scan nearby SSIDs; AP mode only)",
+      "MQTT:GET_CONFIG",
+      "MQTT:SET_CONFIG host=<host> port=<port> user=<user> pass=\"<pass>\"",
+      "MQTT:SET_CONFIG RESET",
+      "STATUS",
+      "GET",
+      "GET ALL",
+      "GET LAST_OP_TIMING[:<id|ALL>]",
+      "GET SPEED",
+      "GET ACCEL",
+      "GET DECEL",
+      "GET THERMAL_LIMITING",
+      "SET THERMAL_LIMITING=OFF|ON",
+      "SET SPEED=<steps_per_second>",
+      "SET ACCEL=<steps_per_second^2>",
+      "SET DECEL=<steps_per_second^2>",
+      "WAKE:<id|ALL>",
+      "SLEEP:<id|ALL>",
+      "Shortcuts: M=MOVE, H=HOME, ST=STATUS",
+      "Multicommand: <cmd1>;<cmd2> note: no cmd queuing; only distinct motors allowed"
+    ]
+  }
+}
+```
+
+Notes:
+
+- The `result.lines` array is exactly the same content and ordering printed over serial; no separate MQTT help text exists.
+- HELP emits no ACK; a single completion payload with `status:"done"` is published immediately.

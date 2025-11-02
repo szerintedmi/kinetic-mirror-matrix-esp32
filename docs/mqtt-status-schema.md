@@ -1,6 +1,6 @@
 # MQTT Status Snapshot Schema
 
-Firmware publishes real-time telemetry on `devices/<mac>/status` where `<mac>` is the device MAC address rendered in lowercase without separators. Publishes use QoS 0 and `retain=false`. The broker Last Will is registered on the same topic with the payload `{"node_state":"offline","motors":{}}` so subscribers immediately observe offline transitions.
+Firmware publishes real-time telemetry on `devices/<node_id>/status` where `<node_id>` is the device MAC address rendered in lowercase without separators. Publishes use QoS 0 and `retain=false`. The broker Last Will is registered on the same topic with the payload `{"node_state":"offline","motors":{}}` so subscribers immediately observe offline transitions.
 
 ## Payload Structure
 

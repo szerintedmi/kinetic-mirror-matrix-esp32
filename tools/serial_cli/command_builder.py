@@ -116,10 +116,12 @@ def parse_serial_command(command: str) -> CommandRequest:
         raise CommandParseError("empty command")
     upper = raw.upper()
 
-    if raw.startswith("HELP"):
-        raise UnsupportedCommandError("HELP not supported over MQTT")
+    if upper.startswith("HELP"):
+        if upper != "HELP":
+            raise CommandParseError("HELP does not take arguments")
+        return CommandRequest(action="HELP", params={}, raw=raw)
 
-    if upper.startswith("STATUS"):
+    if upper in {"STATUS", "ST"}:
         raise UnsupportedCommandError("STATUS not supported over MQTT")
 
     if raw.upper().startswith("NET:"):

@@ -5,11 +5,13 @@
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/BuildConfig.h"
+#include "MotorControl/command/HelpText.h"
 #include "mqtt/MqttConfigStore.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
 #include "transport/CompletionTracker.h"
 #include "transport/CommandSchema.h"
+#include "transport/MessageId.h"
 
 #if defined(ARDUINO) && defined(ESP32)
 #include <Arduino.h>
@@ -715,43 +717,23 @@ CommandResult QueryCommandHandler::execute(const ParsedCommand &command,
 
 CommandResult QueryCommandHandler::handleHelp() const {
   constexpr const char *kAction = "HELP";
-  std::ostringstream os;
-  os << "HELP\n";
-  os << "MOVE:<id|ALL>,<abs_steps>\n";
-  os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
-  os << "NET:RESET\n";
-  os << "NET:STATUS\n";
-  os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
-  os << "NET:LIST (scan nearby SSIDs; AP mode only)\n";
-#if !(USE_SHARED_STEP)
-  os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
-  os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
-#endif
-  os << "STATUS\n";
-  os << "GET\n";
-  os << "GET ALL\n";
-  os << "GET LAST_OP_TIMING[:<id|ALL>]\n";
-  os << "GET SPEED\n";
-  os << "GET ACCEL\n";
-  os << "GET DECEL\n";
-  os << "GET THERMAL_LIMITING\n";
-  os << "SET THERMAL_LIMITING=OFF|ON\n";
-  os << "SET SPEED=<steps_per_second>\n";
-  os << "SET ACCEL=<steps_per_second^2>\n";
-  os << "SET DECEL=<steps_per_second^2>\n";
-  os << "WAKE:<id|ALL>\n";
-  os << "SLEEP:<id|ALL>\n";
-  os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS\n";
-  os << "Multicommand: <cmd1>;<cmd2> note: no cmd queuing; only distinct motors allowed";
+  const std::string &help_text = HelpText();
   CommandResult res;
-  for (const auto &line : Split(os.str(), '\n')) {
+  for (const auto &line : Split(help_text, '\n')) {
     transport::command::ResponseLine info_line;
     info_line.type = transport::command::ResponseLineType::kInfo;
     info_line.raw = line;
     EmitResponseEvent(kAction, info_line);
     res.append(info_line);
+#if defined(ARDUINO) && defined(ESP32)
+    delay(0);
+#endif
   }
-  return res;
+  // Signal immediate completion so transports publish a single 'done' payload.
+  // Generate a fresh msg_id so downstream transports can correlate HELP results
+  // consistently with other commands.
+  std::string msg_id = transport::message_id::Next();
+  return AppendDoneResult(res, kAction, msg_id);
 }
 
 CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context) {

@@ -126,6 +126,7 @@ Host CLI
 - `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
 - `python -m serial_cli interactive --transport mqtt`  # subscribes to aggregate MQTT status snapshots and issues commands over MQTT (use --node to target a device)
 - `python -m serial_cli help --port /dev/ttyUSB0`
+- `python -m serial_cli help --transport mqtt --node <mac>`
 - `python -m serial_cli status --port /dev/ttyUSB0`
 - `python -m serial_cli status --transport mqtt --timeout 1.5`
 - `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
@@ -135,7 +136,7 @@ Host CLI
 - The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
 - CLI module: [tools/serial_cli](./tools/serial_cli/)
 
-MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). Command requests published with `--transport mqtt` now translate familiar serial syntax (e.g., `MOVE:0,1200`) into the unified dispatcher JSON envelope, publish to `devices/<mac>/cmd`, and stream ACK/DONE events back to the CLI/TUI log with correlated `cmd_id` metadata. Duplicate QoS1 deliveries are collapsed automatically via the dispatcher cache; host tools surface `[ACK]` and `[DONE]` entries with latency annotations instead of legacy `CTRL:*` strings.
+MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). Command requests published with `--transport mqtt` translate familiar serial syntax (e.g., `MOVE:0,1200`) into the unified dispatcher JSON envelope, publish to `devices/<mac>/cmd`, and stream ACK/DONE events back to the CLI/TUI log with correlated `cmd_id` metadata. Duplicate QoS1 deliveries are collapsed automatically via the dispatcher cache; host tools surface `[ACK]` and `[DONE]` entries with latency annotations instead of legacy `CTRL:*` strings. The `HELP` command is also supported over MQTT and returns a single completion payload with `result.lines` containing the same help text as serial.
 
 Tests
 
@@ -237,7 +238,7 @@ Runtime Controls (device)
   - `GET LAST_OP_TIMING[:<id|ALL>]`, `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
   - Responses: `CTRL:ACK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, and `CTRL:WARN ...` when enforcement is OFF
 - Full spec: [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
-- HELP source: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp)
+- HELP source: [`QueryCommandHandler::handleHelp`](./lib/MotorControl/src/command/CommandHandlers.cpp)
 
 ## Repo Map (quick links)
 

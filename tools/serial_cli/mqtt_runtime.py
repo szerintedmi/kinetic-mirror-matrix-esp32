@@ -130,6 +130,7 @@ class MqttWorker(threading.Thread):
         self._next_local_id: int = 1
         self._net_state: Dict[str, str] = {}
         self._requested_net_status = False
+        self._help_text: str = ""
         self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
 
         if client_factory is not None:
@@ -339,7 +340,7 @@ class MqttWorker(threading.Thread):
                 list(self._log[-800:]),
                 self._error,
                 self._last_update_ts,
-                "",
+                self._help_text,
             )
 
     def get_net_info(self) -> Dict[str, str]:
@@ -576,6 +577,10 @@ class MqttWorker(threading.Thread):
                     pending.completed = True
                     pending.completed_at = now_wall
                     pending.completed_monotonic = now_mono
+            if event.action and event.action.upper() == "HELP":
+                text = event.attributes.get("text") if event.attributes else None
+                self._help_text = text or event.raw or ""
+
             self._maybe_update_net_state(event)
             formatted = format_event(event, latency_ms=latency)
             self._log.append(formatted)

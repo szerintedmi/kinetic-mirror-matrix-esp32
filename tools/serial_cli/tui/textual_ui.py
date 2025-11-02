@@ -252,7 +252,8 @@ class TextualUI(BaseUI):
 
             def on_show(self) -> None:
                 # Request HELP from device if not present
-                _rows, _log, _err, _ts, help_text = worker.get_state()
+                state = worker.get_state()
+                help_text = state[4] if isinstance(state, (list, tuple)) and len(state) >= 5 else ""
                 if not help_text:
                     worker.queue_cmd("HELP")
                 self.set_interval(
@@ -287,7 +288,8 @@ class TextualUI(BaseUI):
                 return "\n".join(left)
 
             def _refresh_help(self) -> None:
-                _rows, _log, _err, _ts, help_text = worker.get_state()
+                state = worker.get_state()
+                help_text = state[4] if isinstance(state, (list, tuple)) and len(state) >= 5 else ""
                 t = help_text or "(no data)"
                 if t != self._last_help_text:
                     # Trim any leading HELP echo

@@ -55,9 +55,17 @@ void test_batch_conflict_detection() {
 
 void test_execute_matches_serial_output() {
   MotorCommandProcessor proc;
+  // Force deterministic msg_id generation so FormatForSerial and processLine
+  // produce identical output during the test.
+  transport::message_id::SetGenerator([]() {
+    return std::string("00000000-0000-4000-8000-000000000123");
+  });
+  transport::message_id::ClearActive();
   auto structured = proc.execute("HELP", 0);
   std::string formatted = motor::command::FormatForSerial(structured);
   std::string serial_output = proc.processLine("HELP", 0);
+  transport::message_id::ResetGenerator();
+  transport::message_id::ClearActive();
   TEST_ASSERT_FALSE(structured.is_error);
   TEST_ASSERT_EQUAL_STRING(serial_output.c_str(), formatted.c_str());
   TEST_ASSERT_TRUE(structured.structuredResponse().lines.size() > 1);

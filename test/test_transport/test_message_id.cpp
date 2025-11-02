@@ -79,5 +79,10 @@ int main(int, char **) {
   RUN_TEST(test_next_skips_active_id);
   RUN_TEST(test_next_avoids_consecutive_duplicates);
   RUN_TEST(test_active_roundtrip);
+  // Dispatcher/HELP round-trip regressions
+  void test_dispatcher_round_trip_help_has_payload();
+  void test_event_raw_preserved();
+  RUN_TEST(test_dispatcher_round_trip_help_has_payload);
+  RUN_TEST(test_event_raw_preserved);
   return UNITY_END();
 }

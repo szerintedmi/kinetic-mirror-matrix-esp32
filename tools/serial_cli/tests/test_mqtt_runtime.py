@@ -207,6 +207,30 @@ class MqttRuntimeTests(unittest.TestCase):
         self.assertIn("[ACK]", joined)
         self.assertIn("[DONE]", joined)
 
+    def test_help_response_logged_multiline(self) -> None:
+        help_text = "HELP\nLINE1\nLINE2"
+        payload = json.dumps(
+            {
+                "cmd_id": "cmd-help",
+                "action": "HELP",
+                "status": "done",
+                "result": {
+                    "text": help_text,
+                },
+            }
+        )
+        self.worker.ingest_response("devices/node123/cmd/resp", payload)
+
+        _, log, _, _, _ = self.worker.get_state()
+        self.assertTrue(log, "expected log entries")
+        entry = log[-1]
+        self.assertIn("[DONE]", entry)
+        self.assertIn("action=HELP", entry)
+        lines = entry.splitlines()
+        self.assertGreater(len(lines), 1)
+        self.assertEqual(lines[1].strip(), "HELP")
+        self.assertEqual(lines[2].strip(), "LINE1")
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
