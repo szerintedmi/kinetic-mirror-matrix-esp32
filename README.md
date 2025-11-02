@@ -5,6 +5,7 @@ Firmware + host tools to drive up to 8 stepper‑driven mirrors from a single ES
 - [Roadmap](./agent-os/product/roadmap.md)
 - [Tech stack](./agent-os/product/tech-stack.md)
 - [Wiring guide](./docs/esp32-74hc595-wiring.md)
+- [mirror-matrix-control-ui](https://github.com/szerintedmi/mirror-matrix-control-ui)
 
 ## What It Does
 
