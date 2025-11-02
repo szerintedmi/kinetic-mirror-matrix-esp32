@@ -12,6 +12,11 @@
 class MotorCommandProcessor {
 public:
   MotorCommandProcessor();
+  ~MotorCommandProcessor();
+  MotorCommandProcessor(const MotorCommandProcessor&) = delete;
+  MotorCommandProcessor& operator=(const MotorCommandProcessor&) = delete;
+  MotorCommandProcessor(MotorCommandProcessor&&) noexcept = default;
+  MotorCommandProcessor& operator=(MotorCommandProcessor&&) noexcept = default;
   std::string processLine(const std::string& line, uint32_t now_ms);
   void tick(uint32_t now_ms) { controller_->tick(now_ms); }
   motor::command::CommandResult execute(const std::string &line, uint32_t now_ms);

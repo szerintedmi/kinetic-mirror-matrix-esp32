@@ -5,6 +5,8 @@
 #include "MotorControl/command/CommandResult.h"
 #include "MotorControl/command/ResponseFormatter.h"
 
+#include "transport/CompletionTracker.h"
+
 #include "StubMotorController.h"
 #if !defined(USE_STUB_BACKEND) && !defined(UNIT_TEST)
 #include "MotorControl/HardwareMotorController.h"
@@ -40,6 +42,10 @@ MotorCommandProcessor::MotorCommandProcessor()
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::NetCommandHandler()));
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::MqttConfigCommandHandler()));
   router_.reset(new CommandRouter(std::move(handlers)));
+}
+
+MotorCommandProcessor::~MotorCommandProcessor() {
+  transport::response::CompletionTracker::Instance().RemoveController(controller_.get());
 }
 
 CommandResult MotorCommandProcessor::execute(const std::string &line, uint32_t now_ms) {

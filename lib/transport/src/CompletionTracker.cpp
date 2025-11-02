@@ -79,5 +79,15 @@ void CompletionTracker::Clear() {
   pending_.clear();
 }
 
+void CompletionTracker::RemoveController(MotorController *controller) {
+  if (!controller) {
+    return;
+  }
+  pending_.erase(std::remove_if(pending_.begin(),
+                                pending_.end(),
+                                [&](const Pending &p) { return p.controller == controller; }),
+                 pending_.end());
+}
+
 } // namespace response
 } // namespace transport

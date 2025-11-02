@@ -4,6 +4,7 @@
 #include <ArduinoJson.h>
 #include <deque>
 #include <functional>
+#include <memory>
 #include <string>
 #include <vector>
 #include <unordered_map>
@@ -148,9 +149,9 @@ private:
   void executeDispatch(const CommandDispatch &dispatch,
                        const transport::command::Response &response,
                        const transport::response::CommandResponse &contract,
-                       DispatchStream *stream_ptr,
+                       const std::shared_ptr<DispatchStream> &stream_ref,
                        uint32_t now_ms);
-  DispatchStream *findStream(const std::string &cmd_id);
+  std::shared_ptr<DispatchStream> findStream(const std::string &cmd_id);
   bool streamConsumesResponse(DispatchStream *stream_ptr,
                               const CommandDispatch &dispatch,
                               const transport::command::Response &response,
@@ -208,7 +209,7 @@ private:
   std::deque<CachedResponse> recent_;
   std::vector<PendingCompletion> pending_;
   transport::response::ResponseDispatcher::SinkToken dispatcher_token_ = 0;
-  std::unordered_map<std::string, DispatchStream> streams_;
+  std::unordered_map<std::string, std::shared_ptr<DispatchStream>> streams_;
   std::unordered_map<std::string, std::vector<transport::response::Event>> orphan_events_;
   std::deque<std::string> orphan_order_;
 

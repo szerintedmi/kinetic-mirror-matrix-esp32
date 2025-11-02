@@ -394,7 +394,8 @@ namespace mqtt
     uint32_t mask = maskForTargets(targets);
     CommandDispatch dispatch = makeDispatch(cmd_id, action, std::move(command_line), std::move(targets), mask);
     ensureStream(dispatch.cmd_id, dispatch.action, dispatch.mask, now_ms);
-    DispatchStream *stream_ptr = findStream(dispatch.cmd_id);
+    auto stream_ref = findStream(dispatch.cmd_id);
+    DispatchStream *stream_ptr = stream_ref.get();
     if (stream_ptr && stream_ptr->action.empty())
     {
       stream_ptr->action = dispatch.action;
@@ -415,7 +416,7 @@ namespace mqtt
     transport::response::CommandResponse contract =
         transport::response::BuildCommandResponse(response, dispatch.action);
 
-    executeDispatch(dispatch, response, contract, stream_ptr, now_ms);
+    executeDispatch(dispatch, response, contract, stream_ref, now_ms);
   }
 
   bool MqttCommandServer::isDuplicate(const std::string &cmd_id) const
@@ -448,11 +449,11 @@ namespace mqtt
       return false;
     }
     logDuplicate(cmd_id, now_ms);
-    if (DispatchStream *stream = findStream(cmd_id))
+    if (auto stream_ref = findStream(cmd_id))
     {
-      if (!stream->ack_payload.empty())
+      if (!stream_ref->ack_payload.empty())
       {
-        publishAck(stream->ack_payload);
+        publishAck(stream_ref->ack_payload);
         return true;
       }
     }
@@ -604,14 +605,14 @@ namespace mqtt
     return dispatch;
   }
 
-  MqttCommandServer::DispatchStream *MqttCommandServer::findStream(const std::string &cmd_id)
+  std::shared_ptr<MqttCommandServer::DispatchStream> MqttCommandServer::findStream(const std::string &cmd_id)
   {
     auto it = streams_.find(cmd_id);
     if (it == streams_.end())
     {
       return nullptr;
     }
-    return &it->second;
+    return it->second;
   }
 
   bool MqttCommandServer::parsePayload(const std::string &payload,
@@ -688,9 +689,10 @@ namespace mqtt
   void MqttCommandServer::executeDispatch(const CommandDispatch &dispatch,
                                           const transport::command::Response &response,
                                           const transport::response::CommandResponse &contract,
-                                          DispatchStream *stream_ptr,
+                                          const std::shared_ptr<DispatchStream> &stream_ref,
                                           uint32_t now_ms)
   {
+    DispatchStream *stream_ptr = stream_ref.get();
     const transport::command::ResponseLine *ack_line = transport::command::FindAckLine(response);
     bool handled_by_dispatcher = streamConsumesResponse(stream_ptr, dispatch, response, contract, ack_line);
     if (!handled_by_dispatcher)
@@ -1517,17 +1519,37 @@ namespace mqtt
                                        uint32_t mask,
                                        uint32_t started_ms)
   {
-    DispatchStream stream;
-    stream.cmd_id = cmd_id;
-    stream.msg_id.clear();
-    stream.action = action;
-    stream.mask = mask;
-    stream.started_ms = started_ms;
-    stream.saw_event = false;
-    stream.ack_published = false;
-    stream.done_published = false;
-    stream.response.lines.clear();
-    streams_[cmd_id] = std::move(stream);
+    auto it = streams_.find(cmd_id);
+    if (it != streams_.end())
+    {
+      auto &existing = *it->second;
+      if (existing.action.empty())
+      {
+        existing.action = action;
+      }
+      if (mask != 0)
+      {
+        existing.mask = mask;
+      }
+      if (started_ms != 0)
+      {
+        existing.started_ms = started_ms;
+      }
+      return;
+    }
+
+    auto stream = std::make_shared<DispatchStream>();
+    stream->cmd_id = cmd_id;
+    stream->msg_id.clear();
+    stream->action = action;
+    stream->mask = mask;
+    stream->started_ms = started_ms;
+    stream->saw_event = false;
+    stream->ack_published = false;
+    stream->done_published = false;
+    stream->response.lines.clear();
+    stream->ack_payload.clear();
+    streams_.emplace(cmd_id, std::move(stream));
   }
 
   void MqttCommandServer::handleDispatcherEvent(const transport::response::Event &event)
@@ -1537,21 +1559,21 @@ namespace mqtt
       return;
     }
     constexpr std::size_t kMaxOrphanCommands = 4;
-    DispatchStream *stream = nullptr;
+    std::shared_ptr<DispatchStream> stream;
     std::string key;
     auto direct = streams_.find(event.cmd_id);
     if (direct != streams_.end())
     {
-      stream = &direct->second;
+      stream = direct->second;
       key = direct->first;
     }
     else
     {
       for (auto &entry : streams_)
       {
-        if (!entry.second.msg_id.empty() && entry.second.msg_id == event.cmd_id)
+        if (entry.second && !entry.second->msg_id.empty() && entry.second->msg_id == event.cmd_id)
         {
-          stream = &entry.second;
+          stream = entry.second;
           key = entry.first;
           break;
         }

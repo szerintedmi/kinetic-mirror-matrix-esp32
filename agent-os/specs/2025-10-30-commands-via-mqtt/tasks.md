@@ -85,19 +85,19 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 
 ### Validation
 
-#### Task Group 4: Integrated Test & Bench Verification
+-#### Task Group 4: Integrated Test & Bench Verification
 
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 1-3
 
-- [ ] 4.0 Review feature-specific tests from groups 1-3 (expect 6-16 total)
-- [ ] 4.1 Identify remaining critical workflow gaps (e.g., MOVE over MQTT during active motion, config persistence after reboot)
-- [ ] 4.2 Add up to 6 supplementary tests (host integration script or PlatformIO native) covering:
+- [x] 4.0 Review feature-specific tests from groups 1-3 (expect 6-16 total)
+- [x] 4.1 Identify remaining critical workflow gaps (e.g., MOVE over MQTT during active motion, config persistence after reboot)
+- [x] 4.2 Add up to 6 supplementary tests (host integration script or PlatformIO native) covering:
   - End-to-end MOVE/MOVE overlap resulting in BUSY
   - MQTT command vs. STATUS parity check
   - Config command persistence validation
-- [ ] 4.3 Execute feature-focused suite only: union of group tests plus additions (document exact commands run)
-- [ ] 4.4 Produce bench validation checklist referencing `@agent-os/standards/testing/hardware-validation.md` (e.g., single MOVE success, BUSY rejection, config change reboot)
+- [x] 4.3 Execute feature-focused suite only: union of group tests plus additions (document exact commands run)
+- [x] 4.4 Produce bench validation checklist referencing `@agent-os/standards/testing/hardware-validation.md` (e.g., single MOVE success, BUSY rejection, config change reboot)
 
 **Acceptance Criteria:**
 

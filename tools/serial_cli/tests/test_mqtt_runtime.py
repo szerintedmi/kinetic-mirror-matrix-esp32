@@ -1,6 +1,6 @@
 import json
 import unittest
-from typing import List
+from typing import List, Tuple
 
 from tools.serial_cli import render_table
 from tools.serial_cli.mqtt_runtime import MqttWorker
@@ -230,6 +230,108 @@ class MqttRuntimeTests(unittest.TestCase):
         self.assertGreater(len(lines), 1)
         self.assertEqual(lines[1].strip(), "HELP")
         self.assertEqual(lines[2].strip(), "LINE1")
+
+    def test_move_overlap_busy_error(self) -> None:
+        class StubClient:
+            def __init__(self) -> None:
+                self.published: List[Tuple[str, str, int]] = []
+
+            def loop_start(self) -> None:
+                pass
+
+            def loop_stop(self) -> None:
+                pass
+
+            def disconnect(self) -> None:
+                pass
+
+            def subscribe(self, *args, **kwargs) -> None:
+                pass
+
+            def publish(self, topic, payload, qos=1):
+                self.published.append((topic, payload, qos))
+
+                class _Info:
+                    rc = 0
+
+                return _Info()
+
+        ids = iter(["cli-0100", "cli-0101"])
+        worker = MqttWorker(
+            client_factory=lambda: StubClient(),
+            node_id="aa",
+            cmd_id_factory=lambda: next(ids),
+        )
+        try:
+            client = worker._client_factory()  # type: ignore[attr-defined]
+            worker._client = client
+            with worker._lock:
+                worker._connected = True
+
+            handles_a = worker.queue_cmd("MOVE:0,100")
+            handles_b = worker.queue_cmd("MOVE:0,120")
+            self.assertEqual(len(handles_a), 1)
+            self.assertEqual(len(handles_b), 1)
+            self.assertEqual(len(client.published), 2)  # type: ignore[attr-defined]
+
+            _, payload_a, _ = client.published[0]  # type: ignore[index]
+            _, payload_b, _ = client.published[1]  # type: ignore[index]
+            cmd_a = json.loads(payload_a)
+            cmd_b = json.loads(payload_b)
+            self.assertNotEqual(cmd_a["cmd_id"], cmd_b["cmd_id"])
+
+            ack_payload = json.dumps(
+                {
+                    "cmd_id": cmd_a["cmd_id"],
+                    "action": "MOVE",
+                    "status": "ack",
+                    "result": {"est_ms": 150},
+                }
+            )
+            done_payload = json.dumps(
+                {
+                    "cmd_id": cmd_a["cmd_id"],
+                    "action": "MOVE",
+                    "status": "done",
+                    "result": {"actual_ms": 140},
+                }
+            )
+            busy_payload = json.dumps(
+                {
+                    "cmd_id": cmd_b["cmd_id"],
+                    "action": "MOVE",
+                    "status": "error",
+                    "errors": [
+                        {
+                            "code": "E04",
+                            "reason": "BUSY",
+                        }
+                    ],
+                }
+            )
+
+            worker.ingest_response("devices/aa/cmd/resp", ack_payload)
+            worker.ingest_response("devices/aa/cmd/resp", done_payload)
+            worker.ingest_response("devices/aa/cmd/resp", busy_payload)
+
+            pending = worker.wait_for_completion(handles_a + handles_b, timeout=0.25)
+            cmd_a_pending = pending.get(handles_a[0])
+            cmd_b_pending = pending.get(handles_b[0])
+            self.assertIsNotNone(cmd_a_pending)
+            self.assertIsNotNone(cmd_b_pending)
+            self.assertTrue(cmd_a_pending.completed)  # type: ignore[union-attr]
+            self.assertTrue(cmd_b_pending.completed)  # type: ignore[union-attr]
+            self.assertIsNotNone(cmd_b_pending.done_event)  # type: ignore[union-attr]
+            self.assertEqual(
+                cmd_b_pending.done_event.errors[0]["code"],  # type: ignore[union-attr]
+                "E04",
+            )
+
+            _, log, _, _, _ = worker.get_state()
+            combined = "\n".join(log)
+            self.assertIn("BUSY", combined)
+        finally:
+            worker.stop()
 
     def test_thermal_state_updates_from_get_response(self) -> None:
         payload = json.dumps(

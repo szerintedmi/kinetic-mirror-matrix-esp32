@@ -1,8 +1,10 @@
 #include <unity.h>
 
 #include <ArduinoJson.h>
+#include <cmath>
 #include <cstdlib>
 #include <functional>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -10,6 +12,9 @@
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/command/HelpText.h"
 #include "mqtt/MqttCommandServer.h"
+#include "mqtt/MqttConfigStore.h"
+#include "mqtt/MqttStatusPublisher.h"
+#include "net_onboarding/NetOnboarding.h"
 #include "transport/MessageId.h"
 
 namespace {
@@ -193,6 +198,38 @@ std::string makeNetPayload(const std::string &cmd_id,
     auto params = doc["params"].to<ArduinoJson::JsonObject>();
     builder(params);
   }
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
+std::string makeMqttSetConfigPayload(const std::string &cmd_id,
+                                     const std::string &host,
+                                     int port,
+                                     const std::string &user,
+                                     const std::string &pass) {
+  ArduinoJson::JsonDocument doc;
+  if (!cmd_id.empty()) {
+    doc["cmd_id"] = cmd_id;
+  }
+  doc["action"] = "MQTT:SET_CONFIG";
+  auto params = doc["params"].to<ArduinoJson::JsonObject>();
+  params["host"] = host.c_str();
+  params["port"] = port;
+  params["user"] = user.c_str();
+  params["pass"] = pass.c_str();
+  std::string out;
+  serializeJson(doc, out);
+  return out;
+}
+
+std::string makeMqttGetConfigPayload(const std::string &cmd_id) {
+  ArduinoJson::JsonDocument doc;
+  if (!cmd_id.empty()) {
+    doc["cmd_id"] = cmd_id;
+  }
+  doc["action"] = "MQTT:GET_CONFIG";
+  doc["params"].to<ArduinoJson::JsonObject>();
   std::string out;
   serializeJson(doc, out);
   return out;
@@ -501,6 +538,158 @@ void test_busy_rejection() {
   TEST_ASSERT_EQUAL_STRING("E04", errors[0]["code"]);
 }
 
+void test_status_parity_matches_status_publisher() {
+  transport::message_id::ResetGenerator();
+  transport::message_id::ClearActive();
+  Harness h;
+
+  h.send(makeWakePayload("wake-all"));
+  h.advance(0);
+  h.clearMessages();
+
+  h.send(makeMovePayload("move-cmd", 0, 180));
+  h.advance(600);
+  h.clearMessages();
+
+  motor::command::CommandResult status = h.processor.execute("STATUS", h.now_ms);
+  const auto &response = status.structuredResponse();
+
+  std::map<int, std::map<std::string, std::string>> serial_fields;
+  for (const auto &line : response.lines) {
+    if (line.type != transport::command::ResponseLineType::kData) {
+      continue;
+    }
+    int id = -1;
+    for (const auto &field : line.fields) {
+      if (field.key == "id") {
+        id = std::stoi(field.value);
+        break;
+      }
+    }
+    TEST_ASSERT_TRUE_MESSAGE(id >= 0, "STATUS data missing id field");
+    auto &entry = serial_fields[id];
+    for (const auto &field : line.fields) {
+      entry[field.key] = field.value;
+    }
+  }
+  TEST_ASSERT_FALSE_MESSAGE(serial_fields.empty(), "STATUS command produced no motor data");
+
+  net_onboarding::NetOnboarding net;
+#if defined(USE_STUB_BACKEND)
+  net.setTestSimulation(true, 0);
+#endif
+  net.begin();
+
+  std::string payload;
+  mqtt::MqttStatusPublisher publisher(
+      [&](const mqtt::PublishMessage &msg) {
+        payload = msg.payload;
+        return true;
+      },
+      net);
+  publisher.setTopic("devices/test/status");
+  publisher.forceImmediate();
+  publisher.loop(h.processor.controller(), h.now_ms);
+  TEST_ASSERT_FALSE_MESSAGE(payload.empty(), "status publisher did not emit payload");
+
+  ArduinoJson::JsonDocument doc;
+  auto err = ArduinoJson::deserializeJson(doc, payload);
+  TEST_ASSERT_FALSE_MESSAGE(err, err.c_str());
+  auto motors = doc["motors"].as<ArduinoJson::JsonObject>();
+  TEST_ASSERT_FALSE_MESSAGE(motors.isNull(), "motors object missing");
+  TEST_ASSERT_EQUAL_UINT(serial_fields.size(), motors.size());
+
+  auto parse_bool_flag = [](const std::string &value) -> bool {
+    return value == "1";
+  };
+
+  auto parse_long = [](const std::string &value) -> long {
+    return std::stol(value);
+  };
+
+  auto parse_double = [](const std::string &value) -> double {
+    return std::stod(value);
+  };
+
+  for (auto kv : motors) {
+    int id = std::stoi(kv.key().c_str());
+    auto serial_it = serial_fields.find(id);
+    TEST_ASSERT_TRUE_MESSAGE(serial_it != serial_fields.end(), "missing STATUS data for motor");
+    auto obj = kv.value().as<ArduinoJson::JsonObject>();
+    TEST_ASSERT_FALSE_MESSAGE(obj.isNull(), "motor entry missing");
+
+    const auto &fields = serial_it->second;
+    auto require_field = [&](const char *name) -> const std::string & {
+      auto it = fields.find(name);
+      TEST_ASSERT_TRUE_MESSAGE(it != fields.end(), (std::string("missing field ") + name).c_str());
+      return it->second;
+    };
+
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("pos")), obj["position"].as<long>());
+    TEST_ASSERT_EQUAL_INT(parse_bool_flag(require_field("moving")) ? 1 : 0,
+                          obj["moving"].as<bool>() ? 1 : 0);
+    TEST_ASSERT_EQUAL_INT(parse_bool_flag(require_field("awake")) ? 1 : 0,
+                          obj["awake"].as<bool>() ? 1 : 0);
+    TEST_ASSERT_EQUAL_INT(parse_bool_flag(require_field("homed")) ? 1 : 0,
+                          obj["homed"].as<bool>() ? 1 : 0);
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("steps_since_home")), obj["steps_since_home"].as<long>());
+    float budget_expected = static_cast<float>(parse_double(require_field("budget_s")));
+    float budget_actual = obj["budget_s"].as<float>();
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, budget_expected, budget_actual);
+    float ttfc_expected = static_cast<float>(parse_double(require_field("ttfc_s")));
+    float ttfc_actual = obj["ttfc_s"].as<float>();
+    TEST_ASSERT_FLOAT_WITHIN(0.05f, ttfc_expected, ttfc_actual);
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("speed")), obj["speed"].as<long>());
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("accel")), obj["accel"].as<long>());
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("est_ms")), obj["est_ms"].as<long>());
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("started_ms")), obj["started_ms"].as<long>());
+
+    bool serial_has_actual = fields.find("actual_ms") != fields.end();
+    bool json_has_actual = !obj["actual_ms"].isNull();
+    TEST_ASSERT_EQUAL_INT(serial_has_actual ? 1 : 0, json_has_actual ? 1 : 0);
+    if (serial_has_actual && json_has_actual) {
+      TEST_ASSERT_EQUAL_INT(parse_long(fields.at("actual_ms")), obj["actual_ms"].as<long>());
+    }
+  }
+}
+
+void test_mqtt_config_json_persists() {
+  mqtt::ConfigStore::Instance().ResetForTests();
+  transport::message_id::ResetGenerator();
+  transport::message_id::ClearActive();
+  Harness h;
+
+  h.send(makeMqttSetConfigPayload("cfg-set", "mqtt.lab", 1885, "ops", "secret"));
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto set_completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", set_completion["status"]);
+
+  auto cfg = mqtt::ConfigStore::Instance().Current();
+  TEST_ASSERT_EQUAL_STRING("mqtt.lab", cfg.host.c_str());
+  TEST_ASSERT_EQUAL_UINT16(1885, cfg.port);
+  TEST_ASSERT_EQUAL_STRING("ops", cfg.user.c_str());
+  TEST_ASSERT_EQUAL_STRING("secret", cfg.pass.c_str());
+  TEST_ASSERT_TRUE(cfg.host_overridden);
+  TEST_ASSERT_TRUE(cfg.port_overridden);
+  TEST_ASSERT_TRUE(cfg.user_overridden);
+  TEST_ASSERT_TRUE(cfg.pass_overridden);
+
+  mqtt::ConfigStore::Instance().Reload();
+
+  h.clearMessages();
+  h.send(makeMqttGetConfigPayload("cfg-get"));
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto get_completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("done", get_completion["status"]);
+
+  auto result = get_completion["result"].as<ArduinoJson::JsonObject>();
+  TEST_ASSERT_FALSE(result.isNull());
+  TEST_ASSERT_EQUAL_STRING("mqtt.lab", result["host"].as<const char *>());
+  TEST_ASSERT_EQUAL_INT(1885, result["port"].as<int>());
+  TEST_ASSERT_EQUAL_STRING("ops", result["user"].as<const char *>());
+  TEST_ASSERT_EQUAL_STRING("secret", result["pass"].as<const char *>());
+}
+
 int main(int, char **) {
   UNITY_BEGIN();
   RUN_TEST(test_begin_requires_device_id);
@@ -520,5 +709,7 @@ int main(int, char **) {
   RUN_TEST(test_net_set_command_success);
   RUN_TEST(test_duplicate_command_logs);
   RUN_TEST(test_busy_rejection);
+  RUN_TEST(test_status_parity_matches_status_publisher);
+  RUN_TEST(test_mqtt_config_json_persists);
   return UNITY_END();
 }

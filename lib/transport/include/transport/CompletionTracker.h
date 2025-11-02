@@ -19,6 +19,7 @@ public:
                          MotorController &controller);
   void Tick(uint32_t now_ms);
   void Clear();
+  void RemoveController(MotorController *controller);
 
 private:
   CompletionTracker() = default;
