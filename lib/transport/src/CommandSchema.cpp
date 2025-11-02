@@ -41,6 +41,10 @@ const std::vector<ErrorDescriptor> &BuildCatalog() {
        "MQTT command payload failed validation."},
       {"MQTT_UNSUPPORTED_ACTION", nullptr, CompletionStatus::kError,
        "Requested command action is not supported over MQTT."},
+      {"MQTT_BAD_PARAM", nullptr, CompletionStatus::kError,
+       "MQTT command parameters failed validation."},
+      {"MQTT_CONFIG_SAVE_FAILED", nullptr, CompletionStatus::kError,
+       "Failed to persist MQTT configuration changes."},
   };
   return kCatalog;
 }

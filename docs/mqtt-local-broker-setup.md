@@ -83,3 +83,4 @@ Commit updated secrets only if they contain non-sensitive defaults; otherwise ke
 - Ensure your Mac firewall allows inbound connections on TCP 1883.
 - Confirm the device and Mac share a subnet or that routing is configured for the broker's IP.
 - If connections fail, watch firmware logs for `CTRL: MQTT_CONNECT_FAILED` and broker logs for authentication errors.
+- Verify the node's active broker settings with `MQTT:GET_CONFIG` and push updates with `MQTT:SET_CONFIG host=<ip-or-host> port=<port> user=<user> pass=<pass>`—no rebuild or flash required when the broker address or credentials change.

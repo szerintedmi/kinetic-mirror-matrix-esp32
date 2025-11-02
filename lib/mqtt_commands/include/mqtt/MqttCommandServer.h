@@ -74,6 +74,11 @@ private:
                        std::string &out,
                        std::string &error,
                        bool &unsupported) const;
+  bool buildMqttConfigCommand(const std::string &action,
+                              ArduinoJson::JsonVariantConst params,
+                              std::string &out,
+                              std::string &error,
+                              bool &unsupported) const;
   bool buildGetCommand(ArduinoJson::JsonVariantConst params,
                        std::string &out,
                        std::string &error,

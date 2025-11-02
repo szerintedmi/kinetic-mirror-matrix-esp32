@@ -107,6 +107,9 @@ void test_execute_matches_serial_output();
 void test_execute_reports_errors_structurally();
 void test_batch_aggregates_estimate();
 void test_execute_cid_increments();
+void test_mqtt_get_config_defaults();
+void test_mqtt_set_config_persist();
+void test_mqtt_reset_to_defaults();
 
 extern void setUp();
 extern void tearDown();
@@ -213,6 +216,9 @@ int main(int, char**) {
   setUp(); RUN_TEST(test_execute_reports_errors_structurally);
   setUp(); RUN_TEST(test_batch_aggregates_estimate);
   setUp(); RUN_TEST(test_execute_cid_increments);
+  setUp(); RUN_TEST(test_mqtt_get_config_defaults);
+  setUp(); RUN_TEST(test_mqtt_set_config_persist);
+  setUp(); RUN_TEST(test_mqtt_reset_to_defaults);
 
   // Multi-command parsing
   setUp(); RUN_TEST(test_multi_cmd_accept_disjoint);

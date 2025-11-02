@@ -233,9 +233,13 @@ class MqttWorker(threading.Thread):
         try:
             requests = build_requests(stripped)
         except UnsupportedCommandError as exc:
+            if not silent:
+                self._append_log(f"> {stripped}")
             self._append_log(f"error: {exc}")
             return []
         except CommandParseError as exc:
+            if not silent:
+                self._append_log(f"> {stripped}")
             self._append_log(f"error: {exc}")
             return []
 

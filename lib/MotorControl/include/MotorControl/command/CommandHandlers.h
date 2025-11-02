@@ -41,5 +41,13 @@ public:
                         uint32_t now_ms) override;
 };
 
+class MqttConfigCommandHandler : public CommandHandler {
+public:
+  bool canHandle(const std::string &action) const override;
+  CommandResult execute(const ParsedCommand &command,
+                        CommandExecutionContext &context,
+                        uint32_t now_ms) override;
+};
+
 } // namespace command
 } // namespace motor

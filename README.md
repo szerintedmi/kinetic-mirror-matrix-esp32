@@ -151,7 +151,14 @@ Tests
 - Maintains a 1 Hz cadence while idle and 5 Hz while any motor is moving, with change-driven bursts between ticks.
 - On broker loss logs `CTRL: MQTT_DISCONNECTED …` once, schedules exponential-backoff retries with `CTRL: MQTT_RECONNECT delay=<ms>`, and resumes with `CTRL: MQTT_CONNECTED broker=…` upon success.
 - Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
-- Follow-up: add runtime SET/GET actions for MQTT broker host/user/pass (tracked as a deferred implementation task).
+- Inspect or update broker overrides at runtime via `MQTT:GET_CONFIG` and `MQTT:SET_CONFIG`; changes persist in Preferences and apply without reflashing.
+
+### Runtime MQTT configuration
+
+- `MQTT:GET_CONFIG` prints the active broker host/port/user/pass.
+- `MQTT:SET_CONFIG host=<fqdn> port=<port> user=<user> pass=<secret>` updates only the fields you specify; values are stored under the `mqtt` Preferences namespace and the broker client reconnects automatically with the new credentials.
+- Send `MQTT:SET_CONFIG RESET` to roll back to the compile-time defaults defined in `include/secrets.h`.
+- The serial console and the MQTT transport share the same grammar—`tools/serial_cli` will translate these lines into the JSON envelope described in [`docs/mqtt-command-schema.md`](./docs/mqtt-command-schema.md).
 
 ## Wi‑Fi Onboarding
 

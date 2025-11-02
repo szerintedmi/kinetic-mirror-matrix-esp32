@@ -38,6 +38,7 @@ MotorCommandProcessor::MotorCommandProcessor()
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::MotorCommandHandler()));
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::QueryCommandHandler()));
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::NetCommandHandler()));
+  handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::MqttConfigCommandHandler()));
   router_.reset(new CommandRouter(std::move(handlers)));
 }
 

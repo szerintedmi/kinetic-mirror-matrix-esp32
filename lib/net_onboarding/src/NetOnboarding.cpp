@@ -13,7 +13,6 @@
 
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
 #include <ArduinoJson.h>
-#include <AsyncJson.h>
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
@@ -46,12 +45,11 @@ namespace net_onboarding
 
   static void sendJsonError_(AsyncWebServerRequest *request, int status, const char *code)
   {
-    auto *response = new AsyncJsonResponse();
-    response->setCode(status);
-    JsonObject root = response->getRoot();
-    root["error"] = code;
-    response->setLength();
-    request->send(response);
+    JsonDocument doc;
+    doc["error"] = code ? code : "unknown";
+    std::string out;
+    serializeJson(doc, out);
+    request->send(status, "application/json", out.c_str());
   }
 
   static void handleApiStatus_(AsyncWebServerRequest *request)
@@ -61,9 +59,8 @@ namespace net_onboarding
       sendJsonError_(request, 503, "net-unavailable");
       return;
     }
-    auto *response = new AsyncJsonResponse();
-    response->setCode(200);
-    JsonObject root = response->getRoot();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     Status st = g_portal_net->status();
     root["state"] = stateToString_(st.state);
     root["ssid"] = st.ssid.data();
@@ -81,8 +78,9 @@ namespace net_onboarding
     std::array<char, 65> ap_pass{};
     g_portal_net->apPassword(ap_pass);
     root["apPassword"] = ap_pass.data();
-    response->setLength();
-    request->send(response);
+    std::string out;
+    serializeJson(doc, out);
+    request->send(200, "application/json", out.c_str());
   }
 
   static void handleApiScan_(AsyncWebServerRequest *request)
@@ -99,9 +97,8 @@ namespace net_onboarding
     }
     std::vector<WifiScanResult> results;
     g_portal_net->scanNetworks(results);
-    auto *response = new AsyncJsonResponse(true);
-    response->setCode(200);
-    JsonArray arr = response->getRoot();
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
     for (const auto &r : results)
     {
       JsonObject item = arr.add<JsonObject>();
@@ -110,8 +107,9 @@ namespace net_onboarding
       item["secure"] = r.secure;
       item["channel"] = r.channel;
     }
-    response->setLength();
-    request->send(response);
+    std::string out;
+    serializeJson(doc, out);
+    request->send(200, "application/json", out.c_str());
   }
 
   static void handleApiWifiLogic_(AsyncWebServerRequest *request, const String &ssid, const String &pass)
@@ -148,45 +146,59 @@ namespace net_onboarding
       sendJsonError_(request, 500, "persist-failed");
       return;
     }
-    auto *response = new AsyncJsonResponse();
-    response->setCode(200);
-    JsonObject root = response->getRoot();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     root["status"] = "connecting";
     root["state"] = stateToString_(State::CONNECTING);
-    response->setLength();
-    request->send(response);
+    std::string out;
+    serializeJson(doc, out);
+    request->send(200, "application/json", out.c_str());
   }
 
   static void registerWifiHandler_(AsyncWebServer &server)
   {
-    auto *handler = new AsyncCallbackJsonWebHandler(
-        "/api/wifi", [](AsyncWebServerRequest *request, JsonVariant json)
-        {
-        JsonVariantConst payload = json;
-        if (!payload.is<JsonObjectConst>()) {
-          sendJsonError_(request, 400, "invalid-payload");
-          return;
-        }
-        JsonObjectConst obj = payload.as<JsonObjectConst>();
-        const char* ssid_c = obj["ssid"].as<const char*>();
-        if (!ssid_c) {
-          sendJsonError_(request, 400, "invalid-ssid");
-          return;
-        }
-        String ssid = String(ssid_c);
-        String pass;
-        JsonVariantConst passField = obj["pass"];
-        if (!passField.isNull()) {
-          const char* pass_c = passField.as<const char*>();
-          if (!pass_c) {
-            sendJsonError_(request, 400, "invalid-pass");
-            return;
-          }
-          pass = String(pass_c);
-        }
-        handleApiWifiLogic_(request, ssid, pass); });
-    handler->setMethod(HTTP_POST);
-    server.addHandler(handler);
+    server.on("/api/wifi", HTTP_POST,
+              [](AsyncWebServerRequest *request) {
+                // The actual response will be sent after body parsed.
+              },
+              NULL,
+              [](AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total) {
+                auto **buf_ptr = reinterpret_cast<std::string **>(&request->_tempObject);
+                if (index == 0) {
+                  // first chunk
+                  *buf_ptr = new std::string();
+                  (*buf_ptr)->reserve(total);
+                }
+                if (*buf_ptr) {
+                  (*buf_ptr)->append(reinterpret_cast<const char *>(data), len);
+                }
+                if (index + len == total) {
+                  String ssid;
+                  String pass;
+                  bool ok = false;
+                  if (*buf_ptr) {
+                    JsonDocument doc;
+                    auto err = deserializeJson(doc, **buf_ptr);
+                    if (!err && doc.is<JsonObject>()) {
+                      JsonObject obj = doc.as<JsonObject>();
+                      const char *ssid_c = obj["ssid"].as<const char *>();
+                      if (ssid_c) {
+                        ssid = String(ssid_c);
+                        const char *pass_c = obj["pass"].as<const char *>();
+                        if (pass_c) pass = String(pass_c);
+                        ok = true;
+                      }
+                    }
+                  }
+                  delete *buf_ptr;
+                  *buf_ptr = nullptr;
+                  if (!ok) {
+                    sendJsonError_(request, 400, "invalid-payload");
+                    return;
+                  }
+                  handleApiWifiLogic_(request, ssid, pass);
+                }
+              });
   }
 
   static void handleApiReset_(AsyncWebServerRequest *request)
@@ -202,9 +214,8 @@ namespace net_onboarding
       return;
     }
     g_portal_net->resetCredentials();
-    auto *response = new AsyncJsonResponse();
-    response->setCode(200);
-    JsonObject root = response->getRoot();
+    JsonDocument doc;
+    JsonObject root = doc.to<JsonObject>();
     root["status"] = "reset";
     std::array<char, 32> ap_ssid{};
     g_portal_net->softApSsid(ap_ssid);
@@ -212,8 +223,9 @@ namespace net_onboarding
     std::array<char, 65> ap_pass{};
     g_portal_net->apPassword(ap_pass);
     root["apPassword"] = ap_pass.data();
-    response->setLength();
-    request->send(response);
+    std::string out;
+    serializeJson(doc, out);
+    request->send(200, "application/json", out.c_str());
   }
 
   static void handleNotFound_(AsyncWebServerRequest *request)

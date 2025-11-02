@@ -86,6 +86,30 @@ std::string Unquote(const std::string &value) {
   return value;
 }
 
+std::string QuoteIfNeeded(const std::string &value) {
+  bool needs_quotes = value.empty();
+  for (char c : value) {
+    if (std::isspace(static_cast<unsigned char>(c)) || c == '"' || c == '\\' || c == ',') {
+      needs_quotes = true;
+      break;
+    }
+  }
+  if (!needs_quotes) {
+    return value;
+  }
+  std::string out;
+  out.reserve(value.size() + 2);
+  out.push_back('"');
+  for (char c : value) {
+    if (c == '"' || c == '\\') {
+      out.push_back('\\');
+    }
+    out.push_back(c);
+  }
+  out.push_back('"');
+  return out;
+}
+
 void AppendFields(ArduinoJson::JsonObject obj,
                   const std::vector<transport::command::Field> &fields) {
   for (const auto &field : fields) {
@@ -897,6 +921,151 @@ bool MqttCommandServer::buildGetCommand(ArduinoJson::JsonVariantConst params,
   return false;
 }
 
+bool MqttCommandServer::buildMqttConfigCommand(const std::string &action,
+                                               ArduinoJson::JsonVariantConst params,
+                                               std::string &out,
+                                               std::string &error,
+                                               bool &unsupported) const {
+  if (action == "MQTT:GET_CONFIG") {
+    if (!params.isNull() && params.size() > 0) {
+      error = "params must be empty";
+      return false;
+    }
+    out = "MQTT:GET_CONFIG";
+    return true;
+  }
+  if (action == "MQTT:SET_CONFIG") {
+    if (params.isNull()) {
+      error = "params required";
+      return false;
+    }
+    if (!params.is<ArduinoJson::JsonObjectConst>()) {
+      error = "params must be object";
+      return false;
+    }
+    auto obj = params.as<ArduinoJson::JsonObjectConst>();
+    bool reset_requested = false;
+    if (!obj["reset"].isNull()) {
+      auto reset_field = obj["reset"];
+      if (reset_field.is<bool>()) {
+        reset_requested = reset_field.as<bool>();
+      } else if (reset_field.is<int>() || reset_field.is<long>()) {
+        reset_requested = (reset_field.as<long>() != 0);
+      } else if (reset_field.is<const char *>()) {
+        std::string value = ToUpper(std::string(reset_field.as<const char *>()));
+        reset_requested = (value == "RESET" || value == "DEFAULTS" || value == "TRUE" || value == "1");
+      } else {
+        error = "reset must be bool or string";
+        return false;
+      }
+      if (reset_requested) {
+        size_t count = 0;
+        for (auto kv : obj) {
+          std::string key = ToUpper(std::string(kv.key().c_str()));
+          if (key != "RESET" && !kv.value().isNull()) {
+            ++count;
+          }
+        }
+        if (count > 0) {
+          error = "reset cannot combine with other fields";
+          return false;
+        }
+        out = "MQTT:SET_CONFIG RESET";
+        return true;
+      }
+    }
+
+    bool saw_field = false;
+    std::string cmd("MQTT:SET_CONFIG");
+
+    auto append_string_field = [&](const char *field_name,
+                                   ArduinoJson::JsonVariantConst field_value,
+                                   const char *token_name) -> bool {
+      if (field_value.isNull()) {
+        return true;
+      }
+      saw_field = true;
+      if (field_value.is<const char *>()) {
+        std::string value = field_value.as<const char *>();
+        std::string upper = ToUpper(value);
+        if (upper == "DEFAULT") {
+          error = std::string(field_name) + " cannot be 'default'";
+          return false;
+        }
+        cmd.append(" ");
+        cmd.append(token_name);
+        cmd.append("=");
+        cmd.append(QuoteIfNeeded(value));
+        return true;
+      }
+      error = std::string(field_name) + " must be string";
+      return false;
+    };
+
+    if (!append_string_field("host", obj["host"], "host")) {
+      return false;
+    }
+
+    if (!obj["port"].isNull()) {
+      saw_field = true;
+      auto field = obj["port"];
+      if (field.is<const char *>()) {
+        std::string value = field.as<const char *>();
+        std::string upper = ToUpper(value);
+        if (upper == "DEFAULT") {
+          error = "port cannot be 'default'";
+          return false;
+        }
+        long parsed = ParseLong(value, -1);
+        if (parsed <= 0 || parsed > 65535) {
+          error = "port must be 1-65535";
+          return false;
+        }
+        cmd.append(" port=");
+        cmd.append(std::to_string(parsed));
+      } else if (field.is<int>() || field.is<long>()) {
+        long parsed = field.as<long>();
+        if (parsed <= 0 || parsed > 65535) {
+          error = "port must be 1-65535";
+          return false;
+        }
+        cmd.append(" port=");
+        cmd.append(std::to_string(parsed));
+      } else {
+        error = "port must be string or integer";
+        return false;
+      }
+    }
+
+    if (!append_string_field("user", obj["user"], "user")) {
+      return false;
+    }
+    ArduinoJson::JsonVariantConst pass_field = obj["pass"];
+    ArduinoJson::JsonVariantConst password_field = obj["password"];
+    if (!pass_field.isNull() && !password_field.isNull()) {
+      error = "pass and password provided";
+      return false;
+    }
+    if (pass_field.isNull()) {
+      pass_field = password_field;
+    }
+    if (!append_string_field("pass", pass_field, "pass")) {
+      return false;
+    }
+
+    if (!saw_field) {
+      error = "no fields provided";
+      return false;
+    }
+    out = std::move(cmd);
+    return true;
+  }
+
+  unsupported = true;
+  error = "action not supported";
+  return false;
+}
+
 bool MqttCommandServer::buildSetCommand(ArduinoJson::JsonVariantConst params,
                                         std::string &out,
                                         std::string &error,
@@ -983,6 +1152,9 @@ bool MqttCommandServer::buildCommandLine(const std::string &action,
   }
   if (action.rfind("NET:", 0) == 0) {
     return buildNetCommand(action, params, out, error, unsupported);
+  }
+  if (action.rfind("MQTT:", 0) == 0) {
+    return buildMqttConfigCommand(action, params, out, error, unsupported);
   }
   if (action == "GET") {
     return buildGetCommand(params, out, error, unsupported);

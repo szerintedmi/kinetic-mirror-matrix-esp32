@@ -1,6 +1,7 @@
 # Task Breakdown: Commands via MQTT
 
 ## Overview
+
 Total Tasks: 10
 Assigned roles: api-engineer, ui-designer, testing-engineer
 
@@ -9,6 +10,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 ### Firmware & Transport Layer
 
 #### Task Group 1: MQTT Command Parity Core
+
 **Assigned implementer:** api-engineer
 **Dependencies:** None
 
@@ -29,6 +31,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 - [x] 1.6 Run only new/modified native tests and target component build (`pio test -e native --filter mqtt_command*` + `pio run`)
 
 **Acceptance Criteria:**
+
 - Shared message ID helper live outside onboarding and passes unit tests
 - Firmware publishes ACK & completion payloads matching documented schema
 - Serial output reflects consolidated error/status codes without behavior regressions
@@ -36,18 +39,20 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 - Focused test suite (2-8 cases) passes locally
 
 #### Task Group 2: MQTT Config Commands (Post-Parity)
+
 **Assigned implementer:** api-engineer
 **Dependencies:** Task Group 1
 
-- [ ] 2.0 Implement configuration actions
-  - [ ] 2.1 Define `MQTT:GET_CONFIG` / `MQTT:SET_CONFIG` spec additions in schema doc (append)
-  - [ ] 2.2 Persist broker host/port/user/pass in Preferences namespace `mqtt` with version guard
-  - [ ] 2.3 Expose commands over serial and MQTT (same envelope) with validation + defaults fallback
-  - [ ] 2.4 Add 2-4 focused tests exercising set/get round trip and reboot persistence (native + if needed embedded mock)
-- [ ] 2.5 Update developer docs (`docs/mqtt-command-schema.md`, README/Troubleshooting) with usage examples
-- [ ] 2.6 Run only added tests from this group
+- [x] 2.0 Implement configuration actions
+  - [x] 2.1 Define `MQTT:GET_CONFIG` / `MQTT:SET_CONFIG` spec additions in schema doc (append)
+  - [x] 2.2 Persist broker host/port/user/pass in Preferences namespace `mqtt` with version guard
+  - [x] 2.3 Expose commands over serial and MQTT (same envelope) with validation + defaults fallback
+  - [x] 2.4 Add 2-4 focused tests exercising set/get round trip and reboot persistence (native + if needed embedded mock)
+- [x] 2.5 Update developer docs (`docs/mqtt-command-schema.md`, README/Troubleshooting) with usage examples
+- [x] 2.6 Run all tests
 
 **Acceptance Criteria:**
+
 - Config commands return defaults when unset and persist overrides across reboot
 - Serial and MQTT transports share identical payloads for config actions
 - Documentation reflects new commands and preference storage flow
@@ -56,6 +61,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 ### Host Tooling & UX
 
 #### Task Group 3: CLI/TUI MQTT Command Support
+
 **Assigned implementer:** ui-designer
 **Dependencies:** Task Group 1
 
@@ -71,6 +77,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 - [x] 3.7 Run only the new focused Python tests (`pytest tools/serial_cli/tests/test_mqtt_commands.py -k new_cases`)
 
 **Acceptance Criteria:**
+
 - MQTT mode sends single-action commands and logs ACK/completion states analogous to serial mode
 - UI surfaces command progress without blocking telemetry updates
 - Tests (≤6) covering command publish + response handling pass
@@ -79,6 +86,7 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 ### Validation
 
 #### Task Group 4: Integrated Test & Bench Verification
+
 **Assigned implementer:** testing-engineer
 **Dependencies:** Task Groups 1-3
 
@@ -92,11 +100,13 @@ Assigned roles: api-engineer, ui-designer, testing-engineer
 - [ ] 4.4 Produce bench validation checklist referencing `@agent-os/standards/testing/hardware-validation.md` (e.g., single MOVE success, BUSY rejection, config change reboot)
 
 **Acceptance Criteria:**
+
 - Added tests (≤6) pass and cover remaining critical flows
 - Bench checklist completed and attached under `specs/.../verification/`
 - No full-suite runs; only feature-specific tests executed
 
 ## Execution Order
+
 1. Task Group 1: MQTT Command Parity Core
 2. Task Group 2: MQTT Config Commands (Post-Parity)
 3. Task Group 3: CLI/TUI MQTT Command Support

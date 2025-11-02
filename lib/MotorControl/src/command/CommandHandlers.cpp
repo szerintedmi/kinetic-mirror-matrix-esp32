@@ -5,6 +5,7 @@
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/BuildConfig.h"
+#include "mqtt/MqttConfigStore.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
 #include "transport/CompletionTracker.h"
@@ -123,6 +124,92 @@ CommandResult AppendDoneResult(CommandResult res,
   CommandResult done = MakeDoneResult(action, msg_id, fields);
   res.mergeFrom(done);
   return res;
+}
+
+bool ParseKeyValueArgs(const std::string &input,
+                       std::vector<std::pair<std::string, std::string>> &out,
+                       std::string &error) {
+  size_t pos = 0;
+  while (pos < input.size()) {
+    while (pos < input.size() &&
+           (std::isspace(static_cast<unsigned char>(input[pos])) || input[pos] == ',')) {
+      ++pos;
+    }
+    if (pos >= input.size()) {
+      break;
+    }
+    size_t key_start = pos;
+    while (pos < input.size() &&
+           input[pos] != '=' &&
+           !std::isspace(static_cast<unsigned char>(input[pos])) &&
+           input[pos] != ',') {
+      ++pos;
+    }
+    size_t key_end = pos;
+    while (pos < input.size() && std::isspace(static_cast<unsigned char>(input[pos]))) {
+      ++pos;
+    }
+    if (pos >= input.size() || input[pos] != '=') {
+      error = "expected key=value";
+      return false;
+    }
+    ++pos; // skip '='
+    while (pos < input.size() && std::isspace(static_cast<unsigned char>(input[pos]))) {
+      ++pos;
+    }
+    std::string value;
+    if (pos < input.size() && input[pos] == '"') {
+      ++pos;
+      bool escape = false;
+      bool closed = false;
+      while (pos < input.size()) {
+        char c = input[pos++];
+        if (escape) {
+          value.push_back(c);
+          escape = false;
+          continue;
+        }
+        if (c == '\\') {
+          escape = true;
+          continue;
+        }
+        if (c == '"') {
+          closed = true;
+          break;
+        }
+        value.push_back(c);
+      }
+      if (!closed) {
+        error = "unterminated quote";
+        return false;
+      }
+    } else {
+      size_t value_start = pos;
+      while (pos < input.size() &&
+             !std::isspace(static_cast<unsigned char>(input[pos])) &&
+             input[pos] != ',') {
+        ++pos;
+      }
+      value = input.substr(value_start, pos - value_start);
+    }
+    std::string key = Trim(input.substr(key_start, key_end - key_start));
+    if (key.empty()) {
+      error = "missing key";
+      return false;
+    }
+    out.emplace_back(key, value);
+  }
+  error.clear();
+  return true;
+}
+
+std::vector<transport::command::Field> BuildMqttConfigFields(const mqtt::BrokerConfig &cfg) {
+  std::vector<transport::command::Field> fields;
+  fields.push_back({"host", QuoteString(cfg.host)});
+  fields.push_back({"port", std::to_string(static_cast<unsigned long long>(cfg.port))});
+  fields.push_back({"user", QuoteString(cfg.user)});
+  fields.push_back({"pass", QuoteString(cfg.pass)});
+  return fields;
 }
 
 const char *NetStateToString(net_onboarding::State state) {
@@ -1064,6 +1151,151 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
   std::string msg_id = context.nextMsgId();
   auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM",
                                                     {{"requested", sub}});
+  return MakeResultWithLine(kAction, err_line);
+}
+
+// ---------------- MqttConfigCommandHandler ----------------
+
+bool MqttConfigCommandHandler::canHandle(const std::string &action) const {
+  return action == "MQTT";
+}
+
+CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
+                                                CommandExecutionContext &context,
+                                                uint32_t /*now_ms*/) {
+  constexpr const char *kAction = "MQTT";
+  std::string msg_id = context.nextMsgId();
+  std::string args = Trim(command.args);
+  if (args.empty()) {
+    auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                      "MQTT_BAD_PARAM",
+                                                      "MISSING_SUBCOMMAND",
+                                                      {});
+    return MakeResultWithLine(kAction, err_line);
+  }
+
+  size_t space = args.find_first_of(" \t");
+  std::string sub = (space == std::string::npos) ? args : args.substr(0, space);
+  std::string tail = (space == std::string::npos) ? std::string() : Trim(args.substr(space + 1));
+  std::string sub_upper = ToUpperCopy(sub);
+
+  if (sub_upper == "GET_CONFIG") {
+    if (!tail.empty()) {
+      auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                        "MQTT_BAD_PARAM",
+                                                        "UNEXPECTED_ARGS",
+                                                        {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    mqtt::BrokerConfig cfg = mqtt::ConfigStore::Instance().Current();
+    return MakeDoneResult(kAction, msg_id, BuildMqttConfigFields(cfg));
+  }
+
+  if (sub_upper == "SET_CONFIG") {
+    mqtt::ConfigUpdate update;
+    if (tail.empty()) {
+      auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                        "MQTT_BAD_PARAM",
+                                                        "MISSING_FIELDS",
+                                                        {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+
+    std::string tail_upper = ToUpperCopy(tail);
+    if (tail_upper == "RESET" || tail_upper == "DEFAULTS") {
+      update.host_set = update.port_set = update.user_set = update.pass_set = true;
+      update.host_use_default = update.port_use_default = update.user_use_default = update.pass_use_default = true;
+    } else {
+      std::vector<std::pair<std::string, std::string>> kv;
+      std::string parse_error;
+      if (!ParseKeyValueArgs(tail, kv, parse_error)) {
+        auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                          "MQTT_BAD_PARAM",
+                                                          "INVALID",
+                                                          {
+                                                              {"detail", parse_error}
+                                                          });
+        return MakeResultWithLine(kAction, err_line);
+      }
+      if (kv.empty()) {
+        auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                          "MQTT_BAD_PARAM",
+                                                          "MISSING_FIELDS",
+                                                          {});
+        return MakeResultWithLine(kAction, err_line);
+      }
+      for (const auto &entry : kv) {
+        std::string key = ToUpperCopy(Trim(entry.first));
+        std::string value = Trim(entry.second);
+        std::string value_upper = ToUpperCopy(value);
+        if (value_upper == "DEFAULT") {
+          auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                            "MQTT_BAD_PARAM",
+                                                            "UNSUPPORTED_DEFAULT",
+                                                            {{"field", key}});
+          return MakeResultWithLine(kAction, err_line);
+        }
+        if (key == "HOST") {
+          update.host_set = true;
+          update.host = value;
+        } else if (key == "PORT") {
+          update.port_set = true;
+          long parsed = 0;
+          if (!ParseInt(value, parsed)) {
+            auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                              "MQTT_BAD_PARAM",
+                                                              "INVALID_PORT",
+                                                              {{"detail", value}});
+            return MakeResultWithLine(kAction, err_line);
+          }
+          if (parsed <= 0 || parsed > 65535) {
+            auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                              "MQTT_BAD_PARAM",
+                                                              "INVALID_PORT",
+                                                              {{"detail", value}});
+            return MakeResultWithLine(kAction, err_line);
+          }
+          update.port = static_cast<uint16_t>(parsed);
+        } else if (key == "USER") {
+          update.user_set = true;
+          update.user = value;
+        } else if (key == "PASS" || key == "PASSWORD") {
+          update.pass_set = true;
+          update.pass = value;
+        } else {
+          auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                            "MQTT_BAD_PARAM",
+                                                            "UNSUPPORTED_FIELD",
+                                                            {{"field", key}});
+          return MakeResultWithLine(kAction, err_line);
+        }
+      }
+    }
+
+    std::string apply_error;
+    if (!mqtt::ConfigStore::Instance().ApplyUpdate(update, &apply_error)) {
+      if (apply_error.empty()) {
+        auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                          "MQTT_CONFIG_SAVE_FAILED",
+                                                          "FAILED",
+                                                          {});
+        return MakeResultWithLine(kAction, err_line);
+      }
+      auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                        "MQTT_CONFIG_SAVE_FAILED",
+                                                        "FAILED",
+                                                        {{"detail", apply_error}});
+      return MakeResultWithLine(kAction, err_line);
+    }
+
+    mqtt::BrokerConfig cfg = mqtt::ConfigStore::Instance().Current();
+    return MakeDoneResult(kAction, msg_id, BuildMqttConfigFields(cfg));
+  }
+
+  auto err_line = transport::command::MakeErrorLine(msg_id,
+                                                    "MQTT_UNSUPPORTED_ACTION",
+                                                    "UNSUPPORTED",
+                                                    {{"requested", ToUpperCopy(sub)}});
   return MakeResultWithLine(kAction, err_line);
 }
 

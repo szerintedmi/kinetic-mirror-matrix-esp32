@@ -2,6 +2,7 @@
 
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/SerialImmediate.h"
+#include "mqtt/MqttConfigStore.h"
 
 #include <algorithm>
 #include <cctype>
@@ -223,38 +224,6 @@ using ::std::string;
 
 namespace {
 
-const char *brokerHost() {
-#ifdef MQTT_BROKER_HOST
-  return MQTT_BROKER_HOST;
-#else
-  return "127.0.0.1";
-#endif
-}
-
-uint16_t brokerPort() {
-#ifdef MQTT_BROKER_PORT
-  return static_cast<uint16_t>(MQTT_BROKER_PORT);
-#else
-  return 1883;
-#endif
-}
-
-const char *brokerUser() {
-#ifdef MQTT_BROKER_USER
-  return MQTT_BROKER_USER;
-#else
-  return "";
-#endif
-}
-
-const char *brokerPass() {
-#ifdef MQTT_BROKER_PASS
-  return MQTT_BROKER_PASS;
-#else
-  return "";
-#endif
-}
-
 string DisconnectReasonToString(AsyncMqttClientDisconnectReason reason) {
   switch (reason) {
   case AsyncMqttClientDisconnectReason::TCP_DISCONNECTED:
@@ -323,28 +292,16 @@ public:
 
   void begin() {
     logic_.refreshIdentity();
-    const char *host_ptr = brokerHost();
-    broker_host_ = host_ptr ? host_ptr : "";
-    broker_port_ = brokerPort();
-    client_.setServer(broker_host_.c_str(), broker_port_);
-    const char *user = brokerUser();
-    const char *pass = brokerPass();
-    if (user && user[0] != '\0') {
-      broker_user_ = user;
-    } else {
-      broker_user_.clear();
-    }
-    const char *password = (pass && pass[0] != '\0') ? pass : nullptr;
-    if ((user && user[0] != '\0') || password) {
-      const char *user_for_client = !broker_user_.empty() ? broker_user_.c_str() : (user ? user : "");
-      client_.setCredentials(user_for_client, password);
-    }
+    mqtt::BrokerConfig cfg = mqtt::ConfigStore::Instance().Current();
+    applyBrokerConfig(cfg, true);
+    last_config_revision_ = mqtt::ConfigStore::Instance().Revision();
     refreshClientIdentity();
     client_.setCleanSession(true);
     client_.setKeepAlive(kMqttKeepAliveSeconds);
   }
 
   void loop(uint32_t now_ms) {
+    maybeRefreshBrokerConfig();
     logic_.loop(now_ms);
     refreshClientIdentity();
     auto status = net_.status();
@@ -565,6 +522,48 @@ private:
     }
   }
 
+  void applyBrokerConfig(const mqtt::BrokerConfig &cfg, bool force_reconnect) {
+    bool host_changed = (cfg.host != broker_host_) || (cfg.port != broker_port_);
+    bool user_changed = (cfg.user != broker_user_);
+    bool pass_changed = (cfg.pass != broker_pass_);
+    if (!host_changed && !user_changed && !pass_changed && !force_reconnect) {
+      return;
+    }
+
+    broker_host_ = cfg.host;
+    broker_port_ = cfg.port;
+    broker_user_ = cfg.user;
+    broker_pass_ = cfg.pass;
+
+    client_.setServer(broker_host_.c_str(), broker_port_);
+    if (!broker_user_.empty() || !broker_pass_.empty()) {
+      const char *user_ptr = broker_user_.empty() ? "" : broker_user_.c_str();
+      const char *pass_ptr = broker_pass_.empty() ? nullptr : broker_pass_.c_str();
+      client_.setCredentials(user_ptr, pass_ptr);
+    } else {
+      client_.setCredentials("", nullptr);
+    }
+
+    if (host_changed || user_changed || pass_changed || force_reconnect) {
+      if (client_.connected()) {
+        client_.disconnect();
+      }
+      connect_attempted_ = false;
+      connect_succeeded_ = false;
+      next_reconnect_ms_ = 0;
+      reconnect_backoff_ms_ = kInitialReconnectDelayMs;
+    }
+  }
+
+  void maybeRefreshBrokerConfig() {
+    uint32_t revision = mqtt::ConfigStore::Instance().Revision();
+    if (revision != last_config_revision_) {
+      mqtt::BrokerConfig cfg = mqtt::ConfigStore::Instance().Current();
+      applyBrokerConfig(cfg, true);
+      last_config_revision_ = revision;
+    }
+  }
+
   void scheduleReconnect(uint32_t now_ms) {
     uint32_t delay = reconnect_backoff_ms_;
     next_reconnect_ms_ = now_ms + delay;
@@ -637,8 +636,10 @@ private:
   string last_will_topic_;
   string broker_host_;
   string broker_user_;
+  string broker_pass_;
   uint16_t broker_port_ = 0;
   string client_id_;
+  uint32_t last_config_revision_ = 0;
   uint32_t next_reconnect_ms_ = 0;
   uint32_t reconnect_backoff_ms_ = kInitialReconnectDelayMs;
   bool connect_attempted_ = false;

@@ -56,7 +56,9 @@ Responses are published to `devices/<node_id>/cmd/resp` with QoS1. Duplicate req
 | `NET_BUSY_CONNECTING` | Wi‑Fi subsystem busy connecting |
 | `NET_CONNECT_FAILED` | Wi‑Fi connection attempt failed |
 | `MQTT_BAD_PAYLOAD` | MQTT payload schema invalid |
-| `MQTT_UNSUPPORTED_ACTION` | Action not available via
+| `MQTT_UNSUPPORTED_ACTION` | Action not available via MQTT transport |
+| `MQTT_BAD_PARAM` | MQTT command parameters failed validation |
+| `MQTT_CONFIG_SAVE_FAILED` | Persisting MQTT configuration failed |
 
 Warnings reuse the same codes and appear alongside `ack`/`done` without changing the overall status.
 
@@ -502,6 +504,93 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 }
 ```
 
+### MQTT:GET_CONFIG
+
+| Aspect | Serial |
+|--------|--------|
+| Request | `MQTT:GET_CONFIG` |
+| Completion | `CTRL:DONE cmd_id=d3... action=MQTT status=done host="192.168.1.25" port=1883 user="mirror" pass="steelthread"` |
+
+#### MQTT request
+
+```json
+{
+  "cmd_id": "d3...",
+  "action": "MQTT:GET_CONFIG"
+}
+```
+
+#### MQTT completion
+
+```json
+{
+  "cmd_id": "d3...",
+  "action": "MQTT:GET_CONFIG",
+  "status": "done",
+  "result": {
+    "host": "\"192.168.1.25\"",
+    "port": "1883",
+    "user": "\"mirror\"",
+    "pass": "\"steelthread\""
+  }
+}
+```
+
+### MQTT:SET_CONFIG
+
+| Aspect | Serial |
+|--------|--------|
+| Request | `MQTT:SET_CONFIG host=lab-broker.local port=1884 user=lab pass="newsecret"` |
+| Completion | `CTRL:DONE cmd_id=c8... action=MQTT status=done host="lab-broker.local" port=1884 user="lab" pass="newsecret"` |
+
+#### MQTT request
+
+```json
+{
+  "cmd_id": "c8...",
+  "action": "MQTT:SET_CONFIG",
+  "params": {
+    "host": "lab-broker.local",
+    "port": 1884,
+    "user": "lab",
+    "pass": "newsecret"
+  }
+}
+```
+
+#### MQTT completion
+
+```json
+{
+  "cmd_id": "c8...",
+  "action": "MQTT:SET_CONFIG",
+  "status": "done",
+  "result": {
+    "host": "\"lab-broker.local\"",
+    "port": "1884",
+    "user": "\"lab\"",
+    "pass": "\"newsecret\""
+  }
+}
+```
+
+#### Resetting to defaults
+
+- Serial: `MQTT:SET_CONFIG RESET`
+- MQTT JSON:
+
+```json
+{
+  "cmd_id": "e1...",
+  "action": "MQTT:SET_CONFIG",
+  "params": {
+    "reset": true
+  }
+}
+```
+
+ To return to compile-time defaults, use RESET.
+
 ## Duplicate Handling
 
 1. Firmware logs `CTRL:INFO MQTT_DUPLICATE cmd_id=<...>` (rate limited).
@@ -516,4 +605,5 @@ STATUS streams a snapshot in the ACK and does not emit a DONE.
 - Warnings provide additional context (e.g., thermal budget) without affecting success/failure state.
 - Serial supports multi-command batches (`MOVE:0,100;MOVE:1,200`); MQTT clients should submit individual JSON commands.
 - Firmware normalises action/resource casing; clients may send lower-case tokens if desired.
+- Broker overrides persist in Preferences; use `MQTT:GET_CONFIG` to inspect active settings and `MQTT:SET_CONFIG` with either specific fields or `reset:true` to update or revert them.
 - Host CLI/TUI tooling accepts traditional serial command syntax (`MOVE:0,1200`, `NET:RESET`) even when connected over MQTT. The client maps those lines into the JSON envelope described here, publishes to `devices/<node_id>/cmd`, and logs `[ACK]` / `[DONE]` entries derived from dispatcher events (including `cmd_id`, warnings, and timing metadata). The CLI never synthesises `cmd_id` values; if omitted in the request the firmware allocates one and echoes it in subsequent responses.

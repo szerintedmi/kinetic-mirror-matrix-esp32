@@ -150,6 +150,81 @@ def parse_serial_command(command: str) -> CommandRequest:
             )
         raise UnsupportedCommandError(f"unsupported NET action '{action}'")
 
+    # MQTT config commands passthrough
+    if raw.upper().startswith("MQTT:"):
+        prefix, rest = raw.split(":", 1)
+        rest = rest.strip()
+        if not rest:
+            raise CommandParseError("MQTT action required")
+        parts = rest.split(None, 1)
+        sub = parts[0].strip().upper()
+        args = parts[1].strip() if len(parts) > 1 else ""
+        action = f"MQTT:{sub}"
+        if sub == "GET_CONFIG":
+            if args:
+                raise CommandParseError("MQTT:GET_CONFIG does not accept arguments")
+            return CommandRequest(action=action, params={}, raw=raw)
+        if sub == "SET_CONFIG":
+            if args.upper() == "RESET":
+                return CommandRequest(action=action, params={"reset": True}, raw=raw)
+            if not args:
+                raise CommandParseError("MQTT:SET_CONFIG requires assignments or RESET")
+            # Parse space-delimited assignments like host=foo port=1883 user=me pass=secret
+            params: Dict[str, object] = {}
+            # simple split preserving quoted values
+            tokens: List[str] = []
+            cur = []
+            in_quotes = False
+            escape = False
+            for ch in args:
+                if in_quotes:
+                    if escape:
+                        cur.append(ch)
+                        escape = False
+                    elif ch == "\\":
+                        escape = True
+                    elif ch == '"':
+                        in_quotes = False
+                    else:
+                        cur.append(ch)
+                else:
+                    if ch.isspace():
+                        if cur:
+                            tokens.append("".join(cur))
+                            cur = []
+                    elif ch == '"':
+                        in_quotes = True
+                    else:
+                        cur.append(ch)
+            if cur:
+                tokens.append("".join(cur))
+
+            for tok in tokens:
+                if "=" not in tok:
+                    raise CommandParseError("invalid assignment; expected key=value")
+                k, v = tok.split("=", 1)
+                key = k.strip().lower()
+                value = v.strip()
+                if value.startswith('"') and value.endswith('"') and len(value) >= 2:
+                    value = value[1:-1]
+                if key == "host":
+                    params["host"] = value
+                elif key == "port":
+                    if not re.fullmatch(r"\d+", value):
+                        raise CommandParseError("port must be integer")
+                    iv = int(value)
+                    if iv <= 0 or iv > 65535:
+                        raise CommandParseError("port out of range")
+                    params["port"] = iv
+                elif key == "user":
+                    params["user"] = value
+                elif key in ("pass", "password"):
+                    params["pass"] = value
+                else:
+                    raise UnsupportedCommandError(f"unsupported MQTT field '{key}'")
+            return CommandRequest(action=action, params=params, raw=raw)
+        raise UnsupportedCommandError(f"unsupported MQTT action '{sub}'")
+
     if ":" in raw.split()[0]:
         action, arg_string = raw.split(":", 1)
         action = action.strip().upper()
