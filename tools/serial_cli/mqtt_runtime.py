@@ -8,7 +8,7 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
@@ -130,6 +130,9 @@ class MqttWorker(threading.Thread):
         self._next_local_id: int = 1
         self._net_state: Dict[str, str] = {}
         self._requested_net_status = False
+        self._thermal_state: Optional[Tuple[bool, Optional[int]]] = None
+        self._need_thermal_refresh = True
+        self._requested_thermal_status = False
         self._help_text: str = ""
         self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
 
@@ -356,10 +359,18 @@ class MqttWorker(threading.Thread):
             }
 
     def get_thermal_state(self):  # pragma: no cover - compatibility stub
-        return None
+        with self._lock:
+            return self._thermal_state
 
     def get_thermal_status_text(self) -> str:  # pragma: no cover - compatibility stub
-        return ""
+        state = self.get_thermal_state()
+        if not state:
+            return ""
+        enabled, max_budget = state
+        prefix = "thermal limiting=ON" if enabled else "thermal limiting=OFF"
+        if isinstance(max_budget, int):
+            return f"{prefix} (max={max_budget}s)"
+        return prefix
 
     def _resolve_node_id(self) -> Optional[str]:
         if self._node_id:
@@ -505,6 +516,7 @@ class MqttWorker(threading.Thread):
             motors[motor_row["id"]] = motor_row
 
         should_request_net = False
+        should_request_thermal = False
         with self._lock:
             entry = self._devices.get(mac, {})
             entry["node_state"] = str(obj.get("node_state", ""))
@@ -518,11 +530,26 @@ class MqttWorker(threading.Thread):
             if not self._requested_net_status and self._node_id:
                 self._requested_net_status = True
                 should_request_net = True
+            if (
+                self._need_thermal_refresh
+                and not self._requested_thermal_status
+                and self._node_id
+            ):
+                self._requested_thermal_status = True
+                should_request_thermal = True
         if should_request_net:
             handles = self.queue_cmd("NET:STATUS")
             if not handles:
                 with self._lock:
                     self._requested_net_status = False
+        if should_request_thermal:
+            handles = self.queue_cmd("GET THERMAL_LIMITING")
+            if not handles:
+                with self._lock:
+                    self._requested_thermal_status = False
+            else:
+                with self._lock:
+                    self._need_thermal_refresh = False
 
     def ingest_response(self, topic: str, payload: str) -> None:
         node_id = topic.split("/")[1] if topic.startswith("devices/") else ""
@@ -582,6 +609,7 @@ class MqttWorker(threading.Thread):
                 self._help_text = text or event.raw or ""
 
             self._maybe_update_net_state(event)
+            self._maybe_update_thermal_state_locked(event, pending)
             formatted = format_event(event, latency_ms=latency)
             self._log.append(formatted)
             if len(self._log) > 800:
@@ -647,6 +675,54 @@ class MqttWorker(threading.Thread):
             self._log.append(line)
             if len(self._log) > 800:
                 del self._log[: len(self._log) - 800]
+
+    # ------------------------------------------------------------------
+    def _maybe_update_thermal_state_locked(self, event: ResponseEvent, pending: Optional[PendingCommand]) -> None:
+        attrs = event.attributes or {}
+        thermal_key = None
+        for key in ("THERMAL_LIMITING", "thermal_limiting"):
+            if key in attrs:
+                thermal_key = key
+                break
+
+        if thermal_key is not None:
+            raw_value = str(attrs.get(thermal_key, "")).strip().upper()
+            enabled = raw_value != "OFF"
+            max_budget: Optional[int] = None
+            budget_raw = attrs.get("max_budget_s") or attrs.get("MAX_BUDGET_S")
+            if budget_raw is not None:
+                try:
+                    max_budget = int(float(str(budget_raw)))
+                except (ValueError, TypeError):
+                    max_budget = None
+            self._thermal_state = (enabled, max_budget)
+            self._need_thermal_refresh = False
+            self._requested_thermal_status = False
+            return
+
+        # Fall back to command context to determine whether to refresh.
+        command_name = ""
+        if pending and pending.request:
+            command_name = pending.request.raw.strip().upper()
+        elif pending:
+            command_name = pending.raw.strip().upper()
+        action_name = (event.action or "").strip().upper()
+
+        if command_name.startswith("GET THERMAL_LIMITING") or (
+            not command_name and action_name == "GET"
+        ):
+            if event.event_type in (EventType.DONE, EventType.ERROR):
+                self._requested_thermal_status = False
+                if event.event_type == EventType.ERROR:
+                    self._need_thermal_refresh = True
+                else:
+                    self._need_thermal_refresh = True
+        elif command_name.startswith("SET THERMAL_LIMITING") or (
+            not command_name and action_name == "SET" and "THERMAL_LIMITING" in (pending.request.params if pending and pending.request else {})
+        ):
+            if event.event_type in (EventType.DONE, EventType.ERROR):
+                self._need_thermal_refresh = True
+                self._requested_thermal_status = False
 
     # ------------------------------------------------------------------
     def get_table_columns(self):

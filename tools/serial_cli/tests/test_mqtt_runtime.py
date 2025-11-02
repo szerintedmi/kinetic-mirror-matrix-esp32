@@ -231,6 +231,109 @@ class MqttRuntimeTests(unittest.TestCase):
         self.assertEqual(lines[1].strip(), "HELP")
         self.assertEqual(lines[2].strip(), "LINE1")
 
+    def test_thermal_state_updates_from_get_response(self) -> None:
+        payload = json.dumps(
+            {
+                "cmd_id": "cmd-therm",
+                "action": "GET",
+                "status": "done",
+                "result": {
+                    "THERMAL_LIMITING": "ON",
+                    "max_budget_s": 120,
+                },
+            }
+        )
+        self.worker.ingest_response("devices/node123/cmd/resp", payload)
+
+        state = self.worker.get_thermal_state()
+        self.assertEqual(state, (True, 120))
+        self.assertEqual(self.worker.get_thermal_status_text(), "thermal limiting=ON (max=120s)")
+
+    def test_thermal_state_updates_from_set_response(self) -> None:
+        payload = json.dumps(
+            {
+                "cmd_id": "cmd-therm-set",
+                "action": "SET",
+                "status": "done",
+                "result": {
+                    "THERMAL_LIMITING": "OFF",
+                },
+            }
+        )
+        self.worker.ingest_response("devices/node123/cmd/resp", payload)
+
+        state = self.worker.get_thermal_state()
+        self.assertEqual(state, (False, None))
+        self.assertEqual(self.worker.get_thermal_status_text(), "thermal limiting=OFF")
+
+    def test_ingest_message_requests_thermal_status_when_connected(self) -> None:
+        class StubClient:
+            def __init__(self) -> None:
+                self.published = []
+
+            def loop_start(self) -> None:
+                pass
+
+            def loop_stop(self) -> None:
+                pass
+
+            def disconnect(self) -> None:
+                pass
+
+            def subscribe(self, *args, **kwargs) -> None:
+                pass
+
+            def publish(self, topic, payload, qos=1):
+                message = json.loads(payload)
+                self.published.append((topic, message, qos))
+
+                class _Info:
+                    rc = 0
+
+                return _Info()
+
+        stub = StubClient()
+        worker = MqttWorker(client_factory=lambda: stub, node_id="02123456789a")
+        worker._client = stub  # type: ignore[attr-defined]
+        with worker._lock:
+            worker._connected = True
+            worker._requested_net_status = True  # avoid NET:STATUS auto-request
+
+        payload = self._sample_payload()
+        worker.ingest_message("devices/02123456789a/status", payload, timestamp=10.0)
+        worker.ingest_message("devices/02123456789a/status", payload, timestamp=12.0)
+
+        get_cmds = [
+            message
+            for _, message, _ in stub.published
+            if message.get("action") == "GET"
+            and message.get("params", {}).get("resource") == "THERMAL_LIMITING"
+        ]
+        self.assertEqual(len(get_cmds), 1)
+
+        response = json.dumps(
+            {
+                "cmd_id": get_cmds[0]["cmd_id"],
+                "action": "GET",
+                "status": "done",
+                "result": {
+                    "THERMAL_LIMITING": "ON",
+                    "max_budget_s": 90,
+                },
+            }
+        )
+        worker.ingest_response("devices/02123456789a/cmd/resp", response)
+        worker.ingest_message("devices/02123456789a/status", payload, timestamp=15.0)
+
+        refreshed_cmds = [
+            message
+            for _, message, _ in stub.published
+            if message.get("action") == "GET"
+            and message.get("params", {}).get("resource") == "THERMAL_LIMITING"
+        ]
+        self.assertEqual(len(refreshed_cmds), 1)
+        self.assertEqual(worker.get_thermal_state(), (True, 90))
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
