@@ -576,7 +576,8 @@ private:
       return;
     }
     while (!publish_queue_.empty()) {
-      PublishMessage &msg = publish_queue_.front();
+      PublishMessage msg = std::move(publish_queue_.front());
+      publish_queue_.pop_front();
       auto payload_len = static_cast<uint16_t>(msg.payload.size());
       uint16_t packet_id = client_.publish(
           msg.topic.c_str(),
@@ -585,9 +586,9 @@ private:
           msg.payload.c_str(),
           payload_len);
       if (packet_id == 0) {
+        publish_queue_.push_front(std::move(msg));
         break;
       }
-      publish_queue_.pop_front();
     }
   }
 
