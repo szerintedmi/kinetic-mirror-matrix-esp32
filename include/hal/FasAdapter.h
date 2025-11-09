@@ -1,17 +1,18 @@
 #pragma once
+#include "Hal/Shift595.h"
+
 #include <cstddef>
 #include <cstdint>
-#include "Hal/Shift595.h"
 
 // Abstract adapter over FastAccelStepper (or equivalent) to enable
 // unit testing on native by swapping in a stub.
 class IFasAdapter {
 public:
   IFasAdapter() = default;
-  IFasAdapter(const IFasAdapter &) = default;
-  IFasAdapter &operator=(const IFasAdapter &) = default;
-  IFasAdapter(IFasAdapter &&) = default;
-  IFasAdapter &operator=(IFasAdapter &&) = default;
+  IFasAdapter(const IFasAdapter&) = default;
+  IFasAdapter& operator=(const IFasAdapter&) = default;
+  IFasAdapter(IFasAdapter&&) = default;
+  IFasAdapter& operator=(IFasAdapter&&) = default;
   virtual ~IFasAdapter() = default;
 
   // One-time setup
@@ -32,11 +33,11 @@ public:
 
   // Force set current position (e.g., homing or rebase).
   virtual void setCurrentPosition(uint8_t motor_id, long pos) = 0;
-  
+
   // Optional hooks used on ESP32 hardware to integrate external pin control
   // via FastAccelStepper and a 74HC595 shift register. Defaults are no-ops
   // for non-hardware adapters/native tests.
-  virtual void attachShiftRegister(IShift595 * /*drv*/) {}
+  virtual void attachShiftRegister(IShift595* /*drv*/) {}
   virtual void setAutoEnable(uint8_t /*motor_id*/, bool /*auto_enable*/) {}
   virtual void enableOutputs(uint8_t /*motor_id*/) {}
   virtual void disableOutputs(uint8_t /*motor_id*/) {}

@@ -6,8 +6,7 @@ namespace motor {
 namespace command {
 
 // Format a command result for the legacy serial transport.
-std::string FormatForSerial(const CommandResult &result);
+std::string FormatForSerial(const CommandResult& result);
 
-} // namespace command
-} // namespace motor
-
+}  // namespace command
+}  // namespace motor

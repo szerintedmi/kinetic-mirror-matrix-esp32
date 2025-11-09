@@ -1,13 +1,14 @@
 #pragma once
-#include <stdint.h>
-#include <memory>
-#include <string>
 #include "MotorControl/MotorController.h"
 #include "MotorControl/command/CommandBatchExecutor.h"
 #include "MotorControl/command/CommandExecutionContext.h"
 #include "MotorControl/command/CommandParser.h"
-#include "MotorControl/command/CommandRouter.h"
 #include "MotorControl/command/CommandResult.h"
+#include "MotorControl/command/CommandRouter.h"
+
+#include <memory>
+#include <stdint.h>
+#include <string>
 
 class MotorCommandProcessor {
 public:
@@ -18,10 +19,16 @@ public:
   MotorCommandProcessor(MotorCommandProcessor&&) noexcept = default;
   MotorCommandProcessor& operator=(MotorCommandProcessor&&) noexcept = default;
   std::string processLine(const std::string& line, uint32_t now_ms);
-  void tick(uint32_t now_ms) { controller_->tick(now_ms); }
-  motor::command::CommandResult execute(const std::string &line, uint32_t now_ms);
-  MotorController &controller() { return *controller_; }
-  const MotorController &controller() const { return *controller_; }
+  void tick(uint32_t now_ms) {
+    controller_->tick(now_ms);
+  }
+  motor::command::CommandResult execute(const std::string& line, uint32_t now_ms);
+  MotorController& controller() {
+    return *controller_;
+  }
+  const MotorController& controller() const {
+    return *controller_;
+  }
 
 private:
   std::unique_ptr<MotorController> controller_;
@@ -37,7 +44,7 @@ private:
   motor::command::CommandBatchExecutor batch_executor_;
 
   motor::command::CommandExecutionContext makeContext();
-  motor::command::CommandResult dispatchSingle(const motor::command::ParsedCommand &command,
-                                               motor::command::CommandExecutionContext &context,
+  motor::command::CommandResult dispatchSingle(const motor::command::ParsedCommand& command,
+                                               motor::command::CommandExecutionContext& context,
                                                uint32_t now_ms);
 };

@@ -1,10 +1,10 @@
-#include <unity.h>
-#include <vector>
-#include <string>
-
 #include "MotorControl/Bitpack.h"
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotorControlConstants.h"
+
+#include <string>
+#include <unity.h>
+#include <vector>
 
 // Bitpack tests
 void test_bitpack_dir_sleep_basic() {
@@ -14,22 +14,38 @@ void test_bitpack_dir_sleep_basic() {
 }
 
 // Hardware backend tests
-struct Event { std::string type; int id; };
+struct Event {
+  std::string type;
+  int id;
+};
 static std::vector<Event> g_events;
 
 class LoggingShift595 : public IShift595 {
 public:
-  void begin() override { last_dir_ = 0; last_sleep_ = 0; latch_count_ = 0; }
+  void begin() override {
+    last_dir_ = 0;
+    last_sleep_ = 0;
+    latch_count_ = 0;
+  }
   void setDirSleep(uint8_t dir_bits, uint8_t sleep_bits) override {
     last_dir_ = dir_bits;
     last_sleep_ = sleep_bits;
     latch_count_++;
     g_events.push_back({"LATCH", -1});
   }
-  void resetCounters() { latch_count_ = 0; }
-  uint8_t last_dir() const { return last_dir_; }
-  uint8_t last_sleep() const { return last_sleep_; }
-  unsigned latch_count() const { return latch_count_; }
+  void resetCounters() {
+    latch_count_ = 0;
+  }
+  uint8_t last_dir() const {
+    return last_dir_;
+  }
+  uint8_t last_sleep() const {
+    return last_sleep_;
+  }
+  unsigned latch_count() const {
+    return latch_count_;
+  }
+
 private:
   uint8_t last_dir_ = 0;
   uint8_t last_sleep_ = 0;
@@ -38,32 +54,54 @@ private:
 
 class FasAdapterStub : public IFasAdapter {
 public:
-  struct StartCall { uint8_t id; long target; int speed; int accel; };
+  struct StartCall {
+    uint8_t id;
+    long target;
+    int speed;
+    int accel;
+  };
   void begin() override {}
   void configureStepPin(uint8_t, int) override {}
   bool startMoveAbs(uint8_t id, long target, int speed, int accel) override {
-    if (id >= 8) return false;
+    if (id >= 8)
+      return false;
     moving_[id] = true;
     starts_.push_back({id, target, speed, accel});
     g_events.push_back({"START", (int)id});
     targets_[id] = target;
     return true;
   }
-  bool isMoving(uint8_t id) const override { return (id < 8) ? moving_[id] : false; }
-  long currentPosition(uint8_t id) const override { return (id < 8) ? position_[id] : 0; }
-  void setCurrentPosition(uint8_t id, long pos) override {
-    if (id < 8) { position_[id] = pos; if (position_[id] == targets_[id]) moving_[id] = false; }
+  bool isMoving(uint8_t id) const override {
+    return (id < 8) ? moving_[id] : false;
   }
-  void setMoving(uint8_t id, bool m) { if (id < 8) moving_[id] = m; }
-  const std::vector<StartCall>& starts() const { return starts_; }
+  long currentPosition(uint8_t id) const override {
+    return (id < 8) ? position_[id] : 0;
+  }
+  void setCurrentPosition(uint8_t id, long pos) override {
+    if (id < 8) {
+      position_[id] = pos;
+      if (position_[id] == targets_[id])
+        moving_[id] = false;
+    }
+  }
+  void setMoving(uint8_t id, bool m) {
+    if (id < 8)
+      moving_[id] = m;
+  }
+  const std::vector<StartCall>& starts() const {
+    return starts_;
+  }
+
 private:
-  bool moving_[8] = {false,false,false,false,false,false,false,false};
-  long position_[8] = {0,0,0,0,0,0,0,0};
-  long targets_[8] = {0,0,0,0,0,0,0,0};
+  bool moving_[8] = {false, false, false, false, false, false, false, false};
+  long position_[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  long targets_[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   std::vector<StartCall> starts_;
 };
 
-static void clear_events() { g_events.clear(); }
+static void clear_events() {
+  g_events.clear();
+}
 
 void test_backend_latch_before_start() {
   LoggingShift595 shift;
@@ -72,7 +110,11 @@ void test_backend_latch_before_start() {
   shift.resetCounters();
   clear_events();
   uint32_t mask = (1u << 0) | (1u << 1);
-  bool ok = ctrl.moveAbsMask(mask, 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
+  bool ok = ctrl.moveAbsMask(mask,
+                             100,
+                             MotorControlConstants::DEFAULT_SPEED_SPS,
+                             MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                             0);
   TEST_ASSERT_TRUE(ok);
   TEST_ASSERT_GREATER_OR_EQUAL(1u, (unsigned)shift.latch_count());
   TEST_ASSERT_TRUE(g_events.size() >= 3);
@@ -87,12 +129,20 @@ void test_backend_dir_bits_per_target() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-  ctrl.moveAbsMask((1u << 0) | (1u << 1), 100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
+  ctrl.moveAbsMask((1u << 0) | (1u << 1),
+                   100,
+                   MotorControlConstants::DEFAULT_SPEED_SPS,
+                   MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                   0);
   fas.setCurrentPosition(1, 100);
   ctrl.tick(0);
   fas.setCurrentPosition(1, 200);
   ctrl.tick(0);
-  ctrl.moveAbsMask((1u << 1), -100, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
+  ctrl.moveAbsMask((1u << 1),
+                   -100,
+                   MotorControlConstants::DEFAULT_SPEED_SPS,
+                   MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                   0);
   uint8_t dir = shift.last_dir();
   TEST_ASSERT_TRUE((dir & (1u << 0)) != 0);
   TEST_ASSERT_TRUE((dir & (1u << 1)) == 0);
@@ -124,7 +174,11 @@ void test_backend_busy_rule_overlapping_move() {
   shift.resetCounters();
   clear_events();
   fas.setMoving(0, true);
-  bool ok = ctrl.moveAbsMask(1u << 0, 500, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
+  bool ok = ctrl.moveAbsMask(1u << 0,
+                             500,
+                             MotorControlConstants::DEFAULT_SPEED_SPS,
+                             MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                             0);
   TEST_ASSERT_FALSE(ok);
   TEST_ASSERT_EQUAL_UINT(0, shift.latch_count());
 }
@@ -135,7 +189,11 @@ void test_backend_dir_latched_once_per_move() {
   HardwareMotorController ctrl(shift, fas, 8);
   shift.resetCounters();
   clear_events();
-  bool ok = ctrl.moveAbsMask(1u << 4, 250, MotorControlConstants::DEFAULT_SPEED_SPS, MotorControlConstants::DEFAULT_ACCEL_SPS2, 0);
+  bool ok = ctrl.moveAbsMask(1u << 4,
+                             250,
+                             MotorControlConstants::DEFAULT_SPEED_SPS,
+                             MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                             0);
   TEST_ASSERT_TRUE(ok);
   unsigned lc = shift.latch_count();
   ctrl.tick(1);
@@ -156,4 +214,3 @@ void test_backend_speed_accel_passed_to_adapter() {
   TEST_ASSERT_EQUAL(5000, s.speed);
   TEST_ASSERT_EQUAL(12000, s.accel);
 }
-

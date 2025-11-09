@@ -20,20 +20,15 @@ struct PublishMessage {
 
 class MqttPresenceClient {
 public:
-  using PublishFn = std::function<bool(const PublishMessage &)>;
-  using LogFn = std::function<void(const std::string &)>;
+  using PublishFn = std::function<bool(const PublishMessage&)>;
+  using LogFn = std::function<void(const std::string&)>;
 
   struct Config {
     uint32_t heartbeat_interval_ms = 1000;
   };
 
-  MqttPresenceClient(net_onboarding::NetOnboarding &net,
-                     PublishFn publish,
-                     LogFn log = {});
-  MqttPresenceClient(net_onboarding::NetOnboarding &net,
-                     PublishFn publish,
-                     LogFn log,
-                     Config cfg);
+  MqttPresenceClient(net_onboarding::NetOnboarding& net, PublishFn publish, LogFn log = {});
+  MqttPresenceClient(net_onboarding::NetOnboarding& net, PublishFn publish, LogFn log, Config cfg);
 
   void setMotionActive(bool active);
   void setPowerActive(bool active);
@@ -41,16 +36,22 @@ public:
   void loop(uint32_t now_ms);
   void refreshIdentity();
 
-  void handleConnected(uint32_t now_ms, const std::string &broker_info = std::string());
+  void handleConnected(uint32_t now_ms, const std::string& broker_info = std::string());
   void handleDisconnected();
-  void handleConnectFailure(const std::string &details = std::string());
+  void handleConnectFailure(const std::string& details = std::string());
 
-  const std::string &topic() const { return topic_; }
-  const std::string &offlinePayload() const { return offline_payload_; }
-  const std::string &lastPublishedPayload() const { return last_payload_; }
+  const std::string& topic() const {
+    return topic_;
+  }
+  const std::string& offlinePayload() const {
+    return offline_payload_;
+  }
+  const std::string& lastPublishedPayload() const {
+    return last_payload_;
+  }
 
-  static std::string NormalizeMacToTopic(const std::array<char, 18> &mac);
-  static std::string BuildReadyPayload(const std::string &ip);
+  static std::string NormalizeMacToTopic(const std::array<char, 18>& mac);
+  static std::string BuildReadyPayload(const std::string& ip);
   static std::string BuildOfflinePayload();
 
 private:
@@ -58,7 +59,7 @@ private:
   void updateIdentityIfNeeded();
 
 private:
-  net_onboarding::NetOnboarding &net_;
+  net_onboarding::NetOnboarding& net_;
   PublishFn publish_;
   LogFn log_;
   Config cfg_;
@@ -87,23 +88,23 @@ class AsyncMqttPresenceClient {
 public:
   using LogFn = MqttPresenceClient::LogFn;
   using PublishMessage = mqtt::PublishMessage;
-  using MessageCallback = std::function<void(const std::string &, const std::string &)>;
+  using MessageCallback = std::function<void(const std::string&, const std::string&)>;
 
-  AsyncMqttPresenceClient(net_onboarding::NetOnboarding &net, LogFn log = {});
+  AsyncMqttPresenceClient(net_onboarding::NetOnboarding& net, LogFn log = {});
   ~AsyncMqttPresenceClient();
   void begin();
   void loop(uint32_t now_ms);
   void updateMotionState(bool active);
   void updatePowerState(bool active);
-  bool enqueuePublish(const PublishMessage &msg);
-  const std::string &statusTopic() const;
-  const std::string &offlinePayload() const;
-  bool subscribe(const std::string &topic, uint8_t qos, MessageCallback cb);
+  bool enqueuePublish(const PublishMessage& msg);
+  const std::string& statusTopic() const;
+  const std::string& offlinePayload() const;
+  bool subscribe(const std::string& topic, uint8_t qos, MessageCallback cb);
 
 private:
   class Impl;
-  Impl *impl_;
+  Impl* impl_;
 };
 #endif
 
-} // namespace mqtt
+}  // namespace mqtt

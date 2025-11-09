@@ -1,6 +1,7 @@
-#include <unity.h>
-#include "MotorControl/SharedStepTiming.h"
 #include "MotorControl/SharedStepGuards.h"
+#include "MotorControl/SharedStepTiming.h"
+
+#include <unity.h>
 
 using namespace SharedStepTiming;
 using namespace SharedStepGuards;
@@ -21,14 +22,14 @@ void test_guard_fit_thresholds() {
 
 void test_compute_flip_window_too_tight_period() {
   // With very small period, guard window cannot fit → no schedule
-  const uint32_t tight_period = kDirGuardPreUs + kDirGuardPostUs + 2; // just below threshold
+  const uint32_t tight_period = kDirGuardPreUs + kDirGuardPostUs + 2;  // just below threshold
   DirFlipWindow w{};
   bool ok = compute_flip_window(FlipWindowRequest(12345ULL, tight_period), w);
   TEST_ASSERT_FALSE(ok);
 }
 
 void test_compute_flip_window_spacing_matches_constants() {
-  const uint32_t period = 250; // 4k sps
+  const uint32_t period = 250;  // 4k sps
   DirFlipWindow w{};
   bool ok = compute_flip_window(FlipWindowRequest(4321ULL, period), w);
   TEST_ASSERT_TRUE(ok);

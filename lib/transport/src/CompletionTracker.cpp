@@ -1,29 +1,29 @@
 #include "transport/CompletionTracker.h"
 
-#include <algorithm>
-
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
+
+#include <algorithm>
 
 namespace transport {
 namespace response {
 
-CompletionTracker &CompletionTracker::Instance() {
+CompletionTracker& CompletionTracker::Instance() {
   static CompletionTracker tracker;
   return tracker;
 }
 
-void CompletionTracker::RegisterOperation(const std::string &cmd_id,
-                                          const std::string &action,
+void CompletionTracker::RegisterOperation(const std::string& cmd_id,
+                                          const std::string& action,
                                           uint32_t mask,
-                                          MotorController &controller) {
+                                          MotorController& controller) {
   if (cmd_id.empty() || mask == 0) {
     return;
   }
   // Remove any existing entry for this cmd_id
-  pending_.erase(std::remove_if(pending_.begin(), pending_.end(), [&](const Pending &p) {
-                    return p.cmd_id == cmd_id;
-                  }),
+  pending_.erase(std::remove_if(pending_.begin(),
+                                pending_.end(),
+                                [&](const Pending& p) { return p.cmd_id == cmd_id; }),
                  pending_.end());
   Pending pending;
   pending.cmd_id = cmd_id;
@@ -51,7 +51,7 @@ void CompletionTracker::Tick(uint32_t /*now_ms*/) {
       if (idx >= 32 || !(it->mask & (1u << idx))) {
         continue;
       }
-      const MotorState &state = it->controller->state(idx);
+      const MotorState& state = it->controller->state(idx);
       if (!state.last_op_ongoing) {
         actual_ms = std::max(actual_ms, static_cast<int32_t>(state.last_op_last_ms));
       }
@@ -79,15 +79,15 @@ void CompletionTracker::Clear() {
   pending_.clear();
 }
 
-void CompletionTracker::RemoveController(MotorController *controller) {
+void CompletionTracker::RemoveController(MotorController* controller) {
   if (!controller) {
     return;
   }
   pending_.erase(std::remove_if(pending_.begin(),
                                 pending_.end(),
-                                [&](const Pending &p) { return p.controller == controller; }),
+                                [&](const Pending& p) { return p.controller == controller; }),
                  pending_.end());
 }
 
-} // namespace response
-} // namespace transport
+}  // namespace response
+}  // namespace transport

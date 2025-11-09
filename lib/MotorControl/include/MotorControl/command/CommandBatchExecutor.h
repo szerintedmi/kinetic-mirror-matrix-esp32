@@ -9,16 +9,15 @@ namespace command {
 
 class CommandBatchExecutor {
 public:
-  CommandResult execute(const std::vector<ParsedCommand> &commands,
-                        CommandExecutionContext &context,
-                        CommandRouter &router,
+  CommandResult execute(const std::vector<ParsedCommand>& commands,
+                        CommandExecutionContext& context,
+                        CommandRouter& router,
                         uint32_t now_ms);
 
 private:
-  bool isMotionAction(const std::string &action) const;
-  uint32_t maskFor(const ParsedCommand &command,
-                   const CommandExecutionContext &context) const;
+  bool isMotionAction(const std::string& action) const;
+  uint32_t maskFor(const ParsedCommand& command, const CommandExecutionContext& context) const;
 };
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

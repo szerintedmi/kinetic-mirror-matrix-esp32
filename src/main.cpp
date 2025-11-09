@@ -1,14 +1,14 @@
 // Arduino entrypoints; excluded during PlatformIO unit tests to avoid duplicate setup/loop
 #if defined(ARDUINO) && !defined(UNIT_TEST)
-#include <Arduino.h>
+#include "boards/Esp32Dev.hpp"
 #include "console/SerialConsole.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/NetSingleton.h"
 #include "transport/MessageId.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
-#include "boards/Esp32Dev.hpp"
 
+#include <Arduino.h>
 #include <cstring>
 #include <string>
 
@@ -16,19 +16,21 @@
 #include <WiFi.h>
 #endif
 
-using net_onboarding::State;
 using net_onboarding::Net;
-using ResponseAttribute = std::pair<const char *, std::string>;
+using net_onboarding::State;
+using ResponseAttribute = std::pair<const char*, std::string>;
 using ResponseAttributeList = std::initializer_list<ResponseAttribute>;
 
-static State g_last_state = State::AP_ACTIVE; // will be updated after begin() // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+static State g_last_state =
+    State::AP_ACTIVE;  // will be updated after begin() //
+                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 constexpr uint32_t kResetHoldMs = 5000;
 constexpr uint32_t kConnectTimeoutMs = 8000;
 
 static void EmitNetEvent(transport::response::EventType type,
-                         const std::string &cmd_id,
-                         const char *code,
-                         const char *reason,
+                         const std::string& cmd_id,
+                         const char* code,
+                         const char* reason,
                          ResponseAttributeList attributes) {
   transport::response::Event evt;
   evt.type = type;
@@ -40,15 +42,14 @@ static void EmitNetEvent(transport::response::EventType type,
   if (reason != nullptr) {
     evt.reason = reason;
   }
-  for (const auto &kv : attributes) {
+  for (const auto& kv : attributes) {
     evt.attributes[kv.first] = kv.second;
   }
   transport::response::ResponseDispatcher::Instance().Emit(evt);
 }
 
-static void EmitNetDone(const std::string &cmd_id,
-                        const char *status,
-                        ResponseAttributeList attributes) {
+static void
+EmitNetDone(const std::string& cmd_id, const char* status, ResponseAttributeList attributes) {
   if (cmd_id.empty()) {
     return;
   }
@@ -57,14 +58,13 @@ static void EmitNetDone(const std::string &cmd_id,
   evt.action = "NET";
   evt.cmd_id = cmd_id;
   evt.attributes["status"] = (status != nullptr) ? status : "done";
-  for (const auto &kv : attributes) {
+  for (const auto& kv : attributes) {
     evt.attributes[kv.first] = kv.second;
   }
   transport::response::ResponseDispatcher::Instance().Emit(evt);
 }
 
-static void ResetButtonSetup()
-{
+static void ResetButtonSetup() {
 #if defined(ARDUINO)
   // cppcheck-suppress knownConditionTrueFalse
   if (RESET_BUTTON_PIN >= 0) {
@@ -73,8 +73,7 @@ static void ResetButtonSetup()
 #endif
 }
 
-static void ResetButtonTick(uint32_t now_ms)
-{
+static void ResetButtonTick(uint32_t now_ms) {
 #if defined(ARDUINO)
   // cppcheck-suppress knownConditionTrueFalse
   if (RESET_BUTTON_PIN < 0) {
@@ -82,7 +81,7 @@ static void ResetButtonTick(uint32_t now_ms)
   }
   bool pressed = digitalRead(RESET_BUTTON_PIN) == (RESET_BUTTON_ACTIVE_LOW ? LOW : HIGH);
   static bool was_pressed = false;
-  static uint32_t press_started = 0; // cppcheck-suppress variableScope
+  static uint32_t press_started = 0;  // cppcheck-suppress variableScope
   static bool fired = false;
 
   if (pressed) {
@@ -91,11 +90,7 @@ static void ResetButtonTick(uint32_t now_ms)
       fired = false;
     } else if (!fired && (now_ms - press_started) >= kResetHoldMs) {
       fired = true;
-      EmitNetEvent(transport::response::EventType::kInfo,
-                   "",
-                   "NET:RESET_BUTTON",
-                   "LONG_PRESS",
-                   {});
+      EmitNetEvent(transport::response::EventType::kInfo, "", "NET:RESET_BUTTON", "LONG_PRESS", {});
       Net().resetCredentials();
     }
   } else {
@@ -145,29 +140,25 @@ void setup() {
     auto soft_ap_ip = WiFi.softAPIP();
     String quoted_ssid = QuoteString(WiFi.softAPSSID().c_str());
     std::string ssid = std::string(quoted_ssid.c_str());
-    std::string ip_address = std::to_string(soft_ap_ip[0]) + "." +
-                             std::to_string(soft_ap_ip[1]) + "." +
-                             std::to_string(soft_ap_ip[2]) + "." +
+    std::string ip_address = std::to_string(soft_ap_ip[0]) + "." + std::to_string(soft_ap_ip[1]) +
+                             "." + std::to_string(soft_ap_ip[2]) + "." +
                              std::to_string(soft_ap_ip[3]);
-    std::string active_request_id = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+    std::string active_request_id =
+        transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
     EmitNetEvent(transport::response::EventType::kInfo,
                  active_request_id,
                  "NET:AP_ACTIVE",
                  "",
-                 {{"state", "AP_ACTIVE"},
-                  {"ssid", ssid},
-                  {"ip", ip_address}});
+                 {{"state", "AP_ACTIVE"}, {"ssid", ssid}, {"ip", ip_address}});
     if (!active_request_id.empty()) {
-      EmitNetDone(active_request_id,
-                  "done",
-                  {{"state", "AP_ACTIVE"},
-                   {"ssid", ssid},
-                   {"ip", ip_address}});
+      EmitNetDone(
+          active_request_id, "done", {{"state", "AP_ACTIVE"}, {"ssid", ssid}, {"ip", ip_address}});
       // RESET path may emit AP_ACTIVE immediately; if so, clear the correlation now
       transport::message_id::ClearActive();
     }
   } else if (g_last_state == State::CONNECTING) {
-    std::string active_request_id = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+    std::string active_request_id =
+        transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
     EmitNetEvent(transport::response::EventType::kInfo,
                  active_request_id,
                  "NET:CONNECTING",
@@ -189,38 +180,33 @@ void loop() {
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
     if (status_snapshot.state == State::AP_ACTIVE) {
       if (previous_state == State::CONNECTING) {
-        std::string active_error = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
-        EmitNetEvent(transport::response::EventType::kError,
-                     active_error,
-                     "NET_CONNECT_FAILED",
-                     "",
-                     {});
+        std::string active_error =
+            transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+        EmitNetEvent(
+            transport::response::EventType::kError, active_error, "NET_CONNECT_FAILED", "", {});
       }
       auto soft_ap_ip = WiFi.softAPIP();
       String quoted_ssid = QuoteString(WiFi.softAPSSID().c_str());
       std::string ssid = std::string(quoted_ssid.c_str());
-      std::string ip_address = std::to_string(soft_ap_ip[0]) + "." +
-                               std::to_string(soft_ap_ip[1]) + "." +
-                               std::to_string(soft_ap_ip[2]) + "." +
+      std::string ip_address = std::to_string(soft_ap_ip[0]) + "." + std::to_string(soft_ap_ip[1]) +
+                               "." + std::to_string(soft_ap_ip[2]) + "." +
                                std::to_string(soft_ap_ip[3]);
-      std::string active_request_id = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+      std::string active_request_id =
+          transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
       EmitNetEvent(transport::response::EventType::kInfo,
                    active_request_id,
                    "NET:AP_ACTIVE",
                    "",
-                   {{"state", "AP_ACTIVE"},
-                    {"ssid", ssid},
-                    {"ip", ip_address}});
+                   {{"state", "AP_ACTIVE"}, {"ssid", ssid}, {"ip", ip_address}});
       if (!active_request_id.empty()) {
         EmitNetDone(active_request_id,
                     (previous_state == State::CONNECTING) ? "error" : "done",
-                    {{"state", "AP_ACTIVE"},
-                     {"ssid", ssid},
-                     {"ip", ip_address}});
+                    {{"state", "AP_ACTIVE"}, {"ssid", ssid}, {"ip", ip_address}});
         transport::message_id::ClearActive();
       }
     } else if (status_snapshot.state == State::CONNECTING) {
-      std::string active_request_id = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+      std::string active_request_id =
+          transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
       EmitNetEvent(transport::response::EventType::kInfo,
                    active_request_id,
                    "NET:CONNECTING",
@@ -231,22 +217,19 @@ void loop() {
       std::string ssid = std::string(quoted_ssid.c_str());
       std::string ip_address = std::string(status_snapshot.ip.data());
       std::string rssi_dbm = std::to_string(status_snapshot.rssi_dbm);
-      std::string active_request_id = transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
-      EmitNetEvent(transport::response::EventType::kInfo,
-                   active_request_id,
-                   "NET:CONNECTED",
-                   "",
-                   {{"state", "CONNECTED"},
-                    {"ssid", ssid},
-                    {"ip", ip_address},
-                    {"rssi", rssi_dbm}});
+      std::string active_request_id =
+          transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
+      EmitNetEvent(
+          transport::response::EventType::kInfo,
+          active_request_id,
+          "NET:CONNECTED",
+          "",
+          {{"state", "CONNECTED"}, {"ssid", ssid}, {"ip", ip_address}, {"rssi", rssi_dbm}});
       if (!active_request_id.empty()) {
-        EmitNetDone(active_request_id,
-                    "done",
-                    {{"state", "CONNECTED"},
-                     {"ssid", ssid},
-                     {"ip", ip_address},
-                     {"rssi", rssi_dbm}});
+        EmitNetDone(
+            active_request_id,
+            "done",
+            {{"state", "CONNECTED"}, {"ssid", ssid}, {"ip", ip_address}, {"rssi", rssi_dbm}});
         transport::message_id::ClearActive();
       }
     }
@@ -255,8 +238,7 @@ void loop() {
 }
 
 #elif !defined(ARDUINO) && !defined(UNIT_TEST)
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
   (void)argc;
   (void)argv;
   return 0;

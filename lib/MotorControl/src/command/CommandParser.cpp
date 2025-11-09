@@ -3,7 +3,7 @@
 namespace motor {
 namespace command {
 
-std::vector<ParsedCommand> CommandParser::parse(const std::string &line) const {
+std::vector<ParsedCommand> CommandParser::parse(const std::string& line) const {
   std::vector<ParsedCommand> out;
   auto trimmed = Trim(line);
   if (trimmed.empty()) {
@@ -11,7 +11,7 @@ std::vector<ParsedCommand> CommandParser::parse(const std::string &line) const {
   }
 
   auto segments = Split(trimmed, ';');
-  for (auto &segment : segments) {
+  for (auto& segment : segments) {
     auto cmd = Trim(segment);
     if (cmd.empty()) {
       continue;
@@ -36,5 +36,5 @@ std::vector<ParsedCommand> CommandParser::parse(const std::string &line) const {
   return out;
 }
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

@@ -1,28 +1,28 @@
 #pragma once
 
-#include <cstdint>
-#include <ArduinoJson.h>
-#include <deque>
-#include <functional>
-#include <memory>
-#include <string>
-#include <vector>
-#include <unordered_map>
-
 #include "MotorControl/MotorCommandProcessor.h"
 #include "mqtt/MqttPresenceClient.h"
 #include "transport/CommandSchema.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
 
+#include <ArduinoJson.h>
+#include <cstdint>
+#include <deque>
+#include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 namespace mqtt {
 
 class MqttCommandServer {
 public:
-  using PublishFn = std::function<bool(const PublishMessage &)>;
-  using SubscribeCallback = std::function<void(const std::string &, const std::string &)>;
-  using SubscribeFn = std::function<bool(const std::string &, uint8_t, SubscribeCallback)>;
-  using LogFn = std::function<void(const std::string &)>;
+  using PublishFn = std::function<bool(const PublishMessage&)>;
+  using SubscribeCallback = std::function<void(const std::string&, const std::string&)>;
+  using SubscribeFn = std::function<bool(const std::string&, uint8_t, SubscribeCallback)>;
+  using LogFn = std::function<void(const std::string&)>;
   using ClockFn = std::function<uint32_t()>;
 
   struct Config {
@@ -32,7 +32,7 @@ public:
     uint32_t duplicate_log_interval_ms;
   };
 
-  MqttCommandServer(MotorCommandProcessor &processor,
+  MqttCommandServer(MotorCommandProcessor& processor,
                     PublishFn publish,
                     SubscribeFn subscribe,
                     LogFn log,
@@ -40,99 +40,102 @@ public:
                     Config cfg = Config());
   ~MqttCommandServer();
 
-  bool begin(const std::string &device_topic);
+  bool begin(const std::string& device_topic);
   void loop(uint32_t now_ms);
 
 private:
-  void handleIncoming(const std::string &topic, const std::string &payload);
-  bool isDuplicate(const std::string &cmd_id) const;
-  void recordCompleted(const std::string &cmd_id,
-                       const std::string &ack_payload,
-                       const std::string &completion_payload);
-  bool publishAck(const std::string &payload);
-  bool publishCompletion(const std::string &payload);
-  bool buildCommandLine(const std::string &action,
+  void handleIncoming(const std::string& topic, const std::string& payload);
+  bool isDuplicate(const std::string& cmd_id) const;
+  void recordCompleted(const std::string& cmd_id,
+                       const std::string& ack_payload,
+                       const std::string& completion_payload);
+  bool publishAck(const std::string& payload);
+  bool publishCompletion(const std::string& payload);
+  bool buildCommandLine(const std::string& action,
                         ArduinoJson::JsonVariantConst params,
-                        std::string &out,
-                        std::vector<uint8_t> &targets,
-                        std::string &error,
-                        bool &unsupported) const;
+                        std::string& out,
+                        std::vector<uint8_t>& targets,
+                        std::string& error,
+                        bool& unsupported) const;
   bool buildMoveCommand(ArduinoJson::JsonVariantConst params,
-                        std::string &out,
-                        std::vector<uint8_t> &targets,
-                        std::string &error) const;
+                        std::string& out,
+                        std::vector<uint8_t>& targets,
+                        std::string& error) const;
   bool buildHomeCommand(ArduinoJson::JsonVariantConst params,
-                        std::string &out,
-                        std::vector<uint8_t> &targets,
-                        std::string &error) const;
-  bool buildWakeSleepCommand(const std::string &action,
+                        std::string& out,
+                        std::vector<uint8_t>& targets,
+                        std::string& error) const;
+  bool buildWakeSleepCommand(const std::string& action,
                              ArduinoJson::JsonVariantConst params,
-                             std::string &out,
-                             std::vector<uint8_t> &targets,
-                             std::string &error) const;
-  bool buildNetCommand(const std::string &action,
+                             std::string& out,
+                             std::vector<uint8_t>& targets,
+                             std::string& error) const;
+  bool buildNetCommand(const std::string& action,
                        ArduinoJson::JsonVariantConst params,
-                       std::string &out,
-                       std::string &error,
-                       bool &unsupported) const;
-  bool buildMqttConfigCommand(const std::string &action,
+                       std::string& out,
+                       std::string& error,
+                       bool& unsupported) const;
+  bool buildMqttConfigCommand(const std::string& action,
                               ArduinoJson::JsonVariantConst params,
-                              std::string &out,
-                              std::string &error,
-                              bool &unsupported) const;
+                              std::string& out,
+                              std::string& error,
+                              bool& unsupported) const;
   bool buildGetCommand(ArduinoJson::JsonVariantConst params,
-                       std::string &out,
-                       std::string &error,
-                       bool &unsupported) const;
+                       std::string& out,
+                       std::string& error,
+                       bool& unsupported) const;
   bool buildSetCommand(ArduinoJson::JsonVariantConst params,
-                       std::string &out,
-                       std::string &error,
-                       bool &unsupported) const;
+                       std::string& out,
+                       std::string& error,
+                       bool& unsupported) const;
   bool parseMotorTargetSelector(ArduinoJson::JsonVariantConst selector,
-                                std::vector<uint8_t> &targets,
-                                std::string &token,
-                                std::string &error,
+                                std::vector<uint8_t>& targets,
+                                std::string& token,
+                                std::string& error,
                                 bool required,
-                                const char *default_token = nullptr) const;
+                                const char* default_token = nullptr) const;
   bool parseIntegerField(ArduinoJson::JsonVariantConst field,
-                         const char *field_name,
+                         const char* field_name,
                          bool required,
-                         long &value,
-                         std::string &error) const;
-  bool parsePayload(const std::string &payload,
-                    ArduinoJson::JsonDocument &doc,
-                    std::string &error) const;
-  std::string buildAckPayload(const std::string &cmd_id,
-                              const std::string &action,
-                              const transport::command::Response &response,
+                         long& value,
+                         std::string& error) const;
+  bool parsePayload(const std::string& payload,
+                    ArduinoJson::JsonDocument& doc,
+                    std::string& error) const;
+  std::string buildAckPayload(const std::string& cmd_id,
+                              const std::string& action,
+                              const transport::command::Response& response,
                               std::vector<transport::command::ResponseLine> warnings) const;
-  std::string buildCompletionPayload(const std::string &cmd_id,
-                                     const std::string &action,
-                                     const transport::command::Response &response,
-                                     transport::command::CompletionStatus status,
-                                     const std::vector<transport::command::ResponseLine> &warnings,
-                                     const std::vector<transport::command::ResponseLine> &errors,
-                                     const std::vector<transport::command::ResponseLine> &data_lines,
-                                     uint32_t mask,
-                                     uint32_t started_ms,
-                                     bool include_motor_snapshot,
-                                     int32_t actual_ms = -1);
+  std::string
+  buildCompletionPayload(const std::string& cmd_id,
+                         const std::string& action,
+                         const transport::command::Response& response,
+                         transport::command::CompletionStatus status,
+                         const std::vector<transport::command::ResponseLine>& warnings,
+                         const std::vector<transport::command::ResponseLine>& errors,
+                         const std::vector<transport::command::ResponseLine>& data_lines,
+                         uint32_t mask,
+                         uint32_t started_ms,
+                         bool include_motor_snapshot,
+                         int32_t actual_ms = -1);
   void finalizeCompleted(uint32_t now_ms);
-  uint32_t maskForTargets(const std::vector<uint8_t> &targets) const;
+  uint32_t maskForTargets(const std::vector<uint8_t>& targets) const;
   std::string statusToString(transport::command::CompletionStatus status) const;
-  void logDuplicate(const std::string &cmd_id, uint32_t now_ms);
-  std::vector<transport::command::ResponseLine> collectErrors(const transport::command::Response &response) const;
-  std::vector<transport::command::ResponseLine> collectDataLines(const transport::command::Response &response) const;
-  void handleDispatcherEvent(const transport::response::Event &event);
-  void ensureStream(const std::string &cmd_id,
-                    const std::string &action,
+  void logDuplicate(const std::string& cmd_id, uint32_t now_ms);
+  std::vector<transport::command::ResponseLine>
+  collectErrors(const transport::command::Response& response) const;
+  std::vector<transport::command::ResponseLine>
+  collectDataLines(const transport::command::Response& response) const;
+  void handleDispatcherEvent(const transport::response::Event& event);
+  void ensureStream(const std::string& cmd_id,
+                    const std::string& action,
                     uint32_t mask,
                     uint32_t started_ms);
   struct DispatchStream;
-  void publishAckFromStream(struct DispatchStream &stream);
-  void publishCompletionFromStream(struct DispatchStream &stream,
-                                   const transport::response::Event *done_event = nullptr);
-  int32_t extractActualMs(const transport::response::Event *done_event) const;
+  void publishAckFromStream(struct DispatchStream& stream);
+  void publishCompletionFromStream(struct DispatchStream& stream,
+                                   const transport::response::Event* done_event = nullptr);
+  int32_t extractActualMs(const transport::response::Event* done_event) const;
   struct CommandDispatch {
     std::string cmd_id;
     std::string action;
@@ -140,25 +143,25 @@ private:
     std::vector<uint8_t> targets;
     uint32_t mask = 0;
   };
-  bool handleDuplicateCommand(const std::string &cmd_id, uint32_t now_ms);
-  void respondWithError(const std::string &cmd_id,
-                        const std::string &action,
-                        const transport::command::ResponseLine &error_line,
+  bool handleDuplicateCommand(const std::string& cmd_id, uint32_t now_ms);
+  void respondWithError(const std::string& cmd_id,
+                        const std::string& action,
+                        const transport::command::ResponseLine& error_line,
                         uint32_t now_ms);
-  void respondWithHelp(const std::string &cmd_id, uint32_t now_ms);
-  void executeDispatch(const CommandDispatch &dispatch,
-                       const transport::command::Response &response,
-                       const transport::response::CommandResponse &contract,
-                       const std::shared_ptr<DispatchStream> &stream_ref,
+  void respondWithHelp(const std::string& cmd_id, uint32_t now_ms);
+  void executeDispatch(const CommandDispatch& dispatch,
+                       const transport::command::Response& response,
+                       const transport::response::CommandResponse& contract,
+                       const std::shared_ptr<DispatchStream>& stream_ref,
                        uint32_t now_ms);
-  std::shared_ptr<DispatchStream> findStream(const std::string &cmd_id);
-  bool streamConsumesResponse(DispatchStream *stream_ptr,
-                              const CommandDispatch &dispatch,
-                              const transport::command::Response &response,
-                              const transport::response::CommandResponse &contract,
-                              const transport::command::ResponseLine *ack_line);
-  CommandDispatch makeDispatch(const std::string &cmd_id,
-                               const std::string &action,
+  std::shared_ptr<DispatchStream> findStream(const std::string& cmd_id);
+  bool streamConsumesResponse(DispatchStream* stream_ptr,
+                              const CommandDispatch& dispatch,
+                              const transport::command::Response& response,
+                              const transport::response::CommandResponse& contract,
+                              const transport::command::ResponseLine* ack_line);
+  CommandDispatch makeDispatch(const std::string& cmd_id,
+                               const std::string& action,
                                std::string command_line,
                                std::vector<uint8_t> targets,
                                uint32_t mask) const;
@@ -194,7 +197,7 @@ private:
     std::string ack_payload;
   };
 
-  MotorCommandProcessor &processor_;
+  MotorCommandProcessor& processor_;
   PublishFn publish_;
   SubscribeFn subscribe_;
   LogFn log_;
@@ -213,8 +216,8 @@ private:
   std::unordered_map<std::string, std::vector<transport::response::Event>> orphan_events_;
   std::deque<std::string> orphan_order_;
 
-  void bindStreamToMessageId(DispatchStream &stream, const std::string &msg_id);
-  void processStreamEvent(DispatchStream &stream, const transport::response::Event &event);
+  void bindStreamToMessageId(DispatchStream& stream, const std::string& msg_id);
+  void processStreamEvent(DispatchStream& stream, const transport::response::Event& event);
 };
 
-} // namespace mqtt
+}  // namespace mqtt

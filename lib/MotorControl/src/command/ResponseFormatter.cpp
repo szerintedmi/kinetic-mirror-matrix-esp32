@@ -5,12 +5,12 @@
 namespace motor {
 namespace command {
 
-std::string FormatForSerial(const CommandResult &result) {
+std::string FormatForSerial(const CommandResult& result) {
   if (!result.hasStructuredResponse()) {
     return {};
   }
   return transport::command::FormatSerialResponse(result.structuredResponse());
 }
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

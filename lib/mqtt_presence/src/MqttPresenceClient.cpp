@@ -1,55 +1,53 @@
 #include "mqtt/MqttPresenceClient.h"
 
+#include "mqtt/MqttConfigStore.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/SerialImmediate.h"
-#include "mqtt/MqttConfigStore.h"
 
 #include <algorithm>
 #include <cctype>
 #include <cstring>
 #include <deque>
-#include <vector>
-#include <utility>
 #include <string>
+#include <utility>
+#include <vector>
 
 #if defined(ARDUINO)
+#include "secrets.h"
+
 #include <Arduino.h>
 #include <AsyncMqttClient.h>
-#include "secrets.h"
 #endif
 
 namespace mqtt {
 
 namespace {
 
-constexpr const char *kTopicPrefix = "devices/";
-constexpr const char *kTopicSuffix = "/status";
+constexpr const char* kTopicPrefix = "devices/";
+constexpr const char* kTopicSuffix = "/status";
 constexpr uint16_t kMqttKeepAliveSeconds = 30;
-constexpr const char *kOfflinePayloadJson = "{\"node_state\":\"offline\",\"motors\":{}}";
+constexpr const char* kOfflinePayloadJson = "{\"node_state\":\"offline\",\"motors\":{}}";
 constexpr uint32_t kInitialReconnectDelayMs = 1000;
 constexpr uint32_t kMaxReconnectDelayMs = 30000;
 constexpr size_t kMaxQueuedMessages = 16;
 
-} // namespace
+}  // namespace
 
-MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding &net,
+MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding& net,
                                        PublishFn publish,
                                        LogFn log)
     : MqttPresenceClient(net, std::move(publish), std::move(log), Config{}) {}
 
-MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding &net,
+MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding& net,
                                        PublishFn publish,
                                        LogFn log,
                                        Config cfg)
-    : net_(net),
-      publish_(std::move(publish)),
-      log_(std::move(log)),
-      cfg_(cfg) {
+    : net_(net), publish_(std::move(publish)), log_(std::move(log)), cfg_(cfg) {
   if (!publish_) {
-    publish_ = [](const PublishMessage &) { return false; };
+    publish_ = [](const PublishMessage&) { return false; };
   }
   if (!log_) {
-    log_ = [](const std::string &line) { net_onboarding::PrintCtrlLineImmediate(line); };
+    log_ = [](const std::string& line) { net_onboarding::PrintCtrlLineImmediate(line); };
   }
 
   std::array<char, 18> mac{};
@@ -96,7 +94,7 @@ void MqttPresenceClient::loop(uint32_t now_ms) {
   }
 }
 
-void MqttPresenceClient::handleConnected(uint32_t now_ms, const std::string &broker_info) {
+void MqttPresenceClient::handleConnected(uint32_t now_ms, const std::string& broker_info) {
   connected_ = true;
   failure_logged_ = false;
   if (!broker_info.empty()) {
@@ -113,7 +111,7 @@ void MqttPresenceClient::handleDisconnected() {
   connected_ = false;
 }
 
-void MqttPresenceClient::handleConnectFailure(const std::string &details) {
+void MqttPresenceClient::handleConnectFailure(const std::string& details) {
   if (failure_logged_) {
     return;
   }
@@ -126,7 +124,7 @@ void MqttPresenceClient::handleConnectFailure(const std::string &details) {
   log_(line);
 }
 
-std::string MqttPresenceClient::NormalizeMacToTopic(const std::array<char, 18> &mac) {
+std::string MqttPresenceClient::NormalizeMacToTopic(const std::array<char, 18>& mac) {
   std::string out;
   out.reserve(12);
   for (char c : mac) {
@@ -141,8 +139,8 @@ std::string MqttPresenceClient::NormalizeMacToTopic(const std::array<char, 18> &
   return out;
 }
 
-std::string MqttPresenceClient::BuildReadyPayload(const std::string &ip) {
-  const char *ip_cstr = ip.empty() ? "0.0.0.0" : ip.c_str();
+std::string MqttPresenceClient::BuildReadyPayload(const std::string& ip) {
+  const char* ip_cstr = ip.empty() ? "0.0.0.0" : ip.c_str();
   size_t ip_len = ip.empty() ? 7 : ip.size();
   std::string payload;
   payload.reserve(32 + ip_len);
@@ -161,7 +159,7 @@ bool MqttPresenceClient::publishReady(uint32_t now_ms) {
     return false;
   }
   ready_publish_.topic = topic_;
-  std::string &payload = ready_publish_.payload;
+  std::string& payload = ready_publish_.payload;
   payload.clear();
   payload.reserve(32 + last_ip_.size());
   payload.append("{\"node_state\":\"ready\",\"ip\":\"");
@@ -219,8 +217,8 @@ void MqttPresenceClient::updateIdentityIfNeeded() {
 using ::AsyncMqttClient;
 using ::AsyncMqttClientDisconnectReason;
 using ::std::move;
-using ::std::strlen;
 using ::std::string;
+using ::std::strlen;
 
 namespace {
 
@@ -260,7 +258,7 @@ string NetStateToString(net_onboarding::State state) {
   }
 }
 
-string DeriveClientIdFromTopic(const string &topic) {
+string DeriveClientIdFromTopic(const string& topic) {
   if (topic.rfind(kTopicPrefix, 0) == 0) {
     string rest = topic.substr(strlen(kTopicPrefix));
     auto slash = rest.find('/');
@@ -272,20 +270,18 @@ string DeriveClientIdFromTopic(const string &topic) {
   return topic;
 }
 
-} // namespace
+}  // namespace
 
 class AsyncMqttPresenceClient::Impl {
 public:
-  Impl(net_onboarding::NetOnboarding &net, LogFn log)
-      : net_(net),
-        log_fn_(move(log)),
-        logic_(net_,
-               [this](const PublishMessage &pub) { return publish(pub); },
-               [this](const string &line) { this->log(line); }) {
+  Impl(net_onboarding::NetOnboarding& net, LogFn log)
+      : net_(net), log_fn_(move(log)),
+        logic_(
+            net_,
+            [this](const PublishMessage& pub) { return publish(pub); },
+            [this](const string& line) { this->log(line); }) {
     if (!log_fn_) {
-      log_fn_ = [](const string &line) {
-        net_onboarding::PrintCtrlLineImmediate(line);
-      };
+      log_fn_ = [](const string& line) { net_onboarding::PrintCtrlLineImmediate(line); };
     }
     setupCallbacks();
   }
@@ -336,7 +332,7 @@ public:
     logic_.setPowerActive(active);
   }
 
-  bool enqueue(const PublishMessage &msg) {
+  bool enqueue(const PublishMessage& msg) {
     if (publish_queue_.size() >= kMaxQueuedMessages) {
       publish_queue_.pop_front();
     }
@@ -344,7 +340,8 @@ public:
     return true;
   }
 
-  bool subscribe(const std::string &topic, uint8_t qos, AsyncMqttPresenceClient::MessageCallback cb) {
+  bool
+  subscribe(const std::string& topic, uint8_t qos, AsyncMqttPresenceClient::MessageCallback cb) {
     if (topic.empty() || !cb) {
       return false;
     }
@@ -355,11 +352,11 @@ public:
     return true;
   }
 
-  const std::string &topic() const {
+  const std::string& topic() const {
     return logic_.topic();
   }
 
-  const std::string &offlinePayload() const {
+  const std::string& offlinePayload() const {
     return logic_.offlinePayload();
   }
 
@@ -396,21 +393,17 @@ private:
     log(line);
   }
 
-  bool publish(const PublishMessage &pub) {
+  bool publish(const PublishMessage& pub) {
     if (!client_.connected()) {
       return false;
     }
     auto payload_len = static_cast<uint16_t>(pub.payload.size());
-    uint16_t packet_id = client_.publish(
-        pub.topic.c_str(),
-        pub.qos,
-        pub.retain,
-        pub.payload.c_str(),
-        payload_len);
+    uint16_t packet_id =
+        client_.publish(pub.topic.c_str(), pub.qos, pub.retain, pub.payload.c_str(), payload_len);
     return packet_id != 0;
   }
 
-  void log(const string &line) {
+  void log(const string& line) {
     log_fn_(line);
   }
 
@@ -426,7 +419,7 @@ private:
       }
       broker_info += ":" + std::to_string(broker_port_);
       logic_.handleConnected(millis(), broker_info);
-      for (const auto &sub : subscriptions_) {
+      for (const auto& sub : subscriptions_) {
         client_.subscribe(sub.topic.c_str(), sub.qos);
       }
     });
@@ -457,18 +450,18 @@ private:
       (void)was_connected;
       logic_.handleConnectFailure(context);
     });
-    client_.onMessage([this](char *topic,
-                             char *payload,
+    client_.onMessage([this](char* topic,
+                             char* payload,
                              AsyncMqttClientMessageProperties /*properties*/,
                              size_t len,
                              size_t index,
                              size_t total) {
       if (index + len != total) {
-        return; // wait for final chunk
+        return;  // wait for final chunk
       }
       std::string topic_str(topic ? topic : "");
       std::string payload_str(payload && len ? std::string(payload, payload + len) : std::string());
-      for (const auto &sub : subscriptions_) {
+      for (const auto& sub : subscriptions_) {
         if (topic_str == sub.topic && sub.callback) {
           sub.callback(topic_str, payload_str);
         }
@@ -476,7 +469,7 @@ private:
     });
   }
 
-  void logConnectAttempt(const net_onboarding::Status &status) {
+  void logConnectAttempt(const net_onboarding::Status& status) {
     std::string line("CTRL: MQTT_CONNECTING");
     std::string summary = connectionSummary();
     if (!summary.empty()) {
@@ -496,18 +489,21 @@ private:
     if (client_.connected()) {
       return;
     }
-    const std::string &topic = logic_.topic();
+    const std::string& topic = logic_.topic();
     if (!topic.empty() && topic != last_will_topic_) {
       last_will_topic_ = topic;
-      const std::string &offline = logic_.offlinePayload();
-      client_.setWill(last_will_topic_.c_str(), 0, false,
-                      offline.c_str(), static_cast<uint16_t>(offline.size()));
+      const std::string& offline = logic_.offlinePayload();
+      client_.setWill(last_will_topic_.c_str(),
+                      0,
+                      false,
+                      offline.c_str(),
+                      static_cast<uint16_t>(offline.size()));
     }
     string base_client_id = DeriveClientIdFromTopic(topic);
     if (base_client_id.empty()) {
       base_client_id = "mqtt-presence";
     }
-    const char *prefix = MQTT_CLIENT_PREFIX;
+    const char* prefix = MQTT_CLIENT_PREFIX;
     string desired_client_id;
     if (prefix && prefix[0] != '\0') {
       desired_client_id.reserve(std::strlen(prefix) + base_client_id.size());
@@ -522,7 +518,7 @@ private:
     }
   }
 
-  void applyBrokerConfig(const mqtt::BrokerConfig &cfg, bool force_reconnect) {
+  void applyBrokerConfig(const mqtt::BrokerConfig& cfg, bool force_reconnect) {
     bool host_changed = (cfg.host != broker_host_) || (cfg.port != broker_port_);
     bool user_changed = (cfg.user != broker_user_);
     bool pass_changed = (cfg.pass != broker_pass_);
@@ -537,8 +533,8 @@ private:
 
     client_.setServer(broker_host_.c_str(), broker_port_);
     if (!broker_user_.empty() || !broker_pass_.empty()) {
-      const char *user_ptr = broker_user_.empty() ? "" : broker_user_.c_str();
-      const char *pass_ptr = broker_pass_.empty() ? nullptr : broker_pass_.c_str();
+      const char* user_ptr = broker_user_.empty() ? "" : broker_user_.c_str();
+      const char* pass_ptr = broker_pass_.empty() ? nullptr : broker_pass_.c_str();
       client_.setCredentials(user_ptr, pass_ptr);
     } else {
       client_.setCredentials("", nullptr);
@@ -579,12 +575,8 @@ private:
       PublishMessage msg = std::move(publish_queue_.front());
       publish_queue_.pop_front();
       auto payload_len = static_cast<uint16_t>(msg.payload.size());
-      uint16_t packet_id = client_.publish(
-          msg.topic.c_str(),
-          msg.qos,
-          msg.retain,
-          msg.payload.c_str(),
-          payload_len);
+      uint16_t packet_id =
+          client_.publish(msg.topic.c_str(), msg.qos, msg.retain, msg.payload.c_str(), payload_len);
       if (packet_id == 0) {
         publish_queue_.push_front(std::move(msg));
         break;
@@ -620,7 +612,7 @@ private:
   }
 
 private:
-  net_onboarding::NetOnboarding &net_;
+  net_onboarding::NetOnboarding& net_;
   LogFn log_fn_;
   AsyncMqttClient client_;
   MqttPresenceClient logic_;
@@ -647,8 +639,7 @@ private:
   bool connect_succeeded_ = false;
 };
 
-AsyncMqttPresenceClient::AsyncMqttPresenceClient(net_onboarding::NetOnboarding &net,
-                                                 LogFn log)
+AsyncMqttPresenceClient::AsyncMqttPresenceClient(net_onboarding::NetOnboarding& net, LogFn log)
     : impl_(new Impl(net, move(log))) {}
 
 AsyncMqttPresenceClient::~AsyncMqttPresenceClient() {
@@ -671,14 +662,14 @@ void AsyncMqttPresenceClient::updatePowerState(bool active) {
   impl_->updatePowerState(active);
 }
 
-bool AsyncMqttPresenceClient::enqueuePublish(const PublishMessage &msg) {
+bool AsyncMqttPresenceClient::enqueuePublish(const PublishMessage& msg) {
   if (!impl_) {
     return false;
   }
   return impl_->enqueue(msg);
 }
 
-const std::string &AsyncMqttPresenceClient::statusTopic() const {
+const std::string& AsyncMqttPresenceClient::statusTopic() const {
   static const std::string kEmpty;
   if (!impl_) {
     return kEmpty;
@@ -686,7 +677,7 @@ const std::string &AsyncMqttPresenceClient::statusTopic() const {
   return impl_->topic();
 }
 
-const std::string &AsyncMqttPresenceClient::offlinePayload() const {
+const std::string& AsyncMqttPresenceClient::offlinePayload() const {
   static const std::string kEmpty;
   if (!impl_) {
     return kEmpty;
@@ -694,13 +685,13 @@ const std::string &AsyncMqttPresenceClient::offlinePayload() const {
   return impl_->offlinePayload();
 }
 
-bool AsyncMqttPresenceClient::subscribe(const std::string &topic, uint8_t qos, MessageCallback cb) {
+bool AsyncMqttPresenceClient::subscribe(const std::string& topic, uint8_t qos, MessageCallback cb) {
   if (!impl_) {
     return false;
   }
   return impl_->subscribe(topic, qos, std::move(cb));
 }
 
-#endif // ARDUINO
+#endif  // ARDUINO
 
-} // namespace mqtt
+}  // namespace mqtt

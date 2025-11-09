@@ -1,13 +1,13 @@
 #include "MotorControl/command/HelpText.h"
 
-#include <sstream>
-
 #include "MotorControl/BuildConfig.h"
+
+#include <sstream>
 
 namespace motor {
 namespace command {
 
-const std::string &HelpText() {
+const std::string& HelpText() {
   static const std::string text = [] {
     std::ostringstream os;
     os << "HELP\n";
@@ -45,5 +45,5 @@ const std::string &HelpText() {
   return text;
 }
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

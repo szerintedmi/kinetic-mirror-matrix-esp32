@@ -1,5 +1,6 @@
-#include <unity.h>
 #include "MotorControl/SharedStepGuards.h"
+
+#include <unity.h>
 
 using namespace SharedStepGuards;
 
@@ -11,13 +12,14 @@ void test_dir_guard_constants_reasonable() {
 
 void test_compute_flip_window_mid_gap() {
   using namespace SharedStepGuards;
-  const uint32_t period = 100; // us
+  const uint32_t period = 100;  // us
   DirFlipWindow w{};
   // Pick an arbitrary now that is not aligned
   bool ok = compute_flip_window(FlipWindowRequest(1234ULL, period), w);
   TEST_ASSERT_TRUE(ok);
   // The window should lie strictly inside (edge, edge+period)
-  const uint64_t edge_next = SharedStepTiming::align_to_next_edge_us(SharedStepTiming::PeriodAlignmentRequest(1234ULL, period));
+  const uint64_t edge_next = SharedStepTiming::align_to_next_edge_us(
+      SharedStepTiming::PeriodAlignmentRequest(1234ULL, period));
   TEST_ASSERT_TRUE(w.t_sleep_low > edge_next);
   TEST_ASSERT_TRUE(w.t_sleep_high < edge_next + period);
   TEST_ASSERT_TRUE(w.t_sleep_low < w.t_dir_flip);
@@ -26,12 +28,12 @@ void test_compute_flip_window_mid_gap() {
 
 void test_compute_flip_window_aligns_from_edge() {
   using namespace SharedStepGuards;
-  const uint32_t period = 250; // 4 k sps
+  const uint32_t period = 250;  // 4 k sps
   DirFlipWindow w{};
   // When now is exactly at an edge, mid-gap scheduling still valid
   bool ok = compute_flip_window(FlipWindowRequest(1000ULL, period), w);
   TEST_ASSERT_TRUE(ok);
-  const uint64_t edge_next = 1000; // align_to_next_edge_us returns now
+  const uint64_t edge_next = 1000;  // align_to_next_edge_us returns now
   TEST_ASSERT_TRUE(w.t_sleep_low > edge_next);
   TEST_ASSERT_TRUE(w.t_sleep_high < edge_next + period);
 }

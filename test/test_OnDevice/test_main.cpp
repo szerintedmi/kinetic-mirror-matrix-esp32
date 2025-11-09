@@ -33,7 +33,9 @@ void setup() {
   RUN_TEST(test_net_happy_path_if_seeded);
   UNITY_END();
   // Avoid re-running tests
-  while (true) { delay(1000); }
+  while (true) {
+    delay(1000);
+  }
 }
 
 void loop() {}

@@ -13,22 +13,22 @@
 
 namespace {
 
-std::mutex &IdMutex() {
+std::mutex& IdMutex() {
   static std::mutex m;
   return m;
 }
 
-std::function<std::string()> &Generator() {
+std::function<std::string()>& Generator() {
   static std::function<std::string()> gen;
   return gen;
 }
 
-std::string &ActiveId() {
+std::string& ActiveId() {
   static std::string active;
   return active;
 }
 
-std::string &LastIssuedId() {
+std::string& LastIssuedId() {
   static std::string last;
   return last;
 }
@@ -60,13 +60,25 @@ std::string GenerateUuidV4() {
   bytes[8] = static_cast<uint8_t>((bytes[8] & 0x3F) | 0x80);
 
   char out[37];
-  std::snprintf(out, sizeof(out),
+  std::snprintf(out,
+                sizeof(out),
                 "%02x%02x%02x%02x-%02x%02x-%02x%02x-%02x%02x-%02x%02x%02x%02x%02x%02x",
-                bytes[0], bytes[1], bytes[2], bytes[3],
-                bytes[4], bytes[5],
-                bytes[6], bytes[7],
-                bytes[8], bytes[9],
-                bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]);
+                bytes[0],
+                bytes[1],
+                bytes[2],
+                bytes[3],
+                bytes[4],
+                bytes[5],
+                bytes[6],
+                bytes[7],
+                bytes[8],
+                bytes[9],
+                bytes[10],
+                bytes[11],
+                bytes[12],
+                bytes[13],
+                bytes[14],
+                bytes[15]);
   return std::string(out);
 }
 
@@ -74,7 +86,7 @@ std::string DefaultUuidFactory() {
   return GenerateUuidV4();
 }
 
-} // namespace
+}  // namespace
 
 namespace transport {
 namespace message_id {
@@ -95,7 +107,7 @@ std::string Next() {
   return next;
 }
 
-void SetActive(const std::string &msg_id) {
+void SetActive(const std::string& msg_id) {
   std::lock_guard<std::mutex> lock(IdMutex());
   ActiveId() = msg_id;
 }
@@ -125,6 +137,5 @@ void ResetGenerator() {
   Generator() = DefaultUuidFactory;
 }
 
-} // namespace message_id
-} // namespace transport
-
+}  // namespace message_id
+}  // namespace transport

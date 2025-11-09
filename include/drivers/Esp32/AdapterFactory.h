@@ -6,4 +6,3 @@
 // the FastAccelStepper-based adapter.
 
 IFasAdapter* createEsp32MotionAdapter();
-

@@ -8,18 +8,19 @@
 #include <Arduino.h>
 #endif
 #include "secrets.h"
-#if (defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32)) && __has_include(<Preferences.h>))
-  #include <Preferences.h>
-  #define MQTT_CONFIG_USE_PREFERENCES 1
+#if (defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32)) &&                        \
+     __has_include(<Preferences.h>))
+#include <Preferences.h>
+#define MQTT_CONFIG_USE_PREFERENCES 1
 #else
-  #define MQTT_CONFIG_USE_PREFERENCES 0
+#define MQTT_CONFIG_USE_PREFERENCES 0
 #endif
 
 namespace mqtt {
 
 namespace {
 
-constexpr const char *kNamespace = "mqtt";
+constexpr const char* kNamespace = "mqtt";
 
 using LockGuard = std::lock_guard<std::mutex>;
 
@@ -60,7 +61,9 @@ struct DefaultsProvider {
 class PreferencesAdapter {
 public:
   PreferencesAdapter() = default;
-  ~PreferencesAdapter() { end(); }
+  ~PreferencesAdapter() {
+    end();
+  }
 
   bool begin(bool read_only) {
     read_only_ = read_only;
@@ -81,7 +84,7 @@ public:
 #endif
   }
 
-  bool putString(const std::string &key, const std::string &value) {
+  bool putString(const std::string& key, const std::string& value) {
 #if MQTT_CONFIG_USE_PREFERENCES
     if (read_only_) {
       return false;
@@ -96,11 +99,11 @@ public:
 #endif
   }
 
-  std::string getString(const std::string &key, const std::string &def) {
+  std::string getString(const std::string& key, const std::string& def) {
 #if MQTT_CONFIG_USE_PREFERENCES
     return std::string(prefs_.getString(key.c_str(), def.c_str()).c_str());
 #else
-    const auto &map = store();
+    const auto& map = store();
     auto it = map.find(key);
     if (it == map.end()) {
       return def;
@@ -109,7 +112,7 @@ public:
 #endif
   }
 
-  bool remove(const std::string &key) {
+  bool remove(const std::string& key) {
 #if MQTT_CONFIG_USE_PREFERENCES
     if (read_only_) {
       return false;
@@ -125,11 +128,11 @@ public:
 #endif
   }
 
-  bool hasKey(const std::string &key) {
+  bool hasKey(const std::string& key) {
 #if MQTT_CONFIG_USE_PREFERENCES
     return prefs_.isKey(key.c_str());
 #else
-    const auto &map = store();
+    const auto& map = store();
     return map.find(key) != map.end();
 #endif
   }
@@ -142,7 +145,7 @@ public:
 
 private:
 #if !MQTT_CONFIG_USE_PREFERENCES
-  static std::map<std::string, std::string> &store() {
+  static std::map<std::string, std::string>& store() {
     static std::map<std::string, std::string> data;
     return data;
   }
@@ -153,11 +156,11 @@ private:
   bool read_only_ = false;
 };
 
-uint16_t ParsePort(const std::string &value, uint16_t fallback) {
+uint16_t ParsePort(const std::string& value, uint16_t fallback) {
   if (value.empty()) {
     return fallback;
   }
-  char *end = nullptr;
+  char* end = nullptr;
   long parsed = std::strtol(value.c_str(), &end, 10);
   if (!end || *end != '\0' || parsed <= 0 || parsed > 65535) {
     return fallback;
@@ -165,16 +168,16 @@ uint16_t ParsePort(const std::string &value, uint16_t fallback) {
   return static_cast<uint16_t>(parsed);
 }
 
-void ApplyDefaultFlags(const BrokerConfig &defaults, BrokerConfig &config) {
+void ApplyDefaultFlags(const BrokerConfig& defaults, BrokerConfig& config) {
   config.host_overridden = (config.host != defaults.host);
   config.port_overridden = (config.port != defaults.port);
   config.user_overridden = (config.user != defaults.user);
   config.pass_overridden = (config.pass != defaults.pass);
 }
 
-} // namespace
+}  // namespace
 
-ConfigStore &ConfigStore::Instance() {
+ConfigStore& ConfigStore::Instance() {
   static ConfigStore store;
   return store;
 }
@@ -215,7 +218,7 @@ bool ConfigStore::Reload() {
   return true;
 }
 
-bool ConfigStore::ApplyUpdate(const ConfigUpdate &update, std::string *error) {
+bool ConfigStore::ApplyUpdate(const ConfigUpdate& update, std::string* error) {
   LockGuard lock(mutex_);
   ensureLoadedLocked();
 
@@ -240,9 +243,10 @@ bool ConfigStore::ApplyUpdate(const ConfigUpdate &update, std::string *error) {
   return true;
 }
 
-bool ConfigStore::validateUpdate(const ConfigUpdate &update, std::string *error) const {
-  auto setError = [&](const std::string &msg) {
-    if (error) *error = msg;
+bool ConfigStore::validateUpdate(const ConfigUpdate& update, std::string* error) const {
+  auto setError = [&](const std::string& msg) {
+    if (error)
+      *error = msg;
   };
   if (update.host_set && !update.host_use_default) {
     if (update.host.empty()) {
@@ -272,11 +276,12 @@ bool ConfigStore::validateUpdate(const ConfigUpdate &update, std::string *error)
       return false;
     }
   }
-  if (error) error->clear();
+  if (error)
+    error->clear();
   return true;
 }
 
-BrokerConfig ConfigStore::mergeUpdate(const ConfigUpdate &update, std::string *error) const {
+BrokerConfig ConfigStore::mergeUpdate(const ConfigUpdate& update, std::string* error) const {
   BrokerConfig merged = current_;
 
   if (update.host_set) {
@@ -312,7 +317,8 @@ BrokerConfig ConfigStore::mergeUpdate(const ConfigUpdate &update, std::string *e
   }
 
   ApplyDefaultFlags(defaults_, merged);
-  if (error) error->clear();
+  if (error)
+    error->clear();
   return merged;
 }
 
@@ -366,13 +372,13 @@ BrokerConfig ConfigStore::loadLocked() {
   return cfg;
 }
 
-bool ConfigStore::persistLocked(const BrokerConfig &config) {
+bool ConfigStore::persistLocked(const BrokerConfig& config) {
   PreferencesAdapter prefs;
   if (!prefs.begin(false)) {
     return false;
   }
 
-  auto writeString = [&](const char *key, bool overridden, const std::string &value) {
+  auto writeString = [&](const char* key, bool overridden, const std::string& value) {
     if (overridden) {
       prefs.putString(key, value);
     } else {
@@ -405,4 +411,4 @@ void ConfigStore::ResetForTests() {
 #endif
 }
 
-} // namespace mqtt
+}  // namespace mqtt

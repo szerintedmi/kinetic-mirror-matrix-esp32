@@ -1,6 +1,7 @@
 #pragma once
-#include <cstdint>
 #include "Hal/Shift595.h"
+
+#include <cstdint>
 
 class Shift595Esp32 : public IShift595 {
 public:

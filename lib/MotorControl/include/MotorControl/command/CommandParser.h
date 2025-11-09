@@ -18,8 +18,8 @@ struct ParsedCommand {
 
 class CommandParser {
 public:
-  std::vector<ParsedCommand> parse(const std::string &line) const;
+  std::vector<ParsedCommand> parse(const std::string& line) const;
 };
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

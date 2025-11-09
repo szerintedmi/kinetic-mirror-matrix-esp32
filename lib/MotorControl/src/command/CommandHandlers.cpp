@@ -1,17 +1,17 @@
 #include "MotorControl/command/CommandHandlers.h"
 
-#include "MotorControl/command/CommandResult.h"
-#include "MotorControl/command/CommandUtils.h"
+#include "MotorControl/BuildConfig.h"
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorControlConstants.h"
-#include "MotorControl/BuildConfig.h"
+#include "MotorControl/command/CommandResult.h"
+#include "MotorControl/command/CommandUtils.h"
 #include "MotorControl/command/HelpText.h"
 #include "mqtt/MqttConfigStore.h"
+#include "transport/CommandSchema.h"
+#include "transport/CompletionTracker.h"
+#include "transport/MessageId.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
-#include "transport/CompletionTracker.h"
-#include "transport/CommandSchema.h"
-#include "transport/MessageId.h"
 
 #if defined(ARDUINO) && defined(ESP32)
 #include <Arduino.h>
@@ -21,13 +21,13 @@ extern "C" {
 }
 #endif
 
-#include <array>
-#include <utility>
-#include <sstream>
-#include <vector>
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <sstream>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace motor {
 namespace command {
@@ -37,11 +37,13 @@ namespace {
 constexpr long kMinPos = MotorControlConstants::MIN_POS_STEPS;
 constexpr long kMaxPos = MotorControlConstants::MAX_POS_STEPS;
 
-uint32_t parseEstMs(const std::string &line) {
+uint32_t parseEstMs(const std::string& line) {
   size_t pos = line.find("est_ms=");
-  if (pos == std::string::npos) return 0;
+  if (pos == std::string::npos)
+    return 0;
   pos += 7;
-  while (pos < line.size() && line[pos] == ' ') ++pos;
+  while (pos < line.size() && line[pos] == ' ')
+    ++pos;
   uint32_t value = 0;
   bool any = false;
   while (pos < line.size() && line[pos] >= '0' && line[pos] <= '9') {
@@ -73,7 +75,7 @@ std::string FormatTenths(int32_t tenths) {
   return oss.str();
 }
 
-inline const char *BoolToFlag(bool value) {
+inline const char* BoolToFlag(bool value) {
   return value ? "1" : "0";
 }
 
@@ -87,21 +89,21 @@ long GetFreeHeapBytes() {
 #endif
 }
 
-void EmitResponseEvent(const char *action, const transport::command::ResponseLine &line) {
+void EmitResponseEvent(const char* action, const transport::command::ResponseLine& line) {
   transport::response::ResponseDispatcher::Instance().Emit(
       transport::response::BuildEvent(line, action ? action : std::string()));
 }
 
-CommandResult MakeResultWithLine(const char *action, transport::command::ResponseLine line) {
+CommandResult MakeResultWithLine(const char* action, transport::command::ResponseLine line) {
   EmitResponseEvent(action, line);
   CommandResult res;
   res.append(line);
   return res;
 }
 
-CommandResult MakeDoneResult(const char *action,
-                             const std::string &msg_id,
-                             const std::vector<transport::command::Field> &fields = {}) {
+CommandResult MakeDoneResult(const char* action,
+                             const std::string& msg_id,
+                             const std::vector<transport::command::Field>& fields = {}) {
   transport::response::Event event;
   event.type = transport::response::EventType::kDone;
   event.cmd_id = msg_id;
@@ -109,7 +111,7 @@ CommandResult MakeDoneResult(const char *action,
     event.action = action;
   }
   event.attributes["status"] = "done";
-  for (const auto &field : fields) {
+  for (const auto& field : fields) {
     event.attributes[field.key] = field.value;
   }
   transport::response::ResponseDispatcher::Instance().Emit(event);
@@ -120,17 +122,17 @@ CommandResult MakeDoneResult(const char *action,
 }
 
 CommandResult AppendDoneResult(CommandResult res,
-                               const char *action,
-                               const std::string &msg_id,
-                               const std::vector<transport::command::Field> &fields = {}) {
+                               const char* action,
+                               const std::string& msg_id,
+                               const std::vector<transport::command::Field>& fields = {}) {
   CommandResult done = MakeDoneResult(action, msg_id, fields);
   res.mergeFrom(done);
   return res;
 }
 
-bool ParseKeyValueArgs(const std::string &input,
-                       std::vector<std::pair<std::string, std::string>> &out,
-                       std::string &error) {
+bool ParseKeyValueArgs(const std::string& input,
+                       std::vector<std::pair<std::string, std::string>>& out,
+                       std::string& error) {
   size_t pos = 0;
   while (pos < input.size()) {
     while (pos < input.size() &&
@@ -141,10 +143,8 @@ bool ParseKeyValueArgs(const std::string &input,
       break;
     }
     size_t key_start = pos;
-    while (pos < input.size() &&
-           input[pos] != '=' &&
-           !std::isspace(static_cast<unsigned char>(input[pos])) &&
-           input[pos] != ',') {
+    while (pos < input.size() && input[pos] != '=' &&
+           !std::isspace(static_cast<unsigned char>(input[pos])) && input[pos] != ',') {
       ++pos;
     }
     size_t key_end = pos;
@@ -155,7 +155,7 @@ bool ParseKeyValueArgs(const std::string &input,
       error = "expected key=value";
       return false;
     }
-    ++pos; // skip '='
+    ++pos;  // skip '='
     while (pos < input.size() && std::isspace(static_cast<unsigned char>(input[pos]))) {
       ++pos;
     }
@@ -187,8 +187,7 @@ bool ParseKeyValueArgs(const std::string &input,
       }
     } else {
       size_t value_start = pos;
-      while (pos < input.size() &&
-             !std::isspace(static_cast<unsigned char>(input[pos])) &&
+      while (pos < input.size() && !std::isspace(static_cast<unsigned char>(input[pos])) &&
              input[pos] != ',') {
         ++pos;
       }
@@ -205,7 +204,7 @@ bool ParseKeyValueArgs(const std::string &input,
   return true;
 }
 
-std::vector<transport::command::Field> BuildMqttConfigFields(const mqtt::BrokerConfig &cfg) {
+std::vector<transport::command::Field> BuildMqttConfigFields(const mqtt::BrokerConfig& cfg) {
   std::vector<transport::command::Field> fields;
   fields.push_back({"host", QuoteString(cfg.host)});
   fields.push_back({"port", std::to_string(static_cast<unsigned long long>(cfg.port))});
@@ -214,7 +213,7 @@ std::vector<transport::command::Field> BuildMqttConfigFields(const mqtt::BrokerC
   return fields;
 }
 
-const char *NetStateToString(net_onboarding::State state) {
+const char* NetStateToString(net_onboarding::State state) {
   using net_onboarding::State;
   switch (state) {
   case State::AP_ACTIVE:
@@ -228,18 +227,17 @@ const char *NetStateToString(net_onboarding::State state) {
   }
 }
 
-} // namespace
+}  // namespace
 
 // ---------------- MotorCommandHandler ----------------
 
-bool MotorCommandHandler::canHandle(const std::string &action) const {
-  return action == "MOVE" || action == "M" ||
-         action == "HOME" || action == "H" ||
+bool MotorCommandHandler::canHandle(const std::string& action) const {
+  return action == "MOVE" || action == "M" || action == "HOME" || action == "H" ||
          action == "WAKE" || action == "SLEEP";
 }
 
-CommandResult MotorCommandHandler::execute(const ParsedCommand &command,
-                                           CommandExecutionContext &context,
+CommandResult MotorCommandHandler::execute(const ParsedCommand& command,
+                                           CommandExecutionContext& context,
                                            uint32_t now_ms) {
   if (command.action == "WAKE") {
     context.controller().tick(now_ms);
@@ -255,16 +253,13 @@ CommandResult MotorCommandHandler::execute(const ParsedCommand &command,
   if (command.action == "HOME" || command.action == "H") {
     return handleHome(command.args, context, now_ms);
   }
-  auto err_line = transport::command::MakeErrorLine(
-      context.nextMsgId(),
-      "E01",
-      "BAD_CMD",
-      {});
+  auto err_line = transport::command::MakeErrorLine(context.nextMsgId(), "E01", "BAD_CMD", {});
   return MakeResultWithLine(command.action.c_str(), err_line);
 }
 
-CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandExecutionContext &context) {
-  constexpr const char *kAction = "WAKE";
+CommandResult MotorCommandHandler::handleWake(const std::string& args,
+                                              CommandExecutionContext& context) {
+  constexpr const char* kAction = "WAKE";
   std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
@@ -275,11 +270,12 @@ CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandEx
     if ((mask & (1u << id)) == 0) {
       continue;
     }
-    const MotorState &s = context.controller().state(id);
+    const MotorState& s = context.controller().state(id);
     int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
     if (avail_s <= 0) {
       if (context.thermalLimitsEnabled()) {
-        auto err_line = transport::command::MakeErrorLine(msg_id, "E12", "THERMAL_NO_BUDGET_WAKE", {});
+        auto err_line =
+            transport::command::MakeErrorLine(msg_id, "E12", "THERMAL_NO_BUDGET_WAKE", {});
         return MakeResultWithLine(kAction, err_line);
       }
       context.controller().wakeMask(mask);
@@ -294,8 +290,9 @@ CommandResult MotorCommandHandler::handleWake(const std::string &args, CommandEx
   return MakeDoneResult(kAction, msg_id);
 }
 
-CommandResult MotorCommandHandler::handleSleep(const std::string &args, CommandExecutionContext &context) {
-  constexpr const char *kAction = "SLEEP";
+CommandResult MotorCommandHandler::handleSleep(const std::string& args,
+                                               CommandExecutionContext& context) {
+  constexpr const char* kAction = "SLEEP";
   std::string msg_id = context.nextMsgId();
   uint32_t mask;
   if (!ParseIdMask(Trim(args), mask, context.controller().motorCount())) {
@@ -309,24 +306,24 @@ CommandResult MotorCommandHandler::handleSleep(const std::string &args, CommandE
   return MakeDoneResult(kAction, msg_id);
 }
 
-CommandResult MotorCommandHandler::handleMove(const std::string &args,
-                                              CommandExecutionContext &context,
+CommandResult MotorCommandHandler::handleMove(const std::string& args,
+                                              CommandExecutionContext& context,
                                               uint32_t now_ms) {
   using motor::command::Split;
   std::string msg_id = context.nextMsgId();
   using transport::command::Field;
-  auto emitLine = [&](const transport::command::ResponseLine &line) {
+  auto emitLine = [&](const transport::command::ResponseLine& line) {
     auto event = transport::response::BuildEvent(line, "MOVE");
     transport::response::ResponseDispatcher::Instance().Emit(event);
   };
-  auto emitError = [&](const std::string &code,
-                       const std::string &reason,
+  auto emitError = [&](const std::string& code,
+                       const std::string& reason,
                        std::initializer_list<Field> fields = {}) -> CommandResult {
     auto line = transport::command::MakeErrorLine(msg_id, code, reason, fields);
     emitLine(line);
     return CommandResult::Error(line);
   };
-  auto appendLine = [&](CommandResult &res, const transport::command::ResponseLine &line) {
+  auto appendLine = [&](CommandResult& res, const transport::command::ResponseLine& line) {
     emitLine(line);
     res.append(line);
   };
@@ -389,92 +386,96 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
   uint32_t tmp = mask;
   uint32_t max_req_ms = 0;
   for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
-    if ((tmp & (1u << id)) == 0) continue;
-    const MotorState &s = context.controller().state(id);
+    if ((tmp & (1u << id)) == 0)
+      continue;
+    const MotorState& s = context.controller().state(id);
     long dist = std::labs(target - s.position);
     uint32_t req_ms = 0;
 #if (USE_SHARED_STEP)
-    req_ms = MotionKinematics::estimateMoveTimeMsSharedStep(dist, speed, accel, context.defaultDecel());
+    req_ms =
+        MotionKinematics::estimateMoveTimeMsSharedStep(dist, speed, accel, context.defaultDecel());
 #else
     req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
 #endif
-    if (req_ms > max_req_ms) max_req_ms = req_ms;
+    if (req_ms > max_req_ms)
+      max_req_ms = req_ms;
     int req_s = static_cast<int>((req_ms + 999) / 1000);
     if (req_s > static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S)) {
       if (context.thermalLimitsEnabled()) {
         return emitError(
             "E10",
             "THERMAL_REQ_GT_MAX",
-            {
-                {"id", std::to_string(static_cast<int>(id))},
-                {"req_ms", std::to_string(req_ms)},
-                {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}
-            });
+            {{"id", std::to_string(static_cast<int>(id))},
+             {"req_ms", std::to_string(req_ms)},
+             {"max_budget_s",
+              std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
       } else {
         if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
-        transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "MOVE", mask, context.controller());
+        transport::response::CompletionTracker::Instance().RegisterOperation(
+            msg_id, "MOVE", mask, context.controller());
         CommandResult res;
-        appendLine(res, transport::command::MakeWarnLine(
-            msg_id,
-            "THERMAL_REQ_GT_MAX",
-            "",
-            {
-                {"id", std::to_string(static_cast<int>(id))},
-                {"req_ms", std::to_string(req_ms)},
-                {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}
-            }));
-        appendLine(res, transport::command::MakeAckLine(
-            msg_id,
-            {{"est_ms", std::to_string(req_ms)}}));
+        appendLine(
+            res,
+            transport::command::MakeWarnLine(
+                msg_id,
+                "THERMAL_REQ_GT_MAX",
+                "",
+                {{"id", std::to_string(static_cast<int>(id))},
+                 {"req_ms", std::to_string(req_ms)},
+                 {"max_budget_s",
+                  std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}}));
+        appendLine(res,
+                   transport::command::MakeAckLine(msg_id, {{"est_ms", std::to_string(req_ms)}}));
         return res;
       }
     }
   }
   for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
-    if ((mask & (1u << id)) == 0) continue;
-    const MotorState &s = context.controller().state(id);
+    if ((mask & (1u << id)) == 0)
+      continue;
+    const MotorState& s = context.controller().state(id);
     int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
     int req_s = static_cast<int>((max_req_ms + 999) / 1000);
     int32_t missing_t = MotorControlConstants::BUDGET_TENTHS_MAX - s.budget_tenths;
-    if (missing_t < 0) missing_t = 0;
-    int32_t ttfc_tenths = (missing_t <= 0) ? 0 :
-      static_cast<int32_t>(((static_cast<int64_t>(missing_t) * 10 + MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
-                            MotorControlConstants::REFILL_TENTHS_PER_SEC));
+    if (missing_t < 0)
+      missing_t = 0;
+    int32_t ttfc_tenths =
+        (missing_t <= 0)
+            ? 0
+            : static_cast<int32_t>(((static_cast<int64_t>(missing_t) * 10 +
+                                     MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
+                                    MotorControlConstants::REFILL_TENTHS_PER_SEC));
     const int32_t kTtfcMaxTenths = MotorControlConstants::MAX_COOL_DOWN_TIME_S * 10;
-    if (ttfc_tenths > kTtfcMaxTenths) ttfc_tenths = kTtfcMaxTenths;
+    if (ttfc_tenths > kTtfcMaxTenths)
+      ttfc_tenths = kTtfcMaxTenths;
     int ttfc_s = ttfc_tenths / 10;
     if (req_s > avail_s) {
       if (context.thermalLimitsEnabled()) {
-        return emitError(
-            "E11",
-            "THERMAL_NO_BUDGET",
-            {
-                {"id", std::to_string(static_cast<int>(id))},
-                {"req_ms", std::to_string(max_req_ms)},
-                {"budget_s", std::to_string(avail_s)},
-                {"ttfc_s", std::to_string(ttfc_s)}
-            });
+        return emitError("E11",
+                         "THERMAL_NO_BUDGET",
+                         {{"id", std::to_string(static_cast<int>(id))},
+                          {"req_ms", std::to_string(max_req_ms)},
+                          {"budget_s", std::to_string(avail_s)},
+                          {"ttfc_s", std::to_string(ttfc_s)}});
       } else {
         if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
-        transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "MOVE", mask, context.controller());
+        transport::response::CompletionTracker::Instance().RegisterOperation(
+            msg_id, "MOVE", mask, context.controller());
         CommandResult res;
-        appendLine(res, transport::command::MakeWarnLine(
-            msg_id,
-            "THERMAL_NO_BUDGET",
-            "",
-            {
-                {"id", std::to_string(static_cast<int>(id))},
-                {"req_ms", std::to_string(max_req_ms)},
-                {"budget_s", std::to_string(avail_s)},
-                {"ttfc_s", std::to_string(ttfc_s)}
-            }));
-        appendLine(res, transport::command::MakeAckLine(
-            msg_id,
-            {{"est_ms", std::to_string(max_req_ms)}}));
+        appendLine(res,
+                   transport::command::MakeWarnLine(msg_id,
+                                                    "THERMAL_NO_BUDGET",
+                                                    "",
+                                                    {{"id", std::to_string(static_cast<int>(id))},
+                                                     {"req_ms", std::to_string(max_req_ms)},
+                                                     {"budget_s", std::to_string(avail_s)},
+                                                     {"ttfc_s", std::to_string(ttfc_s)}}));
+        appendLine(
+            res, transport::command::MakeAckLine(msg_id, {{"est_ms", std::to_string(max_req_ms)}}));
         return res;
       }
     }
@@ -482,28 +483,29 @@ CommandResult MotorCommandHandler::handleMove(const std::string &args,
   if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
     return emitError("E04", "BUSY");
   }
-  transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "MOVE", mask, context.controller());
+  transport::response::CompletionTracker::Instance().RegisterOperation(
+      msg_id, "MOVE", mask, context.controller());
   return emitAck({{"est_ms", std::to_string(max_req_ms)}});
 }
 
-CommandResult MotorCommandHandler::handleHome(const std::string &args,
-                                              CommandExecutionContext &context,
+CommandResult MotorCommandHandler::handleHome(const std::string& args,
+                                              CommandExecutionContext& context,
                                               uint32_t now_ms) {
   auto parts = Split(args, ',');
   std::string msg_id = context.nextMsgId();
   using transport::command::Field;
-  auto emitLine = [&](const transport::command::ResponseLine &line) {
+  auto emitLine = [&](const transport::command::ResponseLine& line) {
     auto event = transport::response::BuildEvent(line, "HOME");
     transport::response::ResponseDispatcher::Instance().Emit(event);
   };
-  auto emitError = [&](const std::string &code,
-                       const std::string &reason,
+  auto emitError = [&](const std::string& code,
+                       const std::string& reason,
                        std::initializer_list<Field> fields = {}) -> CommandResult {
     auto line = transport::command::MakeErrorLine(msg_id, code, reason, fields);
     emitLine(line);
     return CommandResult::Error(line);
   };
-  auto appendLine = [&](CommandResult &res, const transport::command::ResponseLine &line) {
+  auto appendLine = [&](CommandResult& res, const transport::command::ResponseLine& line) {
     emitLine(line);
     res.append(line);
   };
@@ -522,7 +524,8 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
   }
 
   auto token = [&](size_t idx) -> std::string {
-    if (idx >= parts.size()) return std::string();
+    if (idx >= parts.size())
+      return std::string();
     return Trim(parts[idx]);
   };
 
@@ -594,81 +597,88 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
   int req_s = static_cast<int>((req_ms_total + 999) / 1000);
   uint8_t first_id = 0;
   for (; first_id < context.controller().motorCount(); ++first_id) {
-    if (mask & (1u << first_id)) break;
+    if (mask & (1u << first_id))
+      break;
   }
 
   if (req_s > static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S)) {
     if (context.thermalLimitsEnabled()) {
-      return emitError("E10",
-                       "THERMAL_REQ_GT_MAX",
-                       {
-                           {"id", std::to_string(static_cast<int>(first_id))},
-                           {"req_ms", std::to_string(req_ms_total)},
-                           {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}
-                       });
+      return emitError(
+          "E10",
+          "THERMAL_REQ_GT_MAX",
+          {{"id", std::to_string(static_cast<int>(first_id))},
+           {"req_ms", std::to_string(req_ms_total)},
+           {"max_budget_s",
+            std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
     } else {
-      if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
+      if (!context.controller().homeMask(
+              mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
         return emitError("E04", "BUSY");
       }
-      transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "HOME", mask, context.controller());
+      transport::response::CompletionTracker::Instance().RegisterOperation(
+          msg_id, "HOME", mask, context.controller());
       CommandResult res;
-      appendLine(res, transport::command::MakeWarnLine(
-          msg_id,
-          "THERMAL_REQ_GT_MAX",
-          "",
-          {
-              {"id", std::to_string(static_cast<int>(first_id))},
-              {"req_ms", std::to_string(req_ms_total)},
-              {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}
-          }));
-      appendLine(res, transport::command::MakeAckLine(
-          msg_id,
-          {{"est_ms", std::to_string(req_ms_total)}}));
+      appendLine(
+          res,
+          transport::command::MakeWarnLine(
+              msg_id,
+              "THERMAL_REQ_GT_MAX",
+              "",
+              {{"id", std::to_string(static_cast<int>(first_id))},
+               {"req_ms", std::to_string(req_ms_total)},
+               {"max_budget_s",
+                std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}}));
+      appendLine(
+          res, transport::command::MakeAckLine(msg_id, {{"est_ms", std::to_string(req_ms_total)}}));
       return res;
     }
   }
 
   for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
-    if ((mask & (1u << id)) == 0) continue;
-    const MotorState &s = context.controller().state(id);
+    if ((mask & (1u << id)) == 0)
+      continue;
+    const MotorState& s = context.controller().state(id);
     int avail_s = (s.budget_tenths >= 0) ? (s.budget_tenths / 10) : 0;
     int32_t missing_t = MotorControlConstants::BUDGET_TENTHS_MAX - s.budget_tenths;
-    if (missing_t < 0) missing_t = 0;
-    int32_t ttfc_tenths = (missing_t <= 0) ? 0 :
-      static_cast<int32_t>(((static_cast<int64_t>(missing_t) * 10 + MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
-                            MotorControlConstants::REFILL_TENTHS_PER_SEC));
+    if (missing_t < 0)
+      missing_t = 0;
+    int32_t ttfc_tenths =
+        (missing_t <= 0)
+            ? 0
+            : static_cast<int32_t>(((static_cast<int64_t>(missing_t) * 10 +
+                                     MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
+                                    MotorControlConstants::REFILL_TENTHS_PER_SEC));
     const int32_t kTtfcMaxTenths = MotorControlConstants::MAX_COOL_DOWN_TIME_S * 10;
-    if (ttfc_tenths > kTtfcMaxTenths) ttfc_tenths = kTtfcMaxTenths;
+    if (ttfc_tenths > kTtfcMaxTenths)
+      ttfc_tenths = kTtfcMaxTenths;
     int ttfc_s = ttfc_tenths / 10;
     if (req_s > avail_s) {
       if (context.thermalLimitsEnabled()) {
         return emitError("E11",
                          "THERMAL_NO_BUDGET",
-                         {
-                             {"id", std::to_string(static_cast<int>(id))},
-                             {"req_ms", std::to_string(req_ms_total)},
-                             {"budget_s", std::to_string(avail_s)},
-                             {"ttfc_s", std::to_string(ttfc_s)}
-                         });
+                         {{"id", std::to_string(static_cast<int>(id))},
+                          {"req_ms", std::to_string(req_ms_total)},
+                          {"budget_s", std::to_string(avail_s)},
+                          {"ttfc_s", std::to_string(ttfc_s)}});
       } else {
-        if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
+        if (!context.controller().homeMask(
+                mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
           return emitError("E04", "BUSY");
         }
-        transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "HOME", mask, context.controller());
+        transport::response::CompletionTracker::Instance().RegisterOperation(
+            msg_id, "HOME", mask, context.controller());
         CommandResult res;
-        appendLine(res, transport::command::MakeWarnLine(
-            msg_id,
-            "THERMAL_NO_BUDGET",
-            "",
-            {
-                {"id", std::to_string(static_cast<int>(id))},
-                {"req_ms", std::to_string(req_ms_total)},
-                {"budget_s", std::to_string(avail_s)},
-                {"ttfc_s", std::to_string(ttfc_s)}
-            }));
-        appendLine(res, transport::command::MakeAckLine(
-            msg_id,
-            {{"est_ms", std::to_string(req_ms_total)}}));
+        appendLine(res,
+                   transport::command::MakeWarnLine(msg_id,
+                                                    "THERMAL_NO_BUDGET",
+                                                    "",
+                                                    {{"id", std::to_string(static_cast<int>(id))},
+                                                     {"req_ms", std::to_string(req_ms_total)},
+                                                     {"budget_s", std::to_string(avail_s)},
+                                                     {"ttfc_s", std::to_string(ttfc_s)}}));
+        appendLine(
+            res,
+            transport::command::MakeAckLine(msg_id, {{"est_ms", std::to_string(req_ms_total)}}));
         return res;
       }
     }
@@ -677,19 +687,20 @@ CommandResult MotorCommandHandler::handleHome(const std::string &args,
   if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
     return emitError("E04", "BUSY");
   }
-  transport::response::CompletionTracker::Instance().RegisterOperation(msg_id, "HOME", mask, context.controller());
+  transport::response::CompletionTracker::Instance().RegisterOperation(
+      msg_id, "HOME", mask, context.controller());
   return emitAck({{"est_ms", std::to_string(req_ms_total)}});
 }
 
 // ---------------- QueryCommandHandler ----------------
 
-bool QueryCommandHandler::canHandle(const std::string &action) const {
-  return action == "HELP" || action == "STATUS" || action == "ST" ||
-         action == "GET" || action == "SET";
+bool QueryCommandHandler::canHandle(const std::string& action) const {
+  return action == "HELP" || action == "STATUS" || action == "ST" || action == "GET" ||
+         action == "SET";
 }
 
-CommandResult QueryCommandHandler::execute(const ParsedCommand &command,
-                                           CommandExecutionContext &context,
+CommandResult QueryCommandHandler::execute(const ParsedCommand& command,
+                                           CommandExecutionContext& context,
                                            uint32_t now_ms) {
   (void)now_ms;
   if (command.action == "HELP") {
@@ -707,19 +718,15 @@ CommandResult QueryCommandHandler::execute(const ParsedCommand &command,
     context.controller().tick(now_ms);
     return handleSet(command.args, context);
   }
-  auto err_line = transport::command::MakeErrorLine(
-      context.nextMsgId(),
-      "E01",
-      "BAD_CMD",
-      {});
+  auto err_line = transport::command::MakeErrorLine(context.nextMsgId(), "E01", "BAD_CMD", {});
   return MakeResultWithLine(command.action.c_str(), err_line);
 }
 
 CommandResult QueryCommandHandler::handleHelp() const {
-  constexpr const char *kAction = "HELP";
-  const std::string &help_text = HelpText();
+  constexpr const char* kAction = "HELP";
+  const std::string& help_text = HelpText();
   CommandResult res;
-  for (const auto &line : Split(help_text, '\n')) {
+  for (const auto& line : Split(help_text, '\n')) {
     transport::command::ResponseLine info_line;
     info_line.type = transport::command::ResponseLineType::kInfo;
     info_line.raw = line;
@@ -736,8 +743,8 @@ CommandResult QueryCommandHandler::handleHelp() const {
   return AppendDoneResult(res, kAction, msg_id);
 }
 
-CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context) {
-  constexpr const char *kAction = "STATUS";
+CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext& context) {
+  constexpr const char* kAction = "STATUS";
   std::string msg_id = context.nextMsgId();
   CommandResult res;
 
@@ -746,17 +753,17 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context
   res.append(ack_line);
 
   for (size_t i = 0; i < context.controller().motorCount(); ++i) {
-    const MotorState &s = context.controller().state(i);
+    const MotorState& s = context.controller().state(i);
     int32_t missing_t = MotorControlConstants::BUDGET_TENTHS_MAX - s.budget_tenths;
     if (missing_t < 0) {
       missing_t = 0;
     }
-    int32_t ttfc_tenths = (missing_t <= 0)
-                              ? 0
-                              : static_cast<int32_t>(
-                                    ((static_cast<int64_t>(missing_t) * 10 +
-                                      MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
-                                     MotorControlConstants::REFILL_TENTHS_PER_SEC));
+    int32_t ttfc_tenths =
+        (missing_t <= 0)
+            ? 0
+            : static_cast<int32_t>(((static_cast<int64_t>(missing_t) * 10 +
+                                     MotorControlConstants::REFILL_TENTHS_PER_SEC - 1) /
+                                    MotorControlConstants::REFILL_TENTHS_PER_SEC));
     const int32_t kTtfcMaxTenths = MotorControlConstants::MAX_COOL_DOWN_TIME_S * 10;
     if (ttfc_tenths > kTtfcMaxTenths) {
       ttfc_tenths = kTtfcMaxTenths;
@@ -786,8 +793,9 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext &context
   return res;
 }
 
-CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExecutionContext &context) {
-  constexpr const char *kAction = "GET";
+CommandResult QueryCommandHandler::handleGet(const std::string& args,
+                                             CommandExecutionContext& context) {
+  constexpr const char* kAction = "GET";
   std::string msg_id = context.nextMsgId();
   std::string key = ToUpperCopy(Trim(args));
   if (key.empty() || key == "ALL") {
@@ -797,7 +805,8 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
         {"ACCEL", std::to_string(context.defaultAccel())},
         {"DECEL", std::to_string(context.defaultDecel())},
         {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
-        {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))},
+        {"max_budget_s",
+         std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))},
     };
     if (free_heap >= 0) {
       fields.push_back({"free_heap_bytes", std::to_string(free_heap)});
@@ -816,15 +825,18 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
     return MakeDoneResult(kAction, msg_id, {{"DECEL", std::to_string(context.defaultDecel())}});
   }
   if (key == "THERMAL_LIMITING") {
-    return MakeDoneResult(kAction,
-                          msg_id,
-                          {{"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
-                           {"max_budget_s", std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
+    return MakeDoneResult(
+        kAction,
+        msg_id,
+        {{"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
+         {"max_budget_s",
+          std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
   }
   if (key.rfind("LAST_OP_TIMING", 0) == 0) {
     std::string rest;
     size_t p = key.find(':');
-    if (p != std::string::npos) rest = Trim(key.substr(p + 1));
+    if (p != std::string::npos)
+      rest = Trim(key.substr(p + 1));
     if (rest.empty() || rest == "ALL") {
       CommandResult res;
       std::string list_cid = context.nextMsgId();
@@ -841,7 +853,7 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
       res.append(section_line);
 
       for (uint8_t i = 0; i < context.controller().motorCount(); ++i) {
-        const MotorState &s = context.controller().state(i);
+        const MotorState& s = context.controller().state(i);
         transport::command::ResponseLine data_line;
         data_line.type = transport::command::ResponseLineType::kData;
         data_line.fields.push_back({"id", std::to_string(static_cast<int>(i))});
@@ -864,12 +876,14 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
       return MakeResultWithLine(kAction, err_line);
     }
     uint8_t id = 0;
-    for (; id < context.controller().motorCount(); ++id) if (mask & (1u << id)) break;
+    for (; id < context.controller().motorCount(); ++id)
+      if (mask & (1u << id))
+        break;
     if (id >= context.controller().motorCount()) {
       auto err_line = transport::command::MakeErrorLine(msg_id, "E02", "BAD_ID", {});
       return MakeResultWithLine(kAction, err_line);
     }
-    const MotorState &s = context.controller().state(id);
+    const MotorState& s = context.controller().state(id);
     std::vector<transport::command::Field> fields = {
         {"LAST_OP_TIMING", "1"},
         {"ongoing", BoolToFlag(s.last_op_ongoing)},
@@ -885,8 +899,9 @@ CommandResult QueryCommandHandler::handleGet(const std::string &args, CommandExe
   return MakeResultWithLine(kAction, err_line);
 }
 
-CommandResult QueryCommandHandler::handleSet(const std::string &args, CommandExecutionContext &context) {
-  constexpr const char *kAction = "SET";
+CommandResult QueryCommandHandler::handleSet(const std::string& args,
+                                             CommandExecutionContext& context) {
+  constexpr const char* kAction = "SET";
   std::string msg_id = context.nextMsgId();
   std::string payload = Trim(args);
   std::string up = ToUpperCopy(payload);
@@ -960,23 +975,24 @@ CommandResult QueryCommandHandler::handleSet(const std::string &args, CommandExe
 
 // ---------------- NetCommandHandler ----------------
 
-bool NetCommandHandler::canHandle(const std::string &action) const {
+bool NetCommandHandler::canHandle(const std::string& action) const {
   return action == "NET";
 }
 
-CommandResult NetCommandHandler::execute(const ParsedCommand &command,
-                                         CommandExecutionContext &context,
+CommandResult NetCommandHandler::execute(const ParsedCommand& command,
+                                         CommandExecutionContext& context,
                                          uint32_t /*now_ms*/) {
   using net_onboarding::State;
-  constexpr const char *kAction = "NET";
+  constexpr const char* kAction = "NET";
 
   std::string a = Trim(command.args);
   std::string up = ToUpperCopy(a);
   std::string sub = up;
   size_t comma = up.find(',');
-  if (comma != std::string::npos) sub = Trim(up.substr(0, comma));
+  if (comma != std::string::npos)
+    sub = Trim(up.substr(0, comma));
 
-  auto sub_field = [](const char *value) -> transport::command::Field {
+  auto sub_field = [](const char* value) -> transport::command::Field {
     return {"sub_action", value};
   };
 
@@ -984,7 +1000,8 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
     auto before = context.net().status().state;
     std::string msg_id = context.nextMsgId();
     if (before == State::CONNECTING) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("RESET")});
+      auto err_line = transport::command::MakeErrorLine(
+          msg_id, "NET_BUSY_CONNECTING", "", {sub_field("RESET")});
       return MakeResultWithLine(kAction, err_line);
     }
     context.setActiveMsgId(msg_id);
@@ -1003,22 +1020,18 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
       info_line.fields.push_back({"state", "AP_ACTIVE"});
       info_line.fields.push_back({"ssid", QuoteString(ssid)});
       info_line.fields.push_back({"ip", ip});
-      info_line.raw = "CTRL: NET:AP_ACTIVE msg_id=" + msg_id +
-                      " ssid=" + QuoteString(ssid) +
-                      " ip=" + ip;
+      info_line.raw =
+          "CTRL: NET:AP_ACTIVE msg_id=" + msg_id + " ssid=" + QuoteString(ssid) + " ip=" + ip;
       EmitResponseEvent(kAction, info_line);
       res.append(info_line);
-      return AppendDoneResult(std::move(res),
-                              kAction,
-                              msg_id,
-                              {sub_field("RESET"),
-                               {"state", "AP_ACTIVE"},
-                               {"ssid", QuoteString(ssid)},
-                               {"ip", ip}});
+      return AppendDoneResult(
+          std::move(res),
+          kAction,
+          msg_id,
+          {sub_field("RESET"), {"state", "AP_ACTIVE"}, {"ssid", QuoteString(ssid)}, {"ip", ip}});
     }
-    auto ack_line = transport::command::MakeAckLine(msg_id,
-                                                    {sub_field("RESET"),
-                                                     {"state", NetStateToString(before)}});
+    auto ack_line = transport::command::MakeAckLine(
+        msg_id, {sub_field("RESET"), {"state", NetStateToString(before)}});
     return MakeResultWithLine(kAction, ack_line);
   }
 
@@ -1032,7 +1045,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
         {"ip", s.ip.data()},
         {"ssid", QuoteString(std::string(s.ssid.data()))}};
     if (s.state == State::AP_ACTIVE) {
-      std::array<char,65> pass;
+      std::array<char, 65> pass;
       context.net().apPassword(pass);
       fields.push_back({"pass", QuoteString(std::string(pass.data()))});
     } else {
@@ -1044,35 +1057,38 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
   if (sub == "SET") {
     std::string msg_id = context.nextMsgId();
     if (context.net().status().state == State::CONNECTING) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("SET")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("SET")});
       return MakeResultWithLine(kAction, err_line);
     }
     auto toks = ParseCsvQuoted(a);
     if (toks.size() != 3) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
       return MakeResultWithLine(kAction, err_line);
     }
-    const std::string &ssid = toks[1];
-    const std::string &pass = toks[2];
+    const std::string& ssid = toks[1];
+    const std::string& pass = toks[2];
     if (ssid.empty() || ssid.size() > 32) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
       return MakeResultWithLine(kAction, err_line);
     }
     if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
       if (pass.size() > 0 && pass.size() < 8) {
-        auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                          "NET_BAD_PARAM",
-                                                          "PASS_TOO_SHORT",
-                                                          {sub_field("SET")});
+        auto err_line = transport::command::MakeErrorLine(
+            msg_id, "NET_BAD_PARAM", "PASS_TOO_SHORT", {sub_field("SET")});
         return MakeResultWithLine(kAction, err_line);
       }
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET")});
       return MakeResultWithLine(kAction, err_line);
     }
     context.setActiveMsgId(msg_id);
     bool ok = context.net().setCredentials(ssid.c_str(), pass.c_str());
     if (!ok) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_SAVE_FAILED", "", {sub_field("SET")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_SAVE_FAILED", "", {sub_field("SET")});
       return MakeResultWithLine(kAction, err_line);
     }
     auto ack_line = transport::command::MakeAckLine(msg_id, {sub_field("SET")});
@@ -1082,7 +1098,8 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
   if (sub == "LIST") {
     std::string msg_id = context.nextMsgId();
     if (context.net().status().state != State::AP_ACTIVE) {
-      auto err_line = transport::command::MakeErrorLine(msg_id, "NET_SCAN_AP_ONLY", "", {sub_field("LIST")});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_SCAN_AP_ONLY", "", {sub_field("LIST")});
       return MakeResultWithLine(kAction, err_line);
     }
     CommandResult res;
@@ -1090,9 +1107,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
       EmitResponseEvent(kAction, line);
       res.append(line);
     };
-    append_line(transport::command::MakeAckLine(msg_id,
-                                                {sub_field("LIST"),
-                                                 {"scanning", "1"}}));
+    append_line(transport::command::MakeAckLine(msg_id, {sub_field("LIST"), {"scanning", "1"}}));
     std::vector<net_onboarding::WifiScanResult> nets;
     int n = context.net().scanNetworks(nets, 12, true);
     if (n < 0) {
@@ -1108,7 +1123,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
     append_line(header);
 
     for (int i = 0; i < n; ++i) {
-      const auto &r = nets[static_cast<size_t>(i)];
+      const auto& r = nets[static_cast<size_t>(i)];
       transport::command::ResponseLine data_line;
       data_line.type = transport::command::ResponseLineType::kData;
       data_line.fields.push_back({"SSID", QuoteString(r.ssid)});
@@ -1116,43 +1131,36 @@ CommandResult NetCommandHandler::execute(const ParsedCommand &command,
       data_line.fields.push_back({"secure", r.secure ? "1" : "0"});
       data_line.fields.push_back({"channel", std::to_string(r.channel)});
       std::ostringstream raw;
-      raw << "SSID=" << QuoteString(r.ssid)
-          << " rssi=" << r.rssi
-          << " secure=" << (r.secure ? 1 : 0)
-          << " channel=" << r.channel;
+      raw << "SSID=" << QuoteString(r.ssid) << " rssi=" << r.rssi
+          << " secure=" << (r.secure ? 1 : 0) << " channel=" << r.channel;
       data_line.raw = raw.str();
       append_line(data_line);
     }
-    return AppendDoneResult(std::move(res),
-                            kAction,
-                            msg_id,
-                            {sub_field("LIST"),
-                             {"count", std::to_string(n)}});
+    return AppendDoneResult(
+        std::move(res), kAction, msg_id, {sub_field("LIST"), {"count", std::to_string(n)}});
   }
 
   std::string msg_id = context.nextMsgId();
-  auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM",
-                                                    {{"requested", sub}});
+  auto err_line =
+      transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {{"requested", sub}});
   return MakeResultWithLine(kAction, err_line);
 }
 
 // ---------------- MqttConfigCommandHandler ----------------
 
-bool MqttConfigCommandHandler::canHandle(const std::string &action) const {
+bool MqttConfigCommandHandler::canHandle(const std::string& action) const {
   return action == "MQTT";
 }
 
-CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
-                                                CommandExecutionContext &context,
+CommandResult MqttConfigCommandHandler::execute(const ParsedCommand& command,
+                                                CommandExecutionContext& context,
                                                 uint32_t /*now_ms*/) {
-  constexpr const char *kAction = "MQTT";
+  constexpr const char* kAction = "MQTT";
   std::string msg_id = context.nextMsgId();
   std::string args = Trim(command.args);
   if (args.empty()) {
-    auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                      "MQTT_BAD_PARAM",
-                                                      "MISSING_SUBCOMMAND",
-                                                      {});
+    auto err_line =
+        transport::command::MakeErrorLine(msg_id, "MQTT_BAD_PARAM", "MISSING_SUBCOMMAND", {});
     return MakeResultWithLine(kAction, err_line);
   }
 
@@ -1163,10 +1171,8 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
 
   if (sub_upper == "GET_CONFIG") {
     if (!tail.empty()) {
-      auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                        "MQTT_BAD_PARAM",
-                                                        "UNEXPECTED_ARGS",
-                                                        {});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "MQTT_BAD_PARAM", "UNEXPECTED_ARGS", {});
       return MakeResultWithLine(kAction, err_line);
     }
     mqtt::BrokerConfig cfg = mqtt::ConfigStore::Instance().Current();
@@ -1176,45 +1182,36 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
   if (sub_upper == "SET_CONFIG") {
     mqtt::ConfigUpdate update;
     if (tail.empty()) {
-      auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                        "MQTT_BAD_PARAM",
-                                                        "MISSING_FIELDS",
-                                                        {});
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "MQTT_BAD_PARAM", "MISSING_FIELDS", {});
       return MakeResultWithLine(kAction, err_line);
     }
 
     std::string tail_upper = ToUpperCopy(tail);
     if (tail_upper == "RESET" || tail_upper == "DEFAULTS") {
       update.host_set = update.port_set = update.user_set = update.pass_set = true;
-      update.host_use_default = update.port_use_default = update.user_use_default = update.pass_use_default = true;
+      update.host_use_default = update.port_use_default = update.user_use_default =
+          update.pass_use_default = true;
     } else {
       std::vector<std::pair<std::string, std::string>> kv;
       std::string parse_error;
       if (!ParseKeyValueArgs(tail, kv, parse_error)) {
-        auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                          "MQTT_BAD_PARAM",
-                                                          "INVALID",
-                                                          {
-                                                              {"detail", parse_error}
-                                                          });
+        auto err_line = transport::command::MakeErrorLine(
+            msg_id, "MQTT_BAD_PARAM", "INVALID", {{"detail", parse_error}});
         return MakeResultWithLine(kAction, err_line);
       }
       if (kv.empty()) {
-        auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                          "MQTT_BAD_PARAM",
-                                                          "MISSING_FIELDS",
-                                                          {});
+        auto err_line =
+            transport::command::MakeErrorLine(msg_id, "MQTT_BAD_PARAM", "MISSING_FIELDS", {});
         return MakeResultWithLine(kAction, err_line);
       }
-      for (const auto &entry : kv) {
+      for (const auto& entry : kv) {
         std::string key = ToUpperCopy(Trim(entry.first));
         std::string value = Trim(entry.second);
         std::string value_upper = ToUpperCopy(value);
         if (value_upper == "DEFAULT") {
-          auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                            "MQTT_BAD_PARAM",
-                                                            "UNSUPPORTED_DEFAULT",
-                                                            {{"field", key}});
+          auto err_line = transport::command::MakeErrorLine(
+              msg_id, "MQTT_BAD_PARAM", "UNSUPPORTED_DEFAULT", {{"field", key}});
           return MakeResultWithLine(kAction, err_line);
         }
         if (key == "HOST") {
@@ -1224,17 +1221,13 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
           update.port_set = true;
           long parsed = 0;
           if (!ParseInt(value, parsed)) {
-            auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                              "MQTT_BAD_PARAM",
-                                                              "INVALID_PORT",
-                                                              {{"detail", value}});
+            auto err_line = transport::command::MakeErrorLine(
+                msg_id, "MQTT_BAD_PARAM", "INVALID_PORT", {{"detail", value}});
             return MakeResultWithLine(kAction, err_line);
           }
           if (parsed <= 0 || parsed > 65535) {
-            auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                              "MQTT_BAD_PARAM",
-                                                              "INVALID_PORT",
-                                                              {{"detail", value}});
+            auto err_line = transport::command::MakeErrorLine(
+                msg_id, "MQTT_BAD_PARAM", "INVALID_PORT", {{"detail", value}});
             return MakeResultWithLine(kAction, err_line);
           }
           update.port = static_cast<uint16_t>(parsed);
@@ -1245,10 +1238,8 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
           update.pass_set = true;
           update.pass = value;
         } else {
-          auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                            "MQTT_BAD_PARAM",
-                                                            "UNSUPPORTED_FIELD",
-                                                            {{"field", key}});
+          auto err_line = transport::command::MakeErrorLine(
+              msg_id, "MQTT_BAD_PARAM", "UNSUPPORTED_FIELD", {{"field", key}});
           return MakeResultWithLine(kAction, err_line);
         }
       }
@@ -1257,16 +1248,12 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
     std::string apply_error;
     if (!mqtt::ConfigStore::Instance().ApplyUpdate(update, &apply_error)) {
       if (apply_error.empty()) {
-        auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                          "MQTT_CONFIG_SAVE_FAILED",
-                                                          "FAILED",
-                                                          {});
+        auto err_line =
+            transport::command::MakeErrorLine(msg_id, "MQTT_CONFIG_SAVE_FAILED", "FAILED", {});
         return MakeResultWithLine(kAction, err_line);
       }
-      auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                        "MQTT_CONFIG_SAVE_FAILED",
-                                                        "FAILED",
-                                                        {{"detail", apply_error}});
+      auto err_line = transport::command::MakeErrorLine(
+          msg_id, "MQTT_CONFIG_SAVE_FAILED", "FAILED", {{"detail", apply_error}});
       return MakeResultWithLine(kAction, err_line);
     }
 
@@ -1274,12 +1261,10 @@ CommandResult MqttConfigCommandHandler::execute(const ParsedCommand &command,
     return MakeDoneResult(kAction, msg_id, BuildMqttConfigFields(cfg));
   }
 
-  auto err_line = transport::command::MakeErrorLine(msg_id,
-                                                    "MQTT_UNSUPPORTED_ACTION",
-                                                    "UNSUPPORTED",
-                                                    {{"requested", ToUpperCopy(sub)}});
+  auto err_line = transport::command::MakeErrorLine(
+      msg_id, "MQTT_UNSUPPORTED_ACTION", "UNSUPPORTED", {{"requested", ToUpperCopy(sub)}});
   return MakeResultWithLine(kAction, err_line);
 }
 
-} // namespace command
-} // namespace motor
+}  // namespace command
+}  // namespace motor

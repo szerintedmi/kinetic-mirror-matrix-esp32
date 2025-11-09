@@ -6,7 +6,7 @@
 
 namespace net_onboarding {
 
-bool PrintCtrlLineImmediate(const std::string &line) {
+bool PrintCtrlLineImmediate(const std::string& line) {
 #if defined(ARDUINO)
   Serial.println(line.c_str());
   return true;
@@ -16,4 +16,4 @@ bool PrintCtrlLineImmediate(const std::string &line) {
 #endif
 }
 
-} // namespace net_onboarding
+}  // namespace net_onboarding

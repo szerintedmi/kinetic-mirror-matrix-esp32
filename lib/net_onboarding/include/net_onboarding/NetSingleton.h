@@ -8,5 +8,4 @@ namespace net_onboarding {
 // Implemented in src/NetSingleton.cpp
 NetOnboarding& Net();
 
-} // namespace net_onboarding
-
+}  // namespace net_onboarding

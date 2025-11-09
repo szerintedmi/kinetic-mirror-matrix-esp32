@@ -9,50 +9,69 @@ namespace command {
 
 namespace {
 
-const std::vector<ErrorDescriptor> &BuildCatalog() {
+const std::vector<ErrorDescriptor>& BuildCatalog() {
   static const std::vector<ErrorDescriptor> kCatalog = {
-      {"E01", "BAD_CMD", CompletionStatus::kError,
-       "Unknown or unsupported command action."},
-      {"E02", "BAD_ID", CompletionStatus::kError,
-       "Motor identifier or target mask is invalid."},
-      {"E03", "BAD_PARAM", CompletionStatus::kError,
-       "Command parameter failed validation."},
-      {"E04", "BUSY", CompletionStatus::kError,
-       "Controller is busy executing another command."},
-      {"E07", "POS_OUT_OF_RANGE", CompletionStatus::kError,
+      {"E01", "BAD_CMD", CompletionStatus::kError, "Unknown or unsupported command action."},
+      {"E02", "BAD_ID", CompletionStatus::kError, "Motor identifier or target mask is invalid."},
+      {"E03", "BAD_PARAM", CompletionStatus::kError, "Command parameter failed validation."},
+      {"E04", "BUSY", CompletionStatus::kError, "Controller is busy executing another command."},
+      {"E07",
+       "POS_OUT_OF_RANGE",
+       CompletionStatus::kError,
        "Requested position is outside the allowed travel range."},
-      {"E10", "THERMAL_REQ_GT_MAX", CompletionStatus::kError,
+      {"E10",
+       "THERMAL_REQ_GT_MAX",
+       CompletionStatus::kError,
        "Requested move exceeds the maximum thermal budget."},
-      {"E11", "THERMAL_NO_BUDGET", CompletionStatus::kError,
+      {"E11",
+       "THERMAL_NO_BUDGET",
+       CompletionStatus::kError,
        "Insufficient thermal budget to run the command."},
-      {"E12", "THERMAL_NO_BUDGET_WAKE", CompletionStatus::kError,
+      {"E12",
+       "THERMAL_NO_BUDGET_WAKE",
+       CompletionStatus::kError,
        "Wake rejected because the motor lacks thermal budget."},
-      {"NET_BAD_PARAM", nullptr, CompletionStatus::kError,
+      {"NET_BAD_PARAM",
+       nullptr,
+       CompletionStatus::kError,
        "Network credentials payload is invalid."},
-      {"NET_SAVE_FAILED", nullptr, CompletionStatus::kError,
+      {"NET_SAVE_FAILED",
+       nullptr,
+       CompletionStatus::kError,
        "Failed to persist Wi-Fi credentials."},
-      {"NET_SCAN_AP_ONLY", nullptr, CompletionStatus::kError,
+      {"NET_SCAN_AP_ONLY",
+       nullptr,
+       CompletionStatus::kError,
        "Wi-Fi scan allowed only when device is in AP mode."},
-      {"NET_BUSY_CONNECTING", nullptr, CompletionStatus::kError,
+      {"NET_BUSY_CONNECTING",
+       nullptr,
+       CompletionStatus::kError,
        "Wi-Fi subsystem is busy connecting; request deferred."},
-      {"NET_CONNECT_FAILED", nullptr, CompletionStatus::kError,
-      "Wi-Fi connection attempt failed."},
-      {"MQTT_BAD_PAYLOAD", nullptr, CompletionStatus::kError,
+      {"NET_CONNECT_FAILED", nullptr, CompletionStatus::kError, "Wi-Fi connection attempt failed."},
+      {"MQTT_BAD_PAYLOAD",
+       nullptr,
+       CompletionStatus::kError,
        "MQTT command payload failed validation."},
-      {"MQTT_UNSUPPORTED_ACTION", nullptr, CompletionStatus::kError,
+      {"MQTT_UNSUPPORTED_ACTION",
+       nullptr,
+       CompletionStatus::kError,
        "Requested command action is not supported over MQTT."},
-      {"MQTT_BAD_PARAM", nullptr, CompletionStatus::kError,
+      {"MQTT_BAD_PARAM",
+       nullptr,
+       CompletionStatus::kError,
        "MQTT command parameters failed validation."},
-      {"MQTT_CONFIG_SAVE_FAILED", nullptr, CompletionStatus::kError,
+      {"MQTT_CONFIG_SAVE_FAILED",
+       nullptr,
+       CompletionStatus::kError,
        "Failed to persist MQTT configuration changes."},
   };
   return kCatalog;
 }
 
 ResponseLine MakeControlLine(ResponseLineType type,
-                             const std::string &msg_id,
-                             const std::string &code,
-                             const std::string &reason,
+                             const std::string& msg_id,
+                             const std::string& code,
+                             const std::string& reason,
                              std::initializer_list<Field> fields) {
   ResponseLine line;
   line.type = type;
@@ -63,26 +82,24 @@ ResponseLine MakeControlLine(ResponseLineType type,
   return line;
 }
 
-} // namespace
+}  // namespace
 
-const std::vector<ErrorDescriptor> &ErrorCatalog() {
+const std::vector<ErrorDescriptor>& ErrorCatalog() {
   return BuildCatalog();
 }
 
-const ErrorDescriptor *LookupError(const std::string &code) {
-  const auto &catalog = BuildCatalog();
-  auto it = std::find_if(catalog.begin(), catalog.end(),
-                         [&](const ErrorDescriptor &entry) {
-                           return code == entry.code;
-                         });
+const ErrorDescriptor* LookupError(const std::string& code) {
+  const auto& catalog = BuildCatalog();
+  auto it = std::find_if(catalog.begin(), catalog.end(), [&](const ErrorDescriptor& entry) {
+    return code == entry.code;
+  });
   if (it != catalog.end()) {
     return &*it;
   }
   return nullptr;
 }
 
-ResponseLine MakeAckLine(const std::string &msg_id,
-                         std::initializer_list<Field> fields) {
+ResponseLine MakeAckLine(const std::string& msg_id, std::initializer_list<Field> fields) {
   ResponseLine line;
   line.type = ResponseLineType::kAck;
   line.msg_id = msg_id;
@@ -90,23 +107,23 @@ ResponseLine MakeAckLine(const std::string &msg_id,
   return line;
 }
 
-ResponseLine MakeWarnLine(const std::string &msg_id,
-                          const std::string &code,
-                          const std::string &reason,
+ResponseLine MakeWarnLine(const std::string& msg_id,
+                          const std::string& code,
+                          const std::string& reason,
                           std::initializer_list<Field> fields) {
   return MakeControlLine(ResponseLineType::kWarn, msg_id, code, reason, fields);
 }
 
-ResponseLine MakeInfoLine(const std::string &msg_id,
-                          const std::string &code,
-                          const std::string &reason,
+ResponseLine MakeInfoLine(const std::string& msg_id,
+                          const std::string& code,
+                          const std::string& reason,
                           std::initializer_list<Field> fields) {
   return MakeControlLine(ResponseLineType::kInfo, msg_id, code, reason, fields);
 }
 
-ResponseLine MakeErrorLine(const std::string &msg_id,
-                           const std::string &code,
-                           const std::string &reason,
+ResponseLine MakeErrorLine(const std::string& msg_id,
+                           const std::string& code,
+                           const std::string& reason,
                            std::initializer_list<Field> fields) {
   ResponseLine line = MakeControlLine(ResponseLineType::kError, msg_id, code, reason, fields);
   return line;
@@ -119,7 +136,7 @@ ResponseLine MakeDataLine(std::initializer_list<Field> fields) {
   return line;
 }
 
-std::string FormatSerialResponse(const Response &response) {
+std::string FormatSerialResponse(const Response& response) {
   if (response.lines.empty()) {
     return {};
   }
@@ -133,7 +150,7 @@ std::string FormatSerialResponse(const Response &response) {
   return oss.str();
 }
 
-std::string SerializeLine(const ResponseLine &line) {
+std::string SerializeLine(const ResponseLine& line) {
   if (!line.raw.empty()) {
     return line.raw;
   }
@@ -144,7 +161,7 @@ std::string SerializeLine(const ResponseLine &line) {
     if (!line.msg_id.empty()) {
       oss << " msg_id=" << line.msg_id;
     }
-    for (const auto &field : line.fields) {
+    for (const auto& field : line.fields) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
@@ -159,7 +176,7 @@ std::string SerializeLine(const ResponseLine &line) {
     if (!line.reason.empty()) {
       oss << ' ' << line.reason;
     }
-    for (const auto &field : line.fields) {
+    for (const auto& field : line.fields) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
@@ -174,7 +191,7 @@ std::string SerializeLine(const ResponseLine &line) {
     if (!line.reason.empty()) {
       oss << ' ' << line.reason;
     }
-    for (const auto &field : line.fields) {
+    for (const auto& field : line.fields) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
@@ -189,7 +206,7 @@ std::string SerializeLine(const ResponseLine &line) {
     if (!line.reason.empty()) {
       oss << ' ' << line.reason;
     }
-    for (const auto &field : line.fields) {
+    for (const auto& field : line.fields) {
       oss << ' ' << field.key << '=' << field.value;
     }
     break;
@@ -207,8 +224,8 @@ std::string SerializeLine(const ResponseLine &line) {
   return oss.str();
 }
 
-const ResponseLine *FindAckLine(const Response &response) {
-  for (const auto &line : response.lines) {
+const ResponseLine* FindAckLine(const Response& response) {
+  for (const auto& line : response.lines) {
     if (line.type == ResponseLineType::kAck) {
       return &line;
     }
@@ -216,8 +233,8 @@ const ResponseLine *FindAckLine(const Response &response) {
   return nullptr;
 }
 
-const ResponseLine *FindPrimaryError(const Response &response) {
-  for (const auto &line : response.lines) {
+const ResponseLine* FindPrimaryError(const Response& response) {
+  for (const auto& line : response.lines) {
     if (line.type == ResponseLineType::kError) {
       return &line;
     }
@@ -225,9 +242,9 @@ const ResponseLine *FindPrimaryError(const Response &response) {
   return nullptr;
 }
 
-std::vector<ResponseLine> CollectWarnings(const Response &response) {
+std::vector<ResponseLine> CollectWarnings(const Response& response) {
   std::vector<ResponseLine> warnings;
-  for (const auto &line : response.lines) {
+  for (const auto& line : response.lines) {
     if (line.type == ResponseLineType::kWarn) {
       warnings.push_back(line);
     }
@@ -235,10 +252,10 @@ std::vector<ResponseLine> CollectWarnings(const Response &response) {
   return warnings;
 }
 
-CompletionStatus DeriveCompletionStatus(const Response &response) {
-  if (const ResponseLine *err = FindPrimaryError(response)) {
+CompletionStatus DeriveCompletionStatus(const Response& response) {
+  if (const ResponseLine* err = FindPrimaryError(response)) {
     if (!err->code.empty()) {
-      if (const ErrorDescriptor *desc = LookupError(err->code)) {
+      if (const ErrorDescriptor* desc = LookupError(err->code)) {
         return desc->status;
       }
     }
@@ -250,5 +267,5 @@ CompletionStatus DeriveCompletionStatus(const Response &response) {
   return CompletionStatus::kUnknown;
 }
 
-} // namespace command
-} // namespace transport
+}  // namespace command
+}  // namespace transport

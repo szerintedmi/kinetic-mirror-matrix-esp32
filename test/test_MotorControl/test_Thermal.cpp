@@ -1,11 +1,12 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
-#include <unity.h>
-#include <cstdio>
-#include <string>
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
+
+#include <cstdio>
+#include <string>
+#include <unity.h>
 
 void test_help_includes_thermal_get_set() {
   MotorCommandProcessor p;
@@ -19,7 +20,8 @@ void test_get_thermal_runtime_limiting_default_on_and_max_budget() {
   std::string r1 = p.processLine("GET THERMAL_LIMITING", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" THERMAL_LIMITING=ON") != std::string::npos);
-  std::string exp = std::string("max_budget_s=") + std::to_string((int)MotorControlConstants::MAX_RUNNING_TIME_S);
+  std::string exp =
+      std::string("max_budget_s=") + std::to_string((int)MotorControlConstants::MAX_RUNNING_TIME_S);
   TEST_ASSERT_TRUE(r1.find(exp) != std::string::npos);
   std::string s = p.processLine("SET THERMAL_LIMITING=OFF", 0);
   TEST_ASSERT_TRUE(s.rfind("CTRL:DONE", 0) == 0);
@@ -60,11 +62,19 @@ void test_preflight_warn_when_disabled_then_ok() {
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1", 0).rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=1000", 0).rfind("CTRL:DONE", 0) == 0);
   std::string r1 = p.processLine("MOVE:0,1200", 0);
-  bool r1_warn = (r1.rfind("CTRL:WARN ", 0) == 0) && (r1.find(" THERMAL_REQ_GT_MAX") != std::string::npos);
-  if (!r1_warn) { std::printf("[DEBUG] r1 unexpected response:\n%s\n", r1.c_str()); std::fflush(stdout); }
+  bool r1_warn =
+      (r1.rfind("CTRL:WARN ", 0) == 0) && (r1.find(" THERMAL_REQ_GT_MAX") != std::string::npos);
+  if (!r1_warn) {
+    std::printf("[DEBUG] r1 unexpected response:\n%s\n", r1.c_str());
+    std::fflush(stdout);
+  }
   TEST_ASSERT_TRUE_MESSAGE(r1_warn, "Expected r1 to start with CTRL:WARN THERMAL_REQ_GT_MAX");
-  bool r1_ok = (r1.find("\nCTRL:ACK msg_id=") != std::string::npos) && (r1.find(" est_ms=") != std::string::npos);
-  if (!r1_ok) { std::printf("[DEBUG] r1 missing final ACK est_ms:\n%s\n", r1.c_str()); std::fflush(stdout); }
+  bool r1_ok = (r1.find("\nCTRL:ACK msg_id=") != std::string::npos) &&
+               (r1.find(" est_ms=") != std::string::npos);
+  if (!r1_ok) {
+    std::printf("[DEBUG] r1 missing final ACK est_ms:\n%s\n", r1.c_str());
+    std::fflush(stdout);
+  }
   TEST_ASSERT_TRUE_MESSAGE(r1_ok, "Expected r1 to include final CTRL:ACK est_ms");
 
   // Drain budget and try a small move -> expect WARN then OK
@@ -72,11 +82,19 @@ void test_preflight_warn_when_disabled_then_ok() {
   TEST_ASSERT_TRUE(p.processLine("WAKE:1", 0).rfind("CTRL:DONE", 0) == 0);
   (void)p.processLine("STATUS", 100000);
   std::string r2 = p.processLine("MOVE:1,10", 100000);
-  bool r2_warn = (r2.rfind("CTRL:WARN ", 0) == 0) && (r2.find(" THERMAL_NO_BUDGET") != std::string::npos);
-  if (!r2_warn) { std::printf("[DEBUG] r2 unexpected response:\n%s\n", r2.c_str()); std::fflush(stdout); }
+  bool r2_warn =
+      (r2.rfind("CTRL:WARN ", 0) == 0) && (r2.find(" THERMAL_NO_BUDGET") != std::string::npos);
+  if (!r2_warn) {
+    std::printf("[DEBUG] r2 unexpected response:\n%s\n", r2.c_str());
+    std::fflush(stdout);
+  }
   TEST_ASSERT_TRUE_MESSAGE(r2_warn, "Expected r2 to start with CTRL:WARN THERMAL_NO_BUDGET");
-  bool r2_ok = (r2.find("\nCTRL:ACK msg_id=") != std::string::npos) && (r2.find(" est_ms=") != std::string::npos);
-  if (!r2_ok) { std::printf("[DEBUG] r2 missing final ACK est_ms:\n%s\n", r2.c_str()); std::fflush(stdout); }
+  bool r2_ok = (r2.find("\nCTRL:ACK msg_id=") != std::string::npos) &&
+               (r2.find(" est_ms=") != std::string::npos);
+  if (!r2_ok) {
+    std::printf("[DEBUG] r2 missing final ACK est_ms:\n%s\n", r2.c_str());
+    std::fflush(stdout);
+  }
   TEST_ASSERT_TRUE_MESSAGE(r2_ok, "Expected r2 to include final CTRL:ACK est_ms");
 }
 
@@ -137,7 +155,7 @@ void test_wake_reject_enabled_no_budget() {
   MotorCommandProcessor p;
   // Drain budget by being awake
   TEST_ASSERT_TRUE(p.processLine("WAKE:0", 0).rfind("CTRL:DONE", 0) == 0);
-  (void)p.processLine("STATUS", 100000); // 100s later -> no budget
+  (void)p.processLine("STATUS", 100000);  // 100s later -> no budget
   // Go to sleep to allow WAKE command
   TEST_ASSERT_TRUE(p.processLine("SLEEP:0", 100000).rfind("CTRL:DONE", 0) == 0);
   std::string r = p.processLine("WAKE:0", 100001);
@@ -165,11 +183,14 @@ void test_auto_sleep_overrun_cancels_move_and_awake() {
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1", 0).rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=1000", 0).rfind("CTRL:DONE", 0) == 0);
   std::string r = p.processLine("MOVE:0,1200", 0);
-  TEST_ASSERT_TRUE(r.find("CTRL:ACK ") != std::string::npos && r.find(" est_ms=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("CTRL:ACK ") != std::string::npos &&
+                   r.find(" est_ms=") != std::string::npos);
   // Re-enable enforcement
   TEST_ASSERT_TRUE(p.processLine("SET THERMAL_LIMITING=ON", 0).rfind("CTRL:DONE", 0) == 0);
   // Advance time past zero budget + grace period
-  const uint32_t t_ms = (MotorControlConstants::MAX_RUNNING_TIME_S + MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S + 1) * 1000;
+  const uint32_t t_ms = (MotorControlConstants::MAX_RUNNING_TIME_S +
+                         MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S + 1) *
+                        1000;
   (void)p.processLine("STATUS", t_ms);
   // Verify auto-slept and move canceled
   std::string st = p.processLine("STATUS", t_ms + 1);
@@ -179,9 +200,15 @@ void test_auto_sleep_overrun_cancels_move_and_awake() {
   std::string line0;
   while (start <= st.size()) {
     size_t pos = st.find('\n', start);
-    std::string line = (pos == std::string::npos) ? st.substr(start) : st.substr(start, pos - start);
-    if (line.rfind("id=0", 0) == 0 || line.find("id=0 ") == 0) { line0 = line; found_line = true; break; }
-    if (pos == std::string::npos) break;
+    std::string line =
+        (pos == std::string::npos) ? st.substr(start) : st.substr(start, pos - start);
+    if (line.rfind("id=0", 0) == 0 || line.find("id=0 ") == 0) {
+      line0 = line;
+      found_line = true;
+      break;
+    }
+    if (pos == std::string::npos)
+      break;
     start = pos + 1;
   }
   TEST_ASSERT_TRUE(found_line);

@@ -1,19 +1,17 @@
-#include <unity.h>
+#include "transport/MessageId.h"
 
-#include <cstdio>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
-
-#include "transport/MessageId.h"
+#include <unity.h>
 
 namespace {
 
 std::string makeId(uint64_t value) {
   char buf[37];
-  std::snprintf(buf, sizeof(buf),
-                "00000000-0000-4000-8000-%012llx",
-                static_cast<unsigned long long>(value));
+  std::snprintf(
+      buf, sizeof(buf), "00000000-0000-4000-8000-%012llx", static_cast<unsigned long long>(value));
   return std::string(buf);
 }
 
@@ -22,7 +20,7 @@ void resetGenerator() {
   transport::message_id::ClearActive();
 }
 
-} // namespace
+}  // namespace
 
 void setUp() {
   // no-op
@@ -74,7 +72,7 @@ void test_active_roundtrip() {
   TEST_ASSERT_FALSE(transport::message_id::HasActive());
 }
 
-int main(int, char **) {
+int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_next_skips_active_id);
   RUN_TEST(test_next_avoids_consecutive_duplicates);

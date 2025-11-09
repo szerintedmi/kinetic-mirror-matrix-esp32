@@ -1,10 +1,11 @@
-#include <unity.h>
-#include <string>
-#include <thread>
-#include <chrono>
 #include "MotorControl/MotorCommandProcessor.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/NetSingleton.h"
+
+#include <chrono>
+#include <string>
+#include <thread>
+#include <unity.h>
 
 using namespace net_onboarding;
 

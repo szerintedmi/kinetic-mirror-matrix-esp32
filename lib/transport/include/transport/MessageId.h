@@ -8,7 +8,7 @@ namespace message_id {
 
 // UUID-backed message identifiers shared across transports.
 std::string Next();
-void SetActive(const std::string &msg_id);
+void SetActive(const std::string& msg_id);
 bool HasActive();
 std::string Active();
 void ClearActive();
@@ -17,6 +17,5 @@ void ClearActive();
 void SetGenerator(std::function<std::string()> generator);
 void ResetGenerator();
 
-} // namespace message_id
-} // namespace transport
-
+}  // namespace message_id
+}  // namespace transport

@@ -1,11 +1,11 @@
 #ifdef ARDUINO
-#include <Arduino.h>
-#include <unity.h>
-#include <functional>
-
+#include "MotorControl/BuildConfig.h"
 #include "MotorControl/HardwareMotorController.h"
 #include "MotorControl/MotionKinematics.h"
-#include "MotorControl/BuildConfig.h"
+
+#include <Arduino.h>
+#include <functional>
+#include <unity.h>
 
 #ifndef TEST_MOTOR_ID
 #define TEST_MOTOR_ID 0
@@ -15,13 +15,14 @@
 #endif
 static constexpr uint8_t kMotor = (uint8_t)TEST_MOTOR_ID;
 
-static HardwareMotorController ctrl; // uses ESP32 drivers + 74HC595
+static HardwareMotorController ctrl;  // uses ESP32 drivers + 74HC595
 
 static bool wait_until(std::function<bool()> pred, uint32_t timeout_ms) {
   uint32_t start = millis();
   while ((millis() - start) < timeout_ms) {
     ctrl.tick(millis());
-    if (pred()) return true;
+    if (pred())
+      return true;
     delay(5);
   }
   return false;
@@ -86,8 +87,7 @@ void test_device_move_estimate_vs_actual() {
   uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
   uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
   uint32_t hi = est_ms + tol;
-  std::string msg = std::string("actual=") + std::to_string(dt) +
-                    " est=" + std::to_string(est_ms) +
+  std::string msg = std::string("actual=") + std::to_string(dt) + " est=" + std::to_string(est_ms) +
                     " tol=±" + std::to_string(tol);
   TEST_ASSERT_TRUE_MESSAGE(dt >= lo && dt <= hi, msg.c_str());
 }
@@ -110,8 +110,7 @@ void test_device_home_estimate_vs_actual() {
   uint32_t tol = (tol_pct_ms > tol_abs_ms) ? tol_pct_ms : tol_abs_ms;
   uint32_t lo = (est_ms > tol) ? (est_ms - tol) : 0;
   uint32_t hi = est_ms + tol;
-  std::string msg = std::string("actual=") + std::to_string(dt) +
-                    " est=" + std::to_string(est_ms) +
+  std::string msg = std::string("actual=") + std::to_string(dt) + " est=" + std::to_string(est_ms) +
                     " tol=±" + std::to_string(tol);
   TEST_ASSERT_TRUE_MESSAGE(dt >= lo && dt <= hi, msg.c_str());
 }

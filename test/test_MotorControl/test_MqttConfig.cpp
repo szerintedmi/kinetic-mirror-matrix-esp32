@@ -1,16 +1,15 @@
-#include <unity.h>
-
-#include <string>
-
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/command/CommandUtils.h"
 #include "mqtt/MqttConfigStore.h"
 #include "transport/MessageId.h"
 
+#include <string>
+#include <unity.h>
+
 namespace {
 
-std::string FieldValue(const transport::command::ResponseLine &line, const std::string &key) {
-  for (const auto &field : line.fields) {
+std::string FieldValue(const transport::command::ResponseLine& line, const std::string& key) {
+  for (const auto& field : line.fields) {
     if (field.key == key) {
       return field.value;
     }
@@ -18,7 +17,7 @@ std::string FieldValue(const transport::command::ResponseLine &line, const std::
   return std::string();
 }
 
-} // namespace
+}  // namespace
 
 void test_mqtt_get_config_defaults() {
   mqtt::ConfigStore::Instance().ResetForTests();
@@ -27,7 +26,7 @@ void test_mqtt_get_config_defaults() {
   MotorCommandProcessor proc;
   auto result = proc.execute("MQTT:GET_CONFIG", 0);
   TEST_ASSERT_FALSE(result.is_error);
-  const auto &lines = result.structuredResponse().lines;
+  const auto& lines = result.structuredResponse().lines;
   TEST_ASSERT_EQUAL_UINT32(1, lines.size());
   auto defaults = mqtt::ConfigStore::Instance().Defaults();
   std::string expected_host = motor::command::QuoteString(defaults.host);
@@ -35,7 +34,8 @@ void test_mqtt_get_config_defaults() {
   std::string expected_pass = motor::command::QuoteString(defaults.pass);
 
   TEST_ASSERT_EQUAL_STRING(expected_host.c_str(), FieldValue(lines[0], "host").c_str());
-  TEST_ASSERT_EQUAL_STRING(std::to_string(defaults.port).c_str(), FieldValue(lines[0], "port").c_str());
+  TEST_ASSERT_EQUAL_STRING(std::to_string(defaults.port).c_str(),
+                           FieldValue(lines[0], "port").c_str());
   TEST_ASSERT_EQUAL_STRING(expected_user.c_str(), FieldValue(lines[0], "user").c_str());
   TEST_ASSERT_EQUAL_STRING(expected_pass.c_str(), FieldValue(lines[0], "pass").c_str());
 }
@@ -64,7 +64,7 @@ void test_mqtt_set_config_persist() {
   MotorCommandProcessor proc2;
   auto verify = proc2.execute("MQTT:GET_CONFIG", 0);
   TEST_ASSERT_FALSE(verify.is_error);
-  const auto &lines = verify.structuredResponse().lines;
+  const auto& lines = verify.structuredResponse().lines;
   TEST_ASSERT_EQUAL_UINT32(1, lines.size());
 
   TEST_ASSERT_EQUAL_STRING(motor::command::QuoteString("test.local").c_str(),

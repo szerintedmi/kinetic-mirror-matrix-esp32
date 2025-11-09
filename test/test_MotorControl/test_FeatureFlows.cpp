@@ -1,17 +1,16 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
-#include <unity.h>
-#include <string>
 #include "MotorControl/MotorCommandProcessor.h"
 
-static bool starts_with(const std::string &s, const char *p)
-{
+#include <string>
+#include <unity.h>
+
+static bool starts_with(const std::string& s, const char* p) {
   return s.rfind(p, 0) == 0;
 }
 
-void test_flow_set_off_move_exceeds_max_warn_ok()
-{
+void test_flow_set_off_move_exceeds_max_warn_ok() {
   MotorCommandProcessor p;
   TEST_ASSERT_TRUE(p.processLine("SET THERMAL_LIMITING=OFF", 0).rfind("CTRL:DONE", 0) == 0);
   // This request exceeds MAX_RUNNING_TIME_S by design (speed=1)
@@ -28,8 +27,7 @@ void test_flow_set_off_move_exceeds_max_warn_ok()
   TEST_ASSERT_TRUE(last.find(" est_ms=") != std::string::npos);
 }
 
-void test_flow_set_on_move_exceeds_max_err()
-{
+void test_flow_set_on_move_exceeds_max_err() {
   MotorCommandProcessor p;
   TEST_ASSERT_TRUE(p.processLine("SET THERMAL_LIMITING=ON", 0).rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1", 0).rfind("CTRL:DONE", 0) == 0);

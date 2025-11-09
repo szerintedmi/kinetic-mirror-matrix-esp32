@@ -1,8 +1,9 @@
-#include <unity.h>
-#include <string>
-#include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotionKinematics.h"
+#include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
+
+#include <string>
+#include <unity.h>
 
 void test_get_set_speed_ok() {
   MotorCommandProcessor proto;
@@ -68,7 +69,8 @@ static uint32_t parse_est_ms(const std::string& s) {
   TEST_ASSERT_TRUE(pos != std::string::npos);
   pos += 7;
   size_t end = pos;
-  while (end < s.size() && isdigit((unsigned char)s[end])) ++end;
+  while (end < s.size() && isdigit((unsigned char)s[end]))
+    ++end;
   return (uint32_t)strtoul(s.substr(pos, end - pos).c_str(), nullptr, 10);
 }
 
@@ -84,8 +86,7 @@ void test_home_uses_speed_accel_globals() {
   // Compute expected using defaults for overshoot/backoff/full_range
   using namespace MotorControlConstants;
   uint32_t expected = MotionKinematics::estimateHomeTimeMsWithFullRange(
-    DEFAULT_OVERSHOOT, DEFAULT_BACKOFF,
-    (MAX_POS_STEPS - MIN_POS_STEPS), 2000, 8000);
+      DEFAULT_OVERSHOOT, DEFAULT_BACKOFF, (MAX_POS_STEPS - MIN_POS_STEPS), 2000, 8000);
   TEST_ASSERT_EQUAL_UINT32(expected, est);
 }
 

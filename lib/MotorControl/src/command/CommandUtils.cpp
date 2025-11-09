@@ -8,7 +8,7 @@
 namespace motor {
 namespace command {
 
-std::string Trim(const std::string &s) {
+std::string Trim(const std::string& s) {
   size_t a = 0;
   while (a < s.size() && std::isspace(static_cast<unsigned char>(s[a]))) {
     ++a;
@@ -20,13 +20,13 @@ std::string Trim(const std::string &s) {
   return s.substr(a, b - a);
 }
 
-std::string ToUpperCopy(const std::string &s) {
+std::string ToUpperCopy(const std::string& s) {
   std::string out = s;
   std::transform(out.begin(), out.end(), out.begin(), ::toupper);
   return out;
 }
 
-std::vector<std::string> Split(const std::string &s, char delim) {
+std::vector<std::string> Split(const std::string& s, char delim) {
   std::vector<std::string> out;
   std::string cur;
   std::stringstream ss(s);
@@ -36,7 +36,7 @@ std::vector<std::string> Split(const std::string &s, char delim) {
   return out;
 }
 
-std::vector<std::string> ParseCsvQuoted(const std::string &s) {
+std::vector<std::string> ParseCsvQuoted(const std::string& s) {
   std::vector<std::string> out;
   std::string cur;
   bool in_quotes = false;
@@ -80,7 +80,7 @@ std::vector<std::string> ParseCsvQuoted(const std::string &s) {
   return out;
 }
 
-std::string QuoteString(const std::string &s) {
+std::string QuoteString(const std::string& s) {
   std::string out;
   out.reserve(s.size() + 2);
   out.push_back('"');
@@ -94,11 +94,11 @@ std::string QuoteString(const std::string &s) {
   return out;
 }
 
-bool ParseInt(const std::string &s, long &out) {
+bool ParseInt(const std::string& s, long& out) {
   if (s.empty()) {
     return false;
   }
-  char *end = nullptr;
+  char* end = nullptr;
   long v = std::strtol(s.c_str(), &end, 10);
   if (*end != '\0') {
     return false;
@@ -107,7 +107,7 @@ bool ParseInt(const std::string &s, long &out) {
   return true;
 }
 
-bool ParseInt(const std::string &s, int &out) {
+bool ParseInt(const std::string& s, int& out) {
   long tmp;
   if (!ParseInt(s, tmp)) {
     return false;
@@ -116,7 +116,7 @@ bool ParseInt(const std::string &s, int &out) {
   return true;
 }
 
-bool ParseIdMask(const std::string &token, uint32_t &mask, uint8_t maxMotors) {
+bool ParseIdMask(const std::string& token, uint32_t& mask, uint8_t maxMotors) {
   std::string upper = ToUpperCopy(token);
   if (upper == "ALL") {
     if (maxMotors >= 32) {
@@ -137,6 +137,5 @@ bool ParseIdMask(const std::string &token, uint32_t &mask, uint8_t maxMotors) {
   return true;
 }
 
-} // namespace command
-} // namespace motor
-
+}  // namespace command
+}  // namespace motor

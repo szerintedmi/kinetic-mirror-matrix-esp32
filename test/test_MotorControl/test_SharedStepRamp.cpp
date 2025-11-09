@@ -1,5 +1,6 @@
-#include <unity.h>
 #include "MotorControl/SharedStepTiming.h"
+
+#include <unity.h>
 
 using namespace SharedStepTiming;
 
@@ -14,7 +15,7 @@ void test_stop_distance_edges() {
   TEST_ASSERT_EQUAL_UINT32(0, stop_distance_steps(StopDistanceRequest(0, 16000)));
   TEST_ASSERT_EQUAL_UINT32(0, stop_distance_steps(StopDistanceRequest(0, 1)));
   // Very small acceleration yields larger stopping distances; check rounding up
-  uint32_t d = stop_distance_steps(StopDistanceRequest(1000, 1)); // 1000^2 / 2 = 500000
+  uint32_t d = stop_distance_steps(StopDistanceRequest(1000, 1));  // 1000^2 / 2 = 500000
   TEST_ASSERT_TRUE(d >= 500000);
 }
 

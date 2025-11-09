@@ -1,9 +1,9 @@
 #pragma once
 
-#include <stdint.h>
-#include <string>
 #include <array>
 #include <memory>
+#include <stdint.h>
+#include <string>
 #include <vector>
 
 namespace net_onboarding {
@@ -28,15 +28,16 @@ public:
   virtual void beginSta(const char* ssid, const char* pass) = 0;
   virtual bool staConnected() const = 0;
   virtual int staRssi() const = 0;
-  virtual void staLocalIp(std::array<char,16>& out) const = 0;
+  virtual void staLocalIp(std::array<char, 16>& out) const = 0;
   virtual void softApStart(const char* ssid, const char* pass) = 0;
-  virtual void softApIp(std::array<char,16>& out) const = 0;
+  virtual void softApIp(std::array<char, 16>& out) const = 0;
   virtual void macAddress(uint8_t mac[6]) const = 0;
   virtual std::string softApSsid() const = 0;
   virtual const char* apDefaultPassword() const = 0;
   virtual const char* apSsidPrefix() const = 0;
   // Scan helper; returns number of results written to out (<= max_results)
-  virtual int scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) = 0;
+  virtual int
+  scanNetworks(std::vector<WifiScanResult>& out, int max_results, bool include_hidden) = 0;
 };
 
 class INvs {
@@ -58,4 +59,4 @@ std::unique_ptr<INvs> MakeNvs();
 void ConfigureStubWifi(bool will_connect, uint32_t delay_ms);
 #endif
 
-} // namespace net_onboarding
+}  // namespace net_onboarding

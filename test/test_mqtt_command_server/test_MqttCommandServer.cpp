@@ -1,14 +1,3 @@
-#include <unity.h>
-
-#include <ArduinoJson.h>
-#include <cmath>
-#include <cstdlib>
-#include <functional>
-#include <map>
-#include <string>
-#include <utility>
-#include <vector>
-
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/command/HelpText.h"
 #include "mqtt/MqttCommandServer.h"
@@ -16,6 +5,16 @@
 #include "mqtt/MqttStatusPublisher.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "transport/MessageId.h"
+
+#include <ArduinoJson.h>
+#include <cmath>
+#include <cstdlib>
+#include <functional>
+#include <map>
+#include <string>
+#include <unity.h>
+#include <utility>
+#include <vector>
 
 namespace {
 
@@ -33,22 +32,25 @@ struct Harness {
   mqtt::MqttCommandServer server;
 
   Harness()
-      : server(processor,
-               [this](const mqtt::PublishMessage &msg) {
-                 messages.push_back({msg.topic, msg.payload});
-                 return true;
-               },
-               [this](const std::string & /*topic*/, uint8_t /*qos*/, mqtt::MqttCommandServer::SubscribeCallback cb) {
-                 callback = std::move(cb);
-                 return true;
-               },
-               [this](const std::string &line) { logs.push_back(line); },
-               [this]() -> uint32_t { return now_ms; }) {
+      : server(
+            processor,
+            [this](const mqtt::PublishMessage& msg) {
+              messages.push_back({msg.topic, msg.payload});
+              return true;
+            },
+            [this](const std::string& /*topic*/,
+                   uint8_t /*qos*/,
+                   mqtt::MqttCommandServer::SubscribeCallback cb) {
+              callback = std::move(cb);
+              return true;
+            },
+            [this](const std::string& line) { logs.push_back(line); },
+            [this]() -> uint32_t { return now_ms; }) {
     bool bound = server.begin("devices/test/status");
     (void)bound;
   }
 
-  void send(const std::string &payload) {
+  void send(const std::string& payload) {
     TEST_ASSERT_TRUE_MESSAGE(static_cast<bool>(callback), "Server not subscribed");
     callback("devices/test/cmd", payload);
   }
@@ -72,7 +74,7 @@ struct Harness {
   }
 };
 
-std::string makeMovePayload(const std::string &cmd_id, int target, int position) {
+std::string makeMovePayload(const std::string& cmd_id, int target, int position) {
   ArduinoJson::JsonDocument doc;
   doc["cmd_id"] = cmd_id;
   doc["action"] = "MOVE";
@@ -93,7 +95,7 @@ std::string makeMovePayloadWithoutId(int target, int position) {
   return out;
 }
 
-std::string makeHomePayload(const std::string &cmd_id, const std::string &target = "ALL") {
+std::string makeHomePayload(const std::string& cmd_id, const std::string& target = "ALL") {
   ArduinoJson::JsonDocument doc;
   doc["cmd_id"] = cmd_id;
   doc["action"] = "HOME";
@@ -107,7 +109,7 @@ std::string makeHomePayload(const std::string &cmd_id, const std::string &target
   return out;
 }
 
-std::string makeHelpPayload(const std::string &cmd_id) {
+std::string makeHelpPayload(const std::string& cmd_id) {
   ArduinoJson::JsonDocument doc;
   doc["cmd_id"] = cmd_id;
   doc["action"] = "HELP";
@@ -116,9 +118,9 @@ std::string makeHelpPayload(const std::string &cmd_id) {
   return out;
 }
 
-std::string makeGetPayload(const std::string &cmd_id,
-                           const std::string &resource,
-                           std::function<void(ArduinoJson::JsonObject &)> builder = {}) {
+std::string makeGetPayload(const std::string& cmd_id,
+                           const std::string& resource,
+                           std::function<void(ArduinoJson::JsonObject&)> builder = {}) {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -136,8 +138,8 @@ std::string makeGetPayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeSetPayload(const std::string &cmd_id,
-                           std::function<void(ArduinoJson::JsonObject &)> builder) {
+std::string makeSetPayload(const std::string& cmd_id,
+                           std::function<void(ArduinoJson::JsonObject&)> builder) {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -150,8 +152,7 @@ std::string makeSetPayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeWakePayload(const std::string &cmd_id,
-                            const std::string &target = "ALL") {
+std::string makeWakePayload(const std::string& cmd_id, const std::string& target = "ALL") {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -168,8 +169,7 @@ std::string makeWakePayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeSleepPayload(const std::string &cmd_id,
-                             const std::string &target = "ALL") {
+std::string makeSleepPayload(const std::string& cmd_id, const std::string& target = "ALL") {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -186,9 +186,9 @@ std::string makeSleepPayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeNetPayload(const std::string &cmd_id,
-                           const std::string &net_action,
-                           std::function<void(ArduinoJson::JsonObject &)> builder = {}) {
+std::string makeNetPayload(const std::string& cmd_id,
+                           const std::string& net_action,
+                           std::function<void(ArduinoJson::JsonObject&)> builder = {}) {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -203,11 +203,11 @@ std::string makeNetPayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeMqttSetConfigPayload(const std::string &cmd_id,
-                                     const std::string &host,
+std::string makeMqttSetConfigPayload(const std::string& cmd_id,
+                                     const std::string& host,
                                      int port,
-                                     const std::string &user,
-                                     const std::string &pass) {
+                                     const std::string& user,
+                                     const std::string& pass) {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -223,7 +223,7 @@ std::string makeMqttSetConfigPayload(const std::string &cmd_id,
   return out;
 }
 
-std::string makeMqttGetConfigPayload(const std::string &cmd_id) {
+std::string makeMqttGetConfigPayload(const std::string& cmd_id) {
   ArduinoJson::JsonDocument doc;
   if (!cmd_id.empty()) {
     doc["cmd_id"] = cmd_id;
@@ -235,7 +235,7 @@ std::string makeMqttGetConfigPayload(const std::string &cmd_id) {
   return out;
 }
 
-} // namespace
+}  // namespace
 
 void tearDown() {
   transport::message_id::ResetGenerator();
@@ -245,14 +245,15 @@ void tearDown() {
 void test_begin_requires_device_id() {
   MotorCommandProcessor processor;
   bool subscribed = false;
-  mqtt::MqttCommandServer server(processor,
-                                 [](const mqtt::PublishMessage &) { return true; },
-                                 [&](const std::string &, uint8_t, mqtt::MqttCommandServer::SubscribeCallback) {
-                                   subscribed = true;
-                                   return true;
-                                 },
-                                 [](const std::string &) {},
-                                 []() -> uint32_t { return 0; });
+  mqtt::MqttCommandServer server(
+      processor,
+      [](const mqtt::PublishMessage&) { return true; },
+      [&](const std::string&, uint8_t, mqtt::MqttCommandServer::SubscribeCallback) {
+        subscribed = true;
+        return true;
+      },
+      [](const std::string&) {},
+      []() -> uint32_t { return 0; });
 
   TEST_ASSERT_FALSE(server.begin("devices//status"));
   TEST_ASSERT_FALSE(subscribed);
@@ -292,9 +293,9 @@ void test_move_missing_param_reports_bad_payload() {
   TEST_ASSERT_TRUE(errors.size() > 0);
   TEST_ASSERT_EQUAL_STRING("MQTT_BAD_PAYLOAD", errors[0]["code"]);
   TEST_ASSERT_EQUAL_STRING("INVALID", errors[0]["reason"]);
-  const char *message = nullptr;
-  if (errors[0]["message"].is<const char *>()) {
-    message = errors[0]["message"].as<const char *>();
+  const char* message = nullptr;
+  if (errors[0]["message"].is<const char*>()) {
+    message = errors[0]["message"].as<const char*>();
   }
   TEST_ASSERT_NOT_NULL(message);
   TEST_ASSERT_NOT_EQUAL(-1, std::string(message).find("position_steps"));
@@ -343,12 +344,12 @@ void test_get_all_command_success() {
   TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
   TEST_ASSERT_TRUE(completion["result"]["SPEED"].is<long>());
   TEST_ASSERT_TRUE(completion["result"]["ACCEL"].is<long>());
-  TEST_ASSERT_TRUE(completion["result"]["THERMAL_LIMITING"].is<const char *>());
+  TEST_ASSERT_TRUE(completion["result"]["THERMAL_LIMITING"].is<const char*>());
 }
 
 void test_get_last_op_single_command_success() {
   Harness h;
-  h.send(makeGetPayload("cmd-get-last", "last_op_timing", [](ArduinoJson::JsonObject &obj) {
+  h.send(makeGetPayload("cmd-get-last", "last_op_timing", [](ArduinoJson::JsonObject& obj) {
     obj["target_ids"] = 0;
   }));
 
@@ -367,16 +368,15 @@ void test_help_command_success() {
   auto completion = h.parse(0);
   TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
   TEST_ASSERT_EQUAL_STRING("HELP", completion["action"]);
-  const char *text = completion["result"]["text"].as<const char *>();
+  const char* text = completion["result"]["text"].as<const char*>();
   TEST_ASSERT_NOT_NULL(text);
   TEST_ASSERT_EQUAL_STRING(motor::command::HelpText().c_str(), text);
 }
 
 void test_set_speed_command_success() {
   Harness h;
-  h.send(makeSetPayload("cmd-set-speed", [](ArduinoJson::JsonObject &obj) {
-    obj["speed_sps"] = 1500;
-  }));
+  h.send(makeSetPayload("cmd-set-speed",
+                        [](ArduinoJson::JsonObject& obj) { obj["speed_sps"] = 1500; }));
 
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
   auto completion = h.parse(0);
@@ -395,10 +395,7 @@ void test_missing_cmd_id_generates_uuid() {
   Harness h;
   transport::message_id::SetGenerator([idx = 0]() mutable -> std::string {
     char buffer[37];
-    std::snprintf(buffer,
-                  sizeof(buffer),
-                  "aaaaaaaa-aaaa-4aaa-8aaa-%012u",
-                  idx++);
+    std::snprintf(buffer, sizeof(buffer), "aaaaaaaa-aaaa-4aaa-8aaa-%012u", idx++);
     return std::string(buffer);
   });
   transport::message_id::ClearActive();
@@ -409,9 +406,10 @@ void test_missing_cmd_id_generates_uuid() {
   auto ack = h.parse(0);
   TEST_ASSERT_EQUAL_STRING("ack", ack["status"]);
   TEST_ASSERT_EQUAL_STRING("MOVE", ack["action"]);
-  TEST_ASSERT_TRUE_MESSAGE(ack["cmd_id"].is<const char *>(), "cmd_id missing from ACK");
-  std::string generated_id = ack["cmd_id"].as<const char *>();
-  TEST_ASSERT_EQUAL_UINT_MESSAGE(36, static_cast<unsigned int>(generated_id.size()), "cmd_id must be UUID length");
+  TEST_ASSERT_TRUE_MESSAGE(ack["cmd_id"].is<const char*>(), "cmd_id missing from ACK");
+  std::string generated_id = ack["cmd_id"].as<const char*>();
+  TEST_ASSERT_EQUAL_UINT_MESSAGE(
+      36, static_cast<unsigned int>(generated_id.size()), "cmd_id must be UUID length");
 
   h.advance(2000);
   TEST_ASSERT_EQUAL_UINT(2, h.messages.size());
@@ -424,10 +422,12 @@ void test_missing_cmd_id_generates_uuid() {
   h.send(payload);
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
   auto ack_replay = h.parse(0);
-  TEST_ASSERT_TRUE(ack_replay["cmd_id"].is<const char *>());
-  std::string second_id = ack_replay["cmd_id"].as<const char *>();
-  TEST_ASSERT_EQUAL_UINT_MESSAGE(36, static_cast<unsigned int>(second_id.size()), "cmd_id must be UUID length");
-  TEST_ASSERT_TRUE_MESSAGE(generated_id != second_id, "Generated cmd_id should be unique per request");
+  TEST_ASSERT_TRUE(ack_replay["cmd_id"].is<const char*>());
+  std::string second_id = ack_replay["cmd_id"].as<const char*>();
+  TEST_ASSERT_EQUAL_UINT_MESSAGE(
+      36, static_cast<unsigned int>(second_id.size()), "cmd_id must be UUID length");
+  TEST_ASSERT_TRUE_MESSAGE(generated_id != second_id,
+                           "Generated cmd_id should be unique per request");
 
   h.advance(2000);
   TEST_ASSERT_EQUAL_UINT(2, h.messages.size());
@@ -485,12 +485,12 @@ void test_net_status_command_success() {
   auto completion = h.parse(0);
   TEST_ASSERT_EQUAL_STRING("done", completion["status"]);
   TEST_ASSERT_EQUAL_STRING("NET:STATUS", completion["action"]);
-  TEST_ASSERT_TRUE(completion["result"]["state"].is<const char *>());
+  TEST_ASSERT_TRUE(completion["result"]["state"].is<const char*>());
 }
 
 void test_net_set_command_success() {
   Harness h;
-  h.send(makeNetPayload("cmd-net-set", "NET:SET", [](ArduinoJson::JsonObject &obj) {
+  h.send(makeNetPayload("cmd-net-set", "NET:SET", [](ArduinoJson::JsonObject& obj) {
     obj["ssid"] = "TestNet";
     obj["pass"] = "password123";
   }));
@@ -511,7 +511,7 @@ void test_duplicate_command_logs() {
   h.send(makeMovePayload("cmd-dup", 0, 100));
   TEST_ASSERT_FALSE(h.logs.empty());
   bool saw_duplicate = false;
-  for (const auto &line : h.logs) {
+  for (const auto& line : h.logs) {
     if (line.find("MQTT_DUPLICATE") != std::string::npos) {
       saw_duplicate = true;
       break;
@@ -552,23 +552,23 @@ void test_status_parity_matches_status_publisher() {
   h.clearMessages();
 
   motor::command::CommandResult status = h.processor.execute("STATUS", h.now_ms);
-  const auto &response = status.structuredResponse();
+  const auto& response = status.structuredResponse();
 
   std::map<int, std::map<std::string, std::string>> serial_fields;
-  for (const auto &line : response.lines) {
+  for (const auto& line : response.lines) {
     if (line.type != transport::command::ResponseLineType::kData) {
       continue;
     }
     int id = -1;
-    for (const auto &field : line.fields) {
+    for (const auto& field : line.fields) {
       if (field.key == "id") {
         id = std::stoi(field.value);
         break;
       }
     }
     TEST_ASSERT_TRUE_MESSAGE(id >= 0, "STATUS data missing id field");
-    auto &entry = serial_fields[id];
-    for (const auto &field : line.fields) {
+    auto& entry = serial_fields[id];
+    for (const auto& field : line.fields) {
       entry[field.key] = field.value;
     }
   }
@@ -582,7 +582,7 @@ void test_status_parity_matches_status_publisher() {
 
   std::string payload;
   mqtt::MqttStatusPublisher publisher(
-      [&](const mqtt::PublishMessage &msg) {
+      [&](const mqtt::PublishMessage& msg) {
         payload = msg.payload;
         return true;
       },
@@ -599,17 +599,11 @@ void test_status_parity_matches_status_publisher() {
   TEST_ASSERT_FALSE_MESSAGE(motors.isNull(), "motors object missing");
   TEST_ASSERT_EQUAL_UINT(serial_fields.size(), motors.size());
 
-  auto parse_bool_flag = [](const std::string &value) -> bool {
-    return value == "1";
-  };
+  auto parse_bool_flag = [](const std::string& value) -> bool { return value == "1"; };
 
-  auto parse_long = [](const std::string &value) -> long {
-    return std::stol(value);
-  };
+  auto parse_long = [](const std::string& value) -> long { return std::stol(value); };
 
-  auto parse_double = [](const std::string &value) -> double {
-    return std::stod(value);
-  };
+  auto parse_double = [](const std::string& value) -> double { return std::stod(value); };
 
   for (auto kv : motors) {
     int id = std::stoi(kv.key().c_str());
@@ -618,8 +612,8 @@ void test_status_parity_matches_status_publisher() {
     auto obj = kv.value().as<ArduinoJson::JsonObject>();
     TEST_ASSERT_FALSE_MESSAGE(obj.isNull(), "motor entry missing");
 
-    const auto &fields = serial_it->second;
-    auto require_field = [&](const char *name) -> const std::string & {
+    const auto& fields = serial_it->second;
+    auto require_field = [&](const char* name) -> const std::string& {
       auto it = fields.find(name);
       TEST_ASSERT_TRUE_MESSAGE(it != fields.end(), (std::string("missing field ") + name).c_str());
       return it->second;
@@ -632,7 +626,8 @@ void test_status_parity_matches_status_publisher() {
                           obj["awake"].as<bool>() ? 1 : 0);
     TEST_ASSERT_EQUAL_INT(parse_bool_flag(require_field("homed")) ? 1 : 0,
                           obj["homed"].as<bool>() ? 1 : 0);
-    TEST_ASSERT_EQUAL_INT(parse_long(require_field("steps_since_home")), obj["steps_since_home"].as<long>());
+    TEST_ASSERT_EQUAL_INT(parse_long(require_field("steps_since_home")),
+                          obj["steps_since_home"].as<long>());
     float budget_expected = static_cast<float>(parse_double(require_field("budget_s")));
     float budget_actual = obj["budget_s"].as<float>();
     TEST_ASSERT_FLOAT_WITHIN(0.05f, budget_expected, budget_actual);
@@ -684,13 +679,13 @@ void test_mqtt_config_json_persists() {
 
   auto result = get_completion["result"].as<ArduinoJson::JsonObject>();
   TEST_ASSERT_FALSE(result.isNull());
-  TEST_ASSERT_EQUAL_STRING("mqtt.lab", result["host"].as<const char *>());
+  TEST_ASSERT_EQUAL_STRING("mqtt.lab", result["host"].as<const char*>());
   TEST_ASSERT_EQUAL_INT(1885, result["port"].as<int>());
-  TEST_ASSERT_EQUAL_STRING("ops", result["user"].as<const char *>());
-  TEST_ASSERT_EQUAL_STRING("secret", result["pass"].as<const char *>());
+  TEST_ASSERT_EQUAL_STRING("ops", result["user"].as<const char*>());
+  TEST_ASSERT_EQUAL_STRING("secret", result["pass"].as<const char*>());
 }
 
-int main(int, char **) {
+int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_begin_requires_device_id);
   RUN_TEST(test_invalid_payload_rejected);

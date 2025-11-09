@@ -1,13 +1,14 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #endif
-#include <unity.h>
-#include <string>
-#include <vector>
+#include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
-#include "MotorControl/MotionKinematics.h"
 #include "test_common/TestTimeout.h"
+
+#include <string>
+#include <unity.h>
+#include <vector>
 
 static MotorCommandProcessor proto;
 
@@ -17,7 +18,7 @@ void setUp() {
 
 void tearDown() {}
 
-static std::vector<std::string> split_lines(const std::string &s) {
+static std::vector<std::string> split_lines(const std::string& s) {
   std::vector<std::string> out;
   size_t start = 0;
   while (start <= s.size()) {
@@ -62,7 +63,8 @@ void test_help_format() {
   TEST_ASSERT_TRUE(help.find("HELP") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("STATUS") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("MOVE:<id|ALL>,<abs_steps>") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") !=
+                   std::string::npos);
   TEST_ASSERT_TRUE(help.find("WAKE:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("SLEEP:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("E0") == std::string::npos);
@@ -76,8 +78,10 @@ void test_get_all_settings_single_line() {
   TEST_ASSERT_TRUE(r.find(" SPEED=") != std::string::npos || r.find("SPEED=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" ACCEL=") != std::string::npos || r.find("ACCEL=") != std::string::npos);
   TEST_ASSERT_TRUE(r.find(" DECEL=") != std::string::npos || r.find("DECEL=") != std::string::npos);
-  TEST_ASSERT_TRUE(r.find(" THERMAL_LIMITING=") != std::string::npos || r.find("THERMAL_LIMITING=") != std::string::npos);
-  TEST_ASSERT_TRUE(r.find(" max_budget_s=") != std::string::npos || r.find("max_budget_s=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" THERMAL_LIMITING=") != std::string::npos ||
+                   r.find("THERMAL_LIMITING=") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find(" max_budget_s=") != std::string::npos ||
+                   r.find("max_budget_s=") != std::string::npos);
 }
 
 void test_status_format_lines() {
@@ -86,9 +90,10 @@ void test_status_format_lines() {
   TEST_ASSERT_TRUE((int)lines.size() >= 1);
   // Skip any leading CTRL lines (ACK)
   size_t idx = 0;
-  while (idx < lines.size() && lines[idx].rfind("CTRL:", 0) == 0) ++idx;
+  while (idx < lines.size() && lines[idx].rfind("CTRL:", 0) == 0)
+    ++idx;
   TEST_ASSERT_TRUE(idx < lines.size());
-  const std::string &L0 = lines[idx];
+  const std::string& L0 = lines[idx];
   TEST_ASSERT_TRUE(L0.find("id=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" pos=") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find(" speed=") != std::string::npos);
@@ -103,11 +108,13 @@ void test_status_format_lines() {
 
 // Motion, wake/sleep, HOME
 void test_move_out_of_range() {
-  std::string cmd_hi = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 1);
+  std::string cmd_hi =
+      std::string("MOVE:0,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 1);
   auto r1 = proto.processLine(cmd_hi, 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r1.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
-  std::string cmd_lo = std::string("MOVE:0,") + std::to_string(MotorControlConstants::MIN_POS_STEPS - 1);
+  std::string cmd_lo =
+      std::string("MOVE:0,") + std::to_string(MotorControlConstants::MIN_POS_STEPS - 1);
   auto r2 = proto.processLine(cmd_lo, 0);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r2.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
@@ -140,11 +147,10 @@ void test_home_defaults() {
   auto r2 = proto.processLine("MOVE:0,10", 10);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
-  uint32_t th = MotionKinematics::estimateHomeTimeMs(
-      MotorControlConstants::DEFAULT_OVERSHOOT,
-      MotorControlConstants::DEFAULT_BACKOFF,
-      MotorControlConstants::DEFAULT_SPEED_SPS,
-      MotorControlConstants::DEFAULT_ACCEL_SPS2);
+  uint32_t th = MotionKinematics::estimateHomeTimeMs(MotorControlConstants::DEFAULT_OVERSHOOT,
+                                                     MotorControlConstants::DEFAULT_BACKOFF,
+                                                     MotorControlConstants::DEFAULT_SPEED_SPS,
+                                                     MotorControlConstants::DEFAULT_ACCEL_SPS2);
   proto.tick(th);
   auto r3 = proto.processLine("MOVE:0,10", th + 10);
   TEST_ASSERT_TRUE(r3.rfind("CTRL:ACK", 0) == 0);
@@ -162,7 +168,8 @@ void test_sleep_busy_then_ok() {
 }
 
 void test_move_all_out_of_range() {
-  std::string cmd = std::string("MOVE:ALL,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 100);
+  std::string cmd =
+      std::string("MOVE:ALL,") + std::to_string(MotorControlConstants::MAX_POS_STEPS + 100);
   auto r = proto.processLine(cmd, 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ERR ", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" E07 POS_OUT_OF_RANGE") != std::string::npos);
@@ -174,9 +181,10 @@ void test_wake_sleep_single_and_status() {
   auto st1 = proto.processLine("STATUS", 1);
   auto lines1 = split_lines(st1);
   bool found_awake = false;
-  for (const auto &L : lines1) {
+  for (const auto& L : lines1) {
     if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
-      found_awake = (L.find(" awake=1") != std::string::npos || L.find(" awake=1") != std::string::npos);
+      found_awake =
+          (L.find(" awake=1") != std::string::npos || L.find(" awake=1") != std::string::npos);
       break;
     }
   }
@@ -186,7 +194,7 @@ void test_wake_sleep_single_and_status() {
   auto st2 = proto.processLine("STATUS", 3);
   auto lines2 = split_lines(st2);
   bool found_asleep = false;
-  for (const auto &L : lines2) {
+  for (const auto& L : lines2) {
     if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
       found_asleep = (L.find(" awake=0") != std::string::npos);
       break;
@@ -209,9 +217,10 @@ void test_move_sets_speed_accel_in_status() {
   auto st = proto.processLine("STATUS", 1);
   auto lines = split_lines(st);
   bool ok = false;
-  for (const auto &L : lines) {
+  for (const auto& L : lines) {
     if (L.find("id=0 ") == 0 || L.find("id=0") == 0) {
-      ok = (L.find(" speed=5000") != std::string::npos) && (L.find(" accel=12000") != std::string::npos);
+      ok = (L.find(" speed=5000") != std::string::npos) &&
+           (L.find(" accel=12000") != std::string::npos);
       break;
     }
   }
@@ -258,8 +267,9 @@ void test_multi_cmd_whitespace_and_case() {
 }
 
 // HOME sequencing (from previous dedicated file)
-static bool line_for_id_has(const std::vector<std::string>& lines, int id, const std::string& needle) {
-  for (const auto &L : lines) {
+static bool
+line_for_id_has(const std::vector<std::string>& lines, int id, const std::string& needle) {
+  for (const auto& L : lines) {
     if (L.find("id=" + std::to_string(id)) == 0 || L.find("id=" + std::to_string(id) + " ") == 0) {
       return L.find(needle) != std::string::npos;
     }
@@ -269,7 +279,8 @@ static bool line_for_id_has(const std::vector<std::string>& lines, int id, const
 
 void test_home_parsing_comma_skips() {
   // Comma-skip overshoot, set backoff to DEFAULT_BACKOFF
-  std::string cmd = std::string("HOME:2,,") + std::to_string(MotorControlConstants::DEFAULT_BACKOFF);
+  std::string cmd =
+      std::string("HOME:2,,") + std::to_string(MotorControlConstants::DEFAULT_BACKOFF);
   auto r = proto.processLine(cmd, 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
   auto st0 = proto.processLine("STATUS", 1);
@@ -304,7 +315,8 @@ void test_home_all_concurrency_and_post_state() {
   auto lines0 = split_lines(st0);
   int moving_cnt = 0;
   for (int i = 0; i < 8; ++i) {
-    if (line_for_id_has(lines0, i, " moving=1")) moving_cnt++;
+    if (line_for_id_has(lines0, i, " moving=1"))
+      moving_cnt++;
   }
   TEST_ASSERT_EQUAL_INT(8, moving_cnt);
 
@@ -321,5 +333,6 @@ void test_home_all_concurrency_and_post_state() {
 
 void test_help_includes_home_line_again() {
   auto help = proto.processLine("HELP", 0);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") != std::string::npos);
+  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") !=
+                   std::string::npos);
 }

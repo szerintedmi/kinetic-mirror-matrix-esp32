@@ -1,5 +1,3 @@
-#include <unity.h>
-
 #include "MotorControl/MotorControlConstants.h"
 #include "mqtt/MqttStatusPublisher.h"
 #include "net_onboarding/NetOnboarding.h"
@@ -7,13 +5,14 @@
 #include <algorithm>
 #include <cstdint>
 #include <string>
+#include <unity.h>
 #include <vector>
 
 using mqtt::PublishMessage;
 
 namespace {
 
-void connectNet(net_onboarding::NetOnboarding &net) {
+void connectNet(net_onboarding::NetOnboarding& net) {
   net.begin(10);
   net.setTestSimulation(true, 0);
   net.setCredentials("demo-ssid", "demo-pass");
@@ -24,15 +23,18 @@ void connectNet(net_onboarding::NetOnboarding &net) {
 
 class StubController : public MotorController {
 public:
-  explicit StubController(std::vector<MotorState> motors)
-      : motors_(std::move(motors)) {}
+  explicit StubController(std::vector<MotorState> motors) : motors_(std::move(motors)) {}
 
-  size_t motorCount() const override { return motors_.size(); }
+  size_t motorCount() const override {
+    return motors_.size();
+  }
 
-  const MotorState &state(size_t idx) const override { return motors_.at(idx); }
+  const MotorState& state(size_t idx) const override {
+    return motors_.at(idx);
+  }
 
   bool isAnyMovingForMask(uint32_t mask) const override {
-    for (const auto &m : motors_) {
+    for (const auto& m : motors_) {
       if (((mask >> m.id) & 0x1u) && m.moving) {
         return true;
       }
@@ -41,8 +43,12 @@ public:
   }
 
   void wakeMask(uint32_t) override {}
-  bool sleepMask(uint32_t) override { return true; }
-  bool moveAbsMask(uint32_t, long, int, int, uint32_t) override { return true; }
+  bool sleepMask(uint32_t) override {
+    return true;
+  }
+  bool moveAbsMask(uint32_t, long, int, int, uint32_t) override {
+    return true;
+  }
   bool homeMask(uint32_t, long, long, int, int, long, uint32_t) override {
     return true;
   }
@@ -50,7 +56,9 @@ public:
   void setThermalLimitsEnabled(bool) override {}
   void setDeceleration(int) override {}
 
-  std::vector<MotorState> &data() { return motors_; }
+  std::vector<MotorState>& data() {
+    return motors_;
+  }
 
 private:
   std::vector<MotorState> motors_;
@@ -76,7 +84,7 @@ MotorState makeMotor(uint8_t id) {
   return s;
 }
 
-int countOccurrences(const std::string &text, const std::string &needle) {
+int countOccurrences(const std::string& text, const std::string& needle) {
   int count = 0;
   std::string::size_type pos = text.find(needle);
   while (pos != std::string::npos) {
@@ -86,7 +94,7 @@ int countOccurrences(const std::string &text, const std::string &needle) {
   return count;
 }
 
-} // namespace
+}  // namespace
 
 void test_status_publisher_serializes_snapshot() {
   net_onboarding::NetOnboarding net;
@@ -95,7 +103,7 @@ void test_status_publisher_serializes_snapshot() {
   StubController controller({makeMotor(0), makeMotor(1)});
 
   std::vector<PublishMessage> published;
-  auto publish_fn = [&](const PublishMessage &msg) {
+  auto publish_fn = [&](const PublishMessage& msg) {
     published.push_back(msg);
     return true;
   };
@@ -106,34 +114,21 @@ void test_status_publisher_serializes_snapshot() {
   publisher.loop(controller, 0);
 
   TEST_ASSERT_EQUAL_INT(1, static_cast<int>(published.size()));
-  TEST_ASSERT_EQUAL_STRING("devices/02123456789a/status",
-                           published[0].topic.c_str());
+  TEST_ASSERT_EQUAL_STRING("devices/02123456789a/status", published[0].topic.c_str());
 
-  const std::string &payload = published[0].payload;
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"node_state\":\"ready\"")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"ip\":\"10.0.0.2\"")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"0\":{\"id\":0,\"position\":0")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"moving\":false")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"awake\":true")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"speed\":4000")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"accel\":16000")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"started_ms\":800000")));
-  TEST_ASSERT_EQUAL_INT(1,
-                        countOccurrences(payload, "\"actual_ms\":"));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"1\":{\"id\":1,\"position\":120")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"moving\":true")));
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(payload.find("\"motors\":{")));
+  const std::string& payload = published[0].payload;
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"node_state\":\"ready\"")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"ip\":\"10.0.0.2\"")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"0\":{\"id\":0,\"position\":0")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"moving\":false")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"awake\":true")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"speed\":4000")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"accel\":16000")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"started_ms\":800000")));
+  TEST_ASSERT_EQUAL_INT(1, countOccurrences(payload, "\"actual_ms\":"));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"1\":{\"id\":1,\"position\":120")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"moving\":true")));
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(payload.find("\"motors\":{")));
 }
 
 void test_status_publisher_cadence_and_changes() {
@@ -143,7 +138,7 @@ void test_status_publisher_cadence_and_changes() {
   StubController controller({makeMotor(0), makeMotor(1)});
 
   std::vector<PublishMessage> published;
-  auto publish_fn = [&](const PublishMessage &msg) {
+  auto publish_fn = [&](const PublishMessage& msg) {
     published.push_back(msg);
     return true;
   };
@@ -176,17 +171,14 @@ void test_status_publisher_cadence_and_changes() {
   publisher.loop(controller, 1300);
   TEST_ASSERT_EQUAL_INT(5, static_cast<int>(published.size()));
 
-  const std::string &latest = published.back().payload;
-  TEST_ASSERT_NOT_EQUAL(-1,
-                        static_cast<int>(latest.find("\"moving\":false")));
-  TEST_ASSERT_EQUAL_INT(2,
-                        countOccurrences(latest, "\"actual_ms\":"));
+  const std::string& latest = published.back().payload;
+  TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(latest.find("\"moving\":false")));
+  TEST_ASSERT_EQUAL_INT(2, countOccurrences(latest, "\"actual_ms\":"));
 }
 
-int main(int, char **) {
+int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_status_publisher_serializes_snapshot);
   RUN_TEST(test_status_publisher_cadence_and_changes);
   return UNITY_END();
 }
-

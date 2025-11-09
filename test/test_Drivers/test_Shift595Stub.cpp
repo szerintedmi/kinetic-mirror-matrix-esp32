@@ -1,5 +1,6 @@
-#include <unity.h>
 #include "drivers/Stub/Shift595Stub.h"
+
+#include <unity.h>
 
 void test_shift595_captures_bytes_and_latch();
 
@@ -19,4 +20,3 @@ int main(int, char**) {
   return UNITY_END();
 }
 #endif
-

@@ -1,9 +1,10 @@
 #ifdef ARDUINO
-#include <Arduino.h>
-#include <unity.h>
-#include <WiFi.h>
-#include "secrets.h"
 #include "net_onboarding/NetOnboarding.h"
+#include "secrets.h"
+
+#include <Arduino.h>
+#include <WiFi.h>
+#include <unity.h>
 
 using namespace net_onboarding;
 
@@ -69,4 +70,4 @@ void test_net_happy_path_if_seeded() {
 #endif
 }
 
-#endif // ARDUINO
+#endif  // ARDUINO

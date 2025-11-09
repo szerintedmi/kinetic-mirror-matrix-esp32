@@ -1,18 +1,17 @@
-#include <unity.h>
-
 #include "mqtt/MqttPresenceClient.h"
 #include "net_onboarding/NetOnboarding.h"
 
 #include <chrono>
 #include <string>
 #include <thread>
+#include <unity.h>
 #include <vector>
 
 using mqtt::PublishMessage;
 
 namespace {
 
-void connectNet(net_onboarding::NetOnboarding &net) {
+void connectNet(net_onboarding::NetOnboarding& net) {
   net.begin(10);
   net.setTestSimulation(true, 0);
   net.setCredentials("demo-ssid", "demo-pass");
@@ -22,7 +21,7 @@ void connectNet(net_onboarding::NetOnboarding &net) {
   }
 }
 
-} // namespace
+}  // namespace
 
 void test_presence_payload_formatting() {
   net_onboarding::NetOnboarding net;
@@ -30,15 +29,13 @@ void test_presence_payload_formatting() {
 
   PublishMessage captured;
   bool published = false;
-  auto publish_fn = [&](const PublishMessage &pub) {
+  auto publish_fn = [&](const PublishMessage& pub) {
     captured = pub;
     published = true;
     return true;
   };
   std::vector<std::string> logs;
-  auto log_fn = [&](const std::string &line) {
-    logs.push_back(line);
-  };
+  auto log_fn = [&](const std::string& line) { logs.push_back(line); };
 
   mqtt::MqttPresenceClient client(net, publish_fn, log_fn);
   client.handleConnected(0);
@@ -46,19 +43,17 @@ void test_presence_payload_formatting() {
 
   TEST_ASSERT_TRUE(published);
   TEST_ASSERT_EQUAL_STRING("devices/02123456789a/status", captured.topic.c_str());
-  TEST_ASSERT_EQUAL_STRING(
-      "{\"node_state\":\"ready\",\"ip\":\"10.0.0.2\",\"motors\":{}}",
-      captured.payload.c_str());
-
+  TEST_ASSERT_EQUAL_STRING("{\"node_state\":\"ready\",\"ip\":\"10.0.0.2\",\"motors\":{}}",
+                           captured.payload.c_str());
 }
 
 void test_presence_logs_connect_success() {
   net_onboarding::NetOnboarding net;
   connectNet(net);
 
-  auto publish_fn = [](const PublishMessage &) { return true; };
+  auto publish_fn = [](const PublishMessage&) { return true; };
   std::vector<std::string> logs;
-  auto log_fn = [&](const std::string &line) { logs.push_back(line); };
+  auto log_fn = [&](const std::string& line) { logs.push_back(line); };
 
   mqtt::MqttPresenceClient client(net, publish_fn, log_fn);
   client.handleConnected(0, "mqtt.local:1883");
@@ -72,7 +67,7 @@ void test_presence_republish_on_force() {
   connectNet(net);
 
   std::vector<std::string> payloads;
-  auto publish_fn = [&](const PublishMessage &pub) {
+  auto publish_fn = [&](const PublishMessage& pub) {
     payloads.push_back(pub.payload);
     return true;
   };
@@ -93,8 +88,8 @@ void test_presence_logs_failure_once() {
   connectNet(net);
 
   std::vector<std::string> logs;
-  auto publish_fn = [](const PublishMessage &) { return true; };
-  auto log_fn = [&](const std::string &line) { logs.push_back(line); };
+  auto publish_fn = [](const PublishMessage&) { return true; };
+  auto log_fn = [&](const std::string& line) { logs.push_back(line); };
 
   mqtt::MqttPresenceClient client(net, publish_fn, log_fn);
   client.handleConnectFailure();
@@ -109,8 +104,8 @@ void test_presence_failure_log_resets_after_connect() {
   connectNet(net);
 
   std::vector<std::string> logs;
-  auto publish_fn = [](const PublishMessage &) { return true; };
-  auto log_fn = [&](const std::string &line) { logs.push_back(line); };
+  auto publish_fn = [](const PublishMessage&) { return true; };
+  auto log_fn = [&](const std::string& line) { logs.push_back(line); };
 
   mqtt::MqttPresenceClient client(net, publish_fn, log_fn);
   client.handleConnectFailure();
@@ -125,7 +120,7 @@ void test_presence_failure_log_resets_after_connect() {
   TEST_ASSERT_NOT_EQUAL(-1, static_cast<int>(logs.back().find("MQTT_CONNECT_FAILED")));
 }
 
-int main(int, char **) {
+int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_presence_payload_formatting);
   RUN_TEST(test_presence_logs_connect_success);

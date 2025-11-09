@@ -1,9 +1,9 @@
 #ifdef ARDUINO
-#include <Arduino.h>
-#include <unity.h>
-#include <functional>
-
 #include "MotorControl/HardwareMotorController.h"
+
+#include <Arduino.h>
+#include <functional>
+#include <unity.h>
 
 #ifndef TEST_MOTOR_ID
 #define TEST_MOTOR_ID 0
@@ -19,7 +19,8 @@ static bool wait_until(std::function<bool()> pred, uint32_t timeout_ms) {
   uint32_t start = millis();
   while ((millis() - start) < timeout_ms) {
     ctrl.tick(millis());
-    if (pred()) return true;
+    if (pred())
+      return true;
     delay(5);
   }
   return false;
@@ -35,10 +36,10 @@ void test_auto_sleep_after_move() {
   bool ok = ctrl.moveAbsMask(1u << kMotor, 100, speed, accel, millis());
   TEST_ASSERT_TRUE(ok);
   // Wait until it reports moving
-  TEST_ASSERT_TRUE_MESSAGE(wait_until([]{ return ctrl.state(kMotor).moving; }, 500),
+  TEST_ASSERT_TRUE_MESSAGE(wait_until([] { return ctrl.state(kMotor).moving; }, 500),
                            "motor did not start");
   // Wait until completion
-  TEST_ASSERT_TRUE_MESSAGE(wait_until([]{ return !ctrl.state(kMotor).moving; }, 5000),
+  TEST_ASSERT_TRUE_MESSAGE(wait_until([] { return !ctrl.state(kMotor).moving; }, 5000),
                            "motor did not finish");
   // Expect auto-sleep after move (unless explicitly WAKE'd, which we did not)
   TEST_ASSERT_FALSE(ctrl.state(kMotor).awake);
@@ -56,11 +57,13 @@ void test_two_motor_overlap_constant_speed() {
   bool ok = ctrl.moveAbsMask(mask, 120, speed, accel, millis());
   TEST_ASSERT_TRUE(ok);
   // Wait both report moving
-  TEST_ASSERT_TRUE_MESSAGE(wait_until([&]{ return ctrl.state(kMotor).moving && ctrl.state(m2).moving; }, 800),
-                           "both motors did not start");
+  TEST_ASSERT_TRUE_MESSAGE(
+      wait_until([&] { return ctrl.state(kMotor).moving && ctrl.state(m2).moving; }, 800),
+      "both motors did not start");
   // Wait both complete
-  TEST_ASSERT_TRUE_MESSAGE(wait_until([&]{ return !ctrl.state(kMotor).moving && !ctrl.state(m2).moving; }, 6000),
-                           "both motors did not finish");
+  TEST_ASSERT_TRUE_MESSAGE(
+      wait_until([&] { return !ctrl.state(kMotor).moving && !ctrl.state(m2).moving; }, 6000),
+      "both motors did not finish");
   // Expect both are asleep by default after completion
   TEST_ASSERT_FALSE(ctrl.state(kMotor).awake);
   TEST_ASSERT_FALSE(ctrl.state(m2).awake);

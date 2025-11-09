@@ -9,7 +9,7 @@ constexpr std::size_t kMaxCachedResponses = 0;
 
 }
 
-ResponseDispatcher &ResponseDispatcher::Instance() {
+ResponseDispatcher& ResponseDispatcher::Instance() {
   static ResponseDispatcher instance;
   return instance;
 }
@@ -27,18 +27,18 @@ void ResponseDispatcher::UnregisterSink(SinkToken token) {
   sinks_.erase(token);
 }
 
-void ResponseDispatcher::Emit(const Event &event) {
+void ResponseDispatcher::Emit(const Event& event) {
   if (!event.cmd_id.empty() && kMaxCachedResponses > 0) {
     auto emplace_result = cache_.emplace(event.cmd_id, CacheEntry{});
     if (emplace_result.second) {
       order_.push_back(event.cmd_id);
       while (order_.size() > kMaxCachedResponses) {
-        const std::string &oldest = order_.front();
+        const std::string& oldest = order_.front();
         cache_.erase(oldest);
         order_.pop_front();
       }
     }
-    CacheEntry &entry = emplace_result.first->second;
+    CacheEntry& entry = emplace_result.first->second;
     if (event.type == EventType::kAck) {
       entry.ack.line = EventToLine(event);
       entry.ack.action = event.action;
@@ -52,7 +52,7 @@ void ResponseDispatcher::Emit(const Event &event) {
     }
   }
 
-  for (auto &pair : sinks_) {
+  for (auto& pair : sinks_) {
     pair.second(event);
   }
 }
@@ -62,8 +62,8 @@ void ResponseDispatcher::Clear() {
   order_.clear();
 }
 
-bool ResponseDispatcher::Replay(const std::string &cmd_id,
-                                const std::function<void(const Event &)> &cb) const {
+bool ResponseDispatcher::Replay(const std::string& cmd_id,
+                                const std::function<void(const Event&)>& cb) const {
   if (!cb || cmd_id.empty()) {
     return false;
   }
@@ -91,5 +91,5 @@ std::size_t ResponseDispatcher::CachedCommandCount() const {
   return cache_.size();
 }
 
-} // namespace response
-} // namespace transport
+}  // namespace response
+}  // namespace transport

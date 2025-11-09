@@ -37,16 +37,18 @@ struct ConfigUpdate {
 
 class ConfigStore {
 public:
-  static ConfigStore &Instance();
+  static ConfigStore& Instance();
 
   BrokerConfig Current();
   BrokerConfig Defaults() const;
   uint32_t Revision() const;
 
-  // Applies the provided update and persists it. Returns false on validation or persistence failure.
-  bool ApplyUpdate(const ConfigUpdate &update, std::string *error = nullptr);
+  // Applies the provided update and persists it. Returns false on validation or persistence
+  // failure.
+  bool ApplyUpdate(const ConfigUpdate& update, std::string* error = nullptr);
 
-  // Reloads preferences from storage, discarding cached overrides (used for test reset / reboot simulation).
+  // Reloads preferences from storage, discarding cached overrides (used for test reset / reboot
+  // simulation).
   bool Reload();
 
   void ResetForTests();
@@ -55,12 +57,12 @@ private:
   ConfigStore();
 
   BrokerConfig loadLocked();
-  bool persistLocked(const BrokerConfig &config);
-  bool writeSlotLocked(char slot, const BrokerConfig &config);
-  bool readSlotLocked(char slot, BrokerConfig &config_out);
+  bool persistLocked(const BrokerConfig& config);
+  bool writeSlotLocked(char slot, const BrokerConfig& config);
+  bool readSlotLocked(char slot, BrokerConfig& config_out);
   void ensureLoadedLocked();
-  bool validateUpdate(const ConfigUpdate &update, std::string *error) const;
-  BrokerConfig mergeUpdate(const ConfigUpdate &update, std::string *error) const;
+  bool validateUpdate(const ConfigUpdate& update, std::string* error) const;
+  BrokerConfig mergeUpdate(const ConfigUpdate& update, std::string* error) const;
 
   BrokerConfig defaults_;
   BrokerConfig current_;
@@ -69,4 +71,4 @@ private:
   mutable std::mutex mutex_;
 };
 
-} // namespace mqtt
+}  // namespace mqtt

@@ -4,10 +4,8 @@
 #include "MotorControl/command/CommandHandlers.h"
 #include "MotorControl/command/CommandResult.h"
 #include "MotorControl/command/ResponseFormatter.h"
-
-#include "transport/CompletionTracker.h"
-
 #include "StubMotorController.h"
+#include "transport/CompletionTracker.h"
 #if !defined(USE_STUB_BACKEND) && !defined(UNIT_TEST)
 #include "MotorControl/HardwareMotorController.h"
 #endif
@@ -40,7 +38,8 @@ MotorCommandProcessor::MotorCommandProcessor()
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::MotorCommandHandler()));
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::QueryCommandHandler()));
   handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::NetCommandHandler()));
-  handlers.emplace_back(std::unique_ptr<CommandHandler>(new motor::command::MqttConfigCommandHandler()));
+  handlers.emplace_back(
+      std::unique_ptr<CommandHandler>(new motor::command::MqttConfigCommandHandler()));
   router_.reset(new CommandRouter(std::move(handlers)));
 }
 
@@ -48,7 +47,7 @@ MotorCommandProcessor::~MotorCommandProcessor() {
   transport::response::CompletionTracker::Instance().RemoveController(controller_.get());
 }
 
-CommandResult MotorCommandProcessor::execute(const std::string &line, uint32_t now_ms) {
+CommandResult MotorCommandProcessor::execute(const std::string& line, uint32_t now_ms) {
   auto commands = parser_.parse(line);
   if (commands.empty()) {
     return CommandResult();
@@ -62,7 +61,7 @@ CommandResult MotorCommandProcessor::execute(const std::string &line, uint32_t n
   return batch_executor_.execute(commands, context, *router_, now_ms);
 }
 
-std::string MotorCommandProcessor::processLine(const std::string &line, uint32_t now_ms) {
+std::string MotorCommandProcessor::processLine(const std::string& line, uint32_t now_ms) {
   CommandResult result = execute(line, now_ms);
   return motor::command::FormatForSerial(result);
 }
@@ -77,8 +76,8 @@ CommandExecutionContext MotorCommandProcessor::makeContext() {
                                  batch_initially_idle_);
 }
 
-CommandResult MotorCommandProcessor::dispatchSingle(const ParsedCommand &command,
-                                                    CommandExecutionContext &context,
+CommandResult MotorCommandProcessor::dispatchSingle(const ParsedCommand& command,
+                                                    CommandExecutionContext& context,
                                                     uint32_t now_ms) {
   return router_->dispatch(command, context, now_ms);
 }

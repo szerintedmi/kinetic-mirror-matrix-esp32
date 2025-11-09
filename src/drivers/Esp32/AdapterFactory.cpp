@@ -1,5 +1,6 @@
 #if defined(ARDUINO)
 #include "drivers/Esp32/AdapterFactory.h"
+
 #include "MotorControl/BuildConfig.h"
 
 // FAS adapter factory is provided by FasAdapterEsp32.cpp
@@ -17,5 +18,4 @@ IFasAdapter* createEsp32MotionAdapter() {
 #endif
 }
 
-#endif // ARDUINO
-
+#endif  // ARDUINO

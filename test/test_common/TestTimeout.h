@@ -3,7 +3,7 @@
 #if defined(ARDUINO)
 // On embedded targets we skip host-only timeout handling.
 struct TestTimeoutGuard {
-  TestTimeoutGuard(const char *, unsigned int) {}
+  TestTimeoutGuard(const char*, unsigned int) {}
 };
 #define TEST_TIMEOUT_GUARD(ms) TestTimeoutGuard guard(__func__, ms)
 #else
@@ -17,9 +17,8 @@ struct TestTimeoutGuard {
 
 class TestTimeoutGuard {
 public:
-  TestTimeoutGuard(const char *test_name, unsigned int timeout_ms)
-      : name_(test_name ? test_name : "(unknown)"),
-        done_(false) {
+  TestTimeoutGuard(const char* test_name, unsigned int timeout_ms)
+      : name_(test_name ? test_name : "(unknown)"), done_(false) {
     if (timeout_ms == 0) {
       return;
     }
@@ -28,10 +27,8 @@ public:
       const auto deadline = std::chrono::steady_clock::now() + limit;
       while (!done_.load(std::memory_order_acquire)) {
         if (std::chrono::steady_clock::now() >= deadline) {
-          std::fprintf(stderr,
-                       "\n[FATAL] Test '%s' exceeded timeout of %u ms\n",
-                       name_.c_str(),
-                       timeout_ms);
+          std::fprintf(
+              stderr, "\n[FATAL] Test '%s' exceeded timeout of %u ms\n", name_.c_str(), timeout_ms);
           std::fflush(stderr);
           std::abort();
         }

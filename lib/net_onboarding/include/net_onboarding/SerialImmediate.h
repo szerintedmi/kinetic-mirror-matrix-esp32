@@ -8,6 +8,6 @@ namespace net_onboarding {
 // Returns true if the line was written immediately; false when running in
 // environments without a live serial port (native/tests). Callers can use the
 // return value to decide whether to also buffer the line in their response.
-bool PrintCtrlLineImmediate(const std::string &line);
+bool PrintCtrlLineImmediate(const std::string& line);
 
-} // namespace net_onboarding
+}  // namespace net_onboarding

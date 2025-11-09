@@ -1,7 +1,8 @@
 // Direction/SLEEP guard timing and scheduling helpers
 #pragma once
-#include <cstdint>
 #include "MotorControl/SharedStepTiming.h"
+
+#include <cstdint>
 
 namespace SharedStepGuards {
 
@@ -33,16 +34,17 @@ struct FlipWindowRequest {
 // Compute a safe scheduling window for a DIR change.
 // We always schedule within the gap following the next STEP edge to ensure the
 // full period is available for pre/post guard.
-[[nodiscard]] inline bool compute_flip_window(FlipWindowRequest request, DirFlipWindow &win) {
-  using SharedStepTiming::GuardWindow;
+[[nodiscard]] inline bool compute_flip_window(FlipWindowRequest request, DirFlipWindow& win) {
   using SharedStepTiming::align_to_next_edge_us;
   using SharedStepTiming::guard_fits_between_edges;
+  using SharedStepTiming::GuardWindow;
 
   if (!guard_fits_between_edges(request.period_us, GuardWindow(kDirGuardPreUs, kDirGuardPostUs))) {
     return false;
   }
   // Next STEP edge after now
-  const uint64_t t_edge_next = align_to_next_edge_us(SharedStepTiming::PeriodAlignmentRequest(request.now_us, request.period_us));
+  const uint64_t t_edge_next = align_to_next_edge_us(
+      SharedStepTiming::PeriodAlignmentRequest(request.now_us, request.period_us));
   // Schedule at the middle of the gap to stay away from edges
   const uint64_t t_mid = t_edge_next + (request.period_us / 2U);
   win.t_dir_flip = t_mid;
@@ -51,4 +53,4 @@ struct FlipWindowRequest {
   return true;
 }
 
-} // namespace SharedStepGuards
+}  // namespace SharedStepGuards

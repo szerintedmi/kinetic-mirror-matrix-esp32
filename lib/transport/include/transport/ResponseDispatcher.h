@@ -1,12 +1,12 @@
 #pragma once
 
-#include <cstdint>
-#include <functional>
-#include <deque>
-#include <unordered_map>
-
-#include "transport/ResponseModel.h"
 #include "transport/CommandSchema.h"
+#include "transport/ResponseModel.h"
+
+#include <cstdint>
+#include <deque>
+#include <functional>
+#include <unordered_map>
 
 namespace transport {
 namespace response {
@@ -14,15 +14,15 @@ namespace response {
 class ResponseDispatcher {
 public:
   using SinkToken = std::uint32_t;
-  using SinkCallback = std::function<void(const Event &)>;
+  using SinkCallback = std::function<void(const Event&)>;
 
-  static ResponseDispatcher &Instance();
+  static ResponseDispatcher& Instance();
 
   SinkToken RegisterSink(SinkCallback cb);
   void UnregisterSink(SinkToken token);
-  void Emit(const Event &event);
+  void Emit(const Event& event);
   void Clear();
-  bool Replay(const std::string &cmd_id, const std::function<void(const Event &)> &cb) const;
+  bool Replay(const std::string& cmd_id, const std::function<void(const Event&)>& cb) const;
   std::size_t CachedCommandCount() const;
 
 private:
@@ -45,5 +45,5 @@ private:
   std::deque<std::string> order_;
 };
 
-} // namespace response
-} // namespace transport
+}  // namespace response
+}  // namespace transport

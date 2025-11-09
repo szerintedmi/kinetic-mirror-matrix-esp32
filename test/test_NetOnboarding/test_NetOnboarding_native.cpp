@@ -1,16 +1,16 @@
-#include <unity.h>
+#include "net_onboarding/NetOnboarding.h"
+
+#include <chrono>
 #include <string>
 #include <thread>
-#include <chrono>
-#include "net_onboarding/NetOnboarding.h"
+#include <unity.h>
 
 using namespace net_onboarding;
 
 void setUp() {}
 void tearDown() {}
 
-void test_begin_no_creds_enters_ap()
-{
+void test_begin_no_creds_enters_ap() {
   NetOnboarding n;
   n.configureStatusLed(13, false);
   // Short timeout to keep tests snappy, though we expect AP immediately with no creds
@@ -20,8 +20,7 @@ void test_begin_no_creds_enters_ap()
   TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, n.debugLedPattern(), "AP state should use fast blink pattern");
 }
 
-void test_set_creds_connect_timeout_falls_back_to_ap()
-{
+void test_set_creds_connect_timeout_falls_back_to_ap() {
   NetOnboarding n;
   n.configureStatusLed(14, false);
   n.setConnectTimeoutMs(150);
@@ -41,8 +40,7 @@ void test_set_creds_connect_timeout_falls_back_to_ap()
   TEST_ASSERT_EQUAL_UINT8_MESSAGE(3, n.debugLedPattern(), "Fallback AP should restore fast blink");
 }
 
-void test_led_fast_blink_toggles_in_ap()
-{
+void test_led_fast_blink_toggles_in_ap() {
   NetOnboarding n;
   n.configureStatusLed(12, false);
   n.begin(150);
@@ -52,14 +50,16 @@ void test_led_fast_blink_toggles_in_ap()
   auto start = std::chrono::steady_clock::now();
   while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(350)) {
     n.loop();
-    if (n.debugLedOn() != first) { toggled = true; break; }
+    if (n.debugLedOn() != first) {
+      toggled = true;
+      break;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(20));
   }
   TEST_ASSERT_TRUE_MESSAGE(toggled, "Fast blink should toggle within 350ms");
 }
 
-void test_led_slow_blink_when_connecting()
-{
+void test_led_slow_blink_when_connecting() {
   NetOnboarding n;
   n.configureStatusLed(11, false);
   n.setConnectTimeoutMs(600);
@@ -71,14 +71,16 @@ void test_led_slow_blink_when_connecting()
   auto start = std::chrono::steady_clock::now();
   while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(900)) {
     n.loop();
-    if (n.debugLedOn() != first) { toggled = true; break; }
+    if (n.debugLedOn() != first) {
+      toggled = true;
+      break;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
   }
   TEST_ASSERT_TRUE_MESSAGE(toggled, "Slow blink should toggle within 900ms");
 }
 
-void test_led_solid_when_connected()
-{
+void test_led_solid_when_connected() {
   NetOnboarding n;
   n.configureStatusLed(10, false);
   n.setConnectTimeoutMs(200);
@@ -88,7 +90,8 @@ void test_led_solid_when_connected()
   auto start = std::chrono::steady_clock::now();
   while (std::chrono::steady_clock::now() - start < std::chrono::milliseconds(400)) {
     n.loop();
-    if (n.status().state == State::CONNECTED) break;
+    if (n.status().state == State::CONNECTED)
+      break;
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   }
   TEST_ASSERT_EQUAL((int)State::CONNECTED, (int)n.status().state);

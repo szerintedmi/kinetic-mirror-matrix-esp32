@@ -2,13 +2,6 @@
 #include <Arduino.h>
 #endif
 
-#include <unity.h>
-
-#include <cctype>
-#include <cstdlib>
-#include <cstdio>
-#include <cstring>
-
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/command/CommandParser.h"
 #include "MotorControl/command/CommandUtils.h"
@@ -16,9 +9,15 @@
 #include "transport/CommandSchema.h"
 #include "transport/MessageId.h"
 
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <unity.h>
+
 using motor::command::CommandParser;
-using motor::command::ParsedCommand;
 using motor::command::ParseCsvQuoted;
+using motor::command::ParsedCommand;
 using motor::command::Trim;
 
 void test_parser_alias_to_upper() {
@@ -57,9 +56,8 @@ void test_execute_matches_serial_output() {
   MotorCommandProcessor proc;
   // Force deterministic msg_id generation so FormatForSerial and processLine
   // produce identical output during the test.
-  transport::message_id::SetGenerator([]() {
-    return std::string("00000000-0000-4000-8000-000000000123");
-  });
+  transport::message_id::SetGenerator(
+      []() { return std::string("00000000-0000-4000-8000-000000000123"); });
   transport::message_id::ClearActive();
   auto structured = proc.execute("HELP", 0);
   std::string formatted = motor::command::FormatForSerial(structured);
@@ -75,7 +73,7 @@ void test_execute_reports_errors_structurally() {
   MotorCommandProcessor proc;
   auto structured = proc.execute("FOO", 0);
   TEST_ASSERT_TRUE(structured.is_error);
-  const auto &lines = structured.structuredResponse().lines;
+  const auto& lines = structured.structuredResponse().lines;
   TEST_ASSERT_EQUAL_UINT32(1, lines.size());
   std::string line_text = transport::command::SerializeLine(lines[0]);
   TEST_ASSERT_TRUE(line_text.find("E01 BAD_CMD") != std::string::npos);
@@ -83,7 +81,7 @@ void test_execute_reports_errors_structurally() {
   TEST_ASSERT_EQUAL_STRING(formatted.c_str(), line_text.c_str());
 }
 
-static std::string msg_id_from(const std::string &line) {
+static std::string msg_id_from(const std::string& line) {
   auto pos = line.find("msg_id=");
   TEST_ASSERT_TRUE(pos != std::string::npos);
   pos += 6;  // skip past 'msg_id='
@@ -104,7 +102,7 @@ void test_batch_aggregates_estimate() {
   MotorCommandProcessor proc;
   auto structured = proc.execute("MOVE:0,100;MOVE:1,200", 0);
   TEST_ASSERT_FALSE(structured.is_error);
-  const auto &lines = structured.structuredResponse().lines;
+  const auto& lines = structured.structuredResponse().lines;
   TEST_ASSERT_EQUAL_UINT32(1, lines.size());
   std::string line_text = transport::command::SerializeLine(lines[0]);
   TEST_ASSERT_TRUE(line_text.find("CTRL:ACK") == 0);
@@ -115,7 +113,8 @@ void test_execute_cid_increments() {
   transport::message_id::SetGenerator([]() mutable {
     static uint64_t counter = 0;
     char buf[37];
-    std::snprintf(buf, sizeof(buf),
+    std::snprintf(buf,
+                  sizeof(buf),
                   "00000000-0000-4000-8000-%012llx",
                   static_cast<unsigned long long>(counter++));
     return std::string(buf);
@@ -123,15 +122,16 @@ void test_execute_cid_increments() {
   MotorCommandProcessor proc;
   auto first = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(first.is_error);
-  const auto &first_lines = first.structuredResponse().lines;
+  const auto& first_lines = first.structuredResponse().lines;
   TEST_ASSERT_TRUE(first_lines.size() >= 1);
   auto second = proc.execute("STATUS", 0);
   TEST_ASSERT_FALSE(second.is_error);
-  const auto &second_lines = second.structuredResponse().lines;
+  const auto& second_lines = second.structuredResponse().lines;
   TEST_ASSERT_TRUE(second_lines.size() >= 1);
   std::string first_text = transport::command::SerializeLine(first_lines[0]);
   std::string second_text = transport::command::SerializeLine(second_lines[0]);
-  TEST_ASSERT_TRUE_MESSAGE(std::strcmp(first_text.c_str(), second_text.c_str()) != 0,
-                          ("duplicate msg_id first=" + first_text + " second=" + second_text).c_str());
+  TEST_ASSERT_TRUE_MESSAGE(
+      std::strcmp(first_text.c_str(), second_text.c_str()) != 0,
+      ("duplicate msg_id first=" + first_text + " second=" + second_text).c_str());
   transport::message_id::ResetGenerator();
 }
