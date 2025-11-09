@@ -7,9 +7,11 @@
 #include "MotorControl/BuildConfig.h"
 
 // External pin integration state
+// NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 static IShift595 *g_shift = nullptr;
 static uint8_t g_dir_bits = 0;
 static uint8_t g_sleep_bits = 0;
+// NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 static constexpr uint8_t DIR_BASE = 0;    // virtual range [0..7]
 static constexpr uint8_t SLEEP_BASE = 32; // virtual range [32..39]
 static constexpr uint8_t kMotorSlots = 8;

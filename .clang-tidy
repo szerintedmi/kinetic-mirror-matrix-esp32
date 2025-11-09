@@ -4,10 +4,17 @@ Checks: >
   clang-diagnostic-*,
   modernize-*,
   readability-*,
+  cppcoreguidelines-*,
   performance-*,
   misc-unused-parameters,
   portability-simd-intrinsics,
   -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-no-malloc,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-init-variables,
   -modernize-use-trailing-return-type
 WarningsAsErrors: 'bugprone-*,clang-diagnostic-*'
 HeaderFilterRegex: '^(src|lib|include/(?!secrets\.h$))(?!.*(test|tests)/)'

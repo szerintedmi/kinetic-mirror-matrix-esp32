@@ -49,8 +49,8 @@ bool StatusTopicHasDeviceId(const std::string &topic)
 {
   constexpr const char *kPrefix = "devices/";
   constexpr const char *kSuffix = "/status";
-  const size_t prefix_length = std::strlen(kPrefix);
-  const size_t suffix_length = std::strlen(kSuffix);
+  const size_t prefix_length = std::strlen(kPrefix); // NOLINT(cppcoreguidelines-init-variables)
+  const size_t suffix_length = std::strlen(kSuffix); // NOLINT(cppcoreguidelines-init-variables)
   if (topic.size() <= prefix_length + suffix_length)
   {
     return false;
@@ -63,7 +63,7 @@ bool StatusTopicHasDeviceId(const std::string &topic)
   {
     return false;
   }
-  std::string node_segment = topic.substr(prefix_length, topic.size() - prefix_length - suffix_length);
+  std::string node_segment = topic.substr(prefix_length, topic.size() - prefix_length - suffix_length); // NOLINT(cppcoreguidelines-init-variables)
   return !node_segment.empty() && (node_segment.find('/') == std::string::npos);
 }
 
@@ -89,7 +89,7 @@ void ProcessSerialInput(SerialConsoleState &state)
 {
   while (Serial.available() > 0)
   {
-    const char input_char = static_cast<char>(Serial.read());
+    const char input_char = static_cast<char>(Serial.read()); // NOLINT(cppcoreguidelines-init-variables)
     if (input_char == '\r')
     {
       continue;
@@ -161,8 +161,8 @@ void TickBackends(SerialConsoleState &state, uint32_t now_ms)
   bool any_moving = false;
   bool any_awake = false;
   MotorController &controller = state.command_processor->controller();
-  size_t motor_count = controller.motorCount();
-  for (size_t motor_index = 0; motor_index < motor_count; ++motor_index)
+  size_t motor_count = controller.motorCount(); // NOLINT(cppcoreguidelines-init-variables)
+  for (size_t motor_index = 0; motor_index < motor_count; ++motor_index) // NOLINT(cppcoreguidelines-init-variables)
   {
     const MotorState &motor_state = controller.state(motor_index);
     if (motor_state.moving)
@@ -230,7 +230,7 @@ void serial_console_setup()
     state.serial_sink_token = transport::response::ResponseDispatcher::Instance().RegisterSink(
         [](const transport::response::Event &evt) {
           auto line = transport::response::EventToLine(evt);
-          std::string text = line.raw.empty() ? transport::command::SerializeLine(line) : line.raw;
+          std::string text = line.raw.empty() ? transport::command::SerializeLine(line) : line.raw; // NOLINT(cppcoreguidelines-init-variables)
           if (!text.empty())
           {
             Serial.println(text.c_str());
@@ -276,7 +276,7 @@ void serial_console_setup()
 void serial_console_tick()
 {
   auto &state = ConsoleState();
-  const uint32_t now_ms = millis();
+  const uint32_t now_ms = millis(); // NOLINT(cppcoreguidelines-init-variables)
   if (HandleGracePeriod(state, now_ms))
   {
     return;

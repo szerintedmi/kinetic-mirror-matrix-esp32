@@ -9,7 +9,8 @@ constexpr uint32_t kImmediateFlipDelayUs = 3;
 }
 
 // Static storage for ISR hook
-SharedStepAdapterEsp32* SharedStepAdapterEsp32::self_ = nullptr;
+SharedStepAdapterEsp32* SharedStepAdapterEsp32::self_ = nullptr; // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_() {
   if (self_) {
     self_->phase_anchor_us_ = micros();

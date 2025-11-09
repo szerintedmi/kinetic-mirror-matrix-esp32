@@ -13,6 +13,7 @@ static constexpr int kStepPin = SHARED_STEP_GPIO; // overridable via -DSHARED_ST
 static constexpr rmt_channel_t kRmtChannel = RMT_CHANNEL_7; // avoid common channel collisions
 
 // Forward decl of ISR callback
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 static void IRAM_ATTR on_rmt_tx_end(rmt_channel_t channel, void* arg);
 
 SharedStepRmtGenerator::SharedStepRmtGenerator() = default;
@@ -33,6 +34,7 @@ static inline rmt_item32_t make_square_item(SquareWaveDurations durations)
   return square_item;
 }
 
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
 void IRAM_ATTR SharedStepRmtGenerator::onTxEndIsr()
 {
   if (!running_) return;

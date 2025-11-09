@@ -21,7 +21,7 @@ using net_onboarding::Net;
 using ResponseAttribute = std::pair<const char *, std::string>;
 using ResponseAttributeList = std::initializer_list<ResponseAttribute>;
 
-static State g_last_state = State::AP_ACTIVE; // will be updated after begin()
+static State g_last_state = State::AP_ACTIVE; // will be updated after begin() // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
 constexpr uint32_t kResetHoldMs = 5000;
 constexpr uint32_t kConnectTimeoutMs = 8000;
 

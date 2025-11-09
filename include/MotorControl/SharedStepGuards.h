@@ -42,9 +42,9 @@ struct FlipWindowRequest {
     return false;
   }
   // Next STEP edge after now
-  const uint64_t t_edge_next{align_to_next_edge_us(SharedStepTiming::PeriodAlignmentRequest(request.now_us, request.period_us))};
+  const uint64_t t_edge_next = align_to_next_edge_us(SharedStepTiming::PeriodAlignmentRequest(request.now_us, request.period_us));
   // Schedule at the middle of the gap to stay away from edges
-  const uint64_t t_mid{t_edge_next + (request.period_us / 2U)};
+  const uint64_t t_mid = t_edge_next + (request.period_us / 2U);
   win.t_dir_flip = t_mid;
   win.t_sleep_low = t_mid - kDirGuardPreUs;
   win.t_sleep_high = t_mid + kDirGuardPostUs;

@@ -32,8 +32,8 @@ struct StopDistanceRequest {
     return 0;
   }
   // Round to nearest integer microseconds
-  const uint64_t denom{static_cast<uint64_t>(speed_sps)};
-  const uint64_t rounded_period_us{(1000000ULL + (denom / 2ULL)) / denom};
+  const uint64_t denom = static_cast<uint64_t>(speed_sps);
+  const uint64_t rounded_period_us = (1000000ULL + (denom / 2ULL)) / denom;
   return static_cast<uint32_t>(rounded_period_us > 0 ? rounded_period_us : 1ULL);
 }
 
@@ -43,7 +43,7 @@ struct StopDistanceRequest {
   if (request.period_us == 0) {
     return request.timestamp_us;
   }
-  const uint64_t remainder{request.timestamp_us % request.period_us};
+  const uint64_t remainder = request.timestamp_us % request.period_us;
   return (remainder == 0)
              ? request.timestamp_us
              : (request.timestamp_us + (request.period_us - remainder));
@@ -52,7 +52,7 @@ struct StopDistanceRequest {
 // Return true if a guard window (pre+post) comfortably fits between STEP edges
 // for the given period. This is a quick feasibility check for DIR flips.
 [[nodiscard]] inline bool guard_fits_between_edges(uint32_t period_us, GuardWindow guard) {
-  const uint64_t total_guard{static_cast<uint64_t>(guard.pre_us) + static_cast<uint64_t>(guard.post_us)};
+  const uint64_t total_guard = static_cast<uint64_t>(guard.pre_us) + static_cast<uint64_t>(guard.post_us);
   return (period_us > 0U) && (total_guard + 2U /*margin*/ < period_us);
 }
 
@@ -62,8 +62,8 @@ struct StopDistanceRequest {
   if (request.accel_sps2 == 0U) {
     return 0;
   }
-  const uint64_t speed_squared{static_cast<uint64_t>(request.speed_sps) * static_cast<uint64_t>(request.speed_sps)};
-  const uint64_t denominator{2ULL * static_cast<uint64_t>(request.accel_sps2)};
+  const uint64_t speed_squared = static_cast<uint64_t>(request.speed_sps) * static_cast<uint64_t>(request.speed_sps);
+  const uint64_t denominator = 2ULL * static_cast<uint64_t>(request.accel_sps2);
   return static_cast<uint32_t>((speed_squared + denominator - 1ULL) / denominator);
 }
 
