@@ -1,0 +1,23 @@
+Checks: >
+  bugprone-*,
+  clang-analyzer-*,
+  clang-diagnostic-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  misc-unused-parameters,
+  portability-simd-intrinsics,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-no-malloc,
+  -cppcoreguidelines-owning-memory,
+  -modernize-use-trailing-return-type
+WarningsAsErrors: 'bugprone-*,clang-diagnostic-*'
+HeaderFilterRegex: '^(src|include|lib)/(?!.*(test|tests)/)'
+FormatStyle: file
+ExtraArgs: ['-std=gnu++17']
+CheckOptions:
+  - key: readability-qualified-auto.AllowMemberFunctionsWithTemplateReturnType
+    value: '1'

@@ -251,3 +251,11 @@ Runtime Controls (device)
 - Constants: [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h)
 - Tests (C++): [test_MotorControl](./test/test_MotorControl/), [test_Drivers](./test/test_Drivers/)
 - Host CLI: [tools/serial_cli](./tools/serial_cli/)
+
+## Linting & Formatting
+
+1. Install the VS Code `llvm-vs-code-extensions.vscode-clangd` extension (recommended via `.vscode/extensions.json`).
+2. Generate `compile_commands.json` for whichever env you're editing whenever build flags change so clangd and clang-tidy see the right includes: `pio run -t compiledb -e esp32DedicatedStep` (add more `-e` flags as needed).
+3. Format C/C++ files on save (enabled in `.vscode/settings.json`) using the shared [`.clang-format`](./.clang-format).
+4. clangd runs clang-tidy inline using [`.clang-tidy`](./.clang-tidy); open any source file to see diagnostics.
+5. Run `pio check` before committing to execute the same clang-tidy and cppcheck rules that CI will enforce.
