@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 
 // ESP32 DevKit default pin assignments for this project
 
@@ -14,7 +15,7 @@ constexpr int SHIFT595_RCLK = 5;
 constexpr int SHIFT595_OE = 22;
 
 // STEP pins for motors 0..7
-constexpr int STEP_PINS[8] = {32, 25, 27, 13, 21, 19, 17, 4};
+constexpr std::array<int, 8> STEP_PINS = {32, 25, 27, 13, 21, 19, 17, 4};
 
 // Status LED (on-board LED on GPIO2, active-low)
 constexpr int  STATUS_LED_PIN        = 2;

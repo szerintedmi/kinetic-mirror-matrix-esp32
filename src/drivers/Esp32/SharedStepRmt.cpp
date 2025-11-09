@@ -7,7 +7,7 @@
 
 // RMT-based shared STEP generator
 #ifndef SHARED_STEP_GPIO
-#define SHARED_STEP_GPIO 4
+#define SHARED_STEP_GPIO 4 // NOLINT(cppcoreguidelines-macro-usage)
 #endif
 static constexpr int kStepPin = SHARED_STEP_GPIO; // overridable via -DSHARED_STEP_GPIO
 static constexpr rmt_channel_t kRmtChannel = RMT_CHANNEL_7; // avoid common channel collisions
@@ -15,17 +15,22 @@ static constexpr rmt_channel_t kRmtChannel = RMT_CHANNEL_7; // avoid common chan
 // Forward decl of ISR callback
 static void IRAM_ATTR on_rmt_tx_end(rmt_channel_t channel, void* arg);
 
-SharedStepRmtGenerator::SharedStepRmtGenerator()
-    : speed_sps_(0), hook_(nullptr), running_(false) {}
+SharedStepRmtGenerator::SharedStepRmtGenerator() = default;
 
-static inline rmt_item32_t make_square_item(uint16_t high_us, uint16_t low_us)
+struct SquareWaveDurations {
+  uint16_t high_us = 0;
+  uint16_t low_us = 0;
+  explicit constexpr SquareWaveDurations(uint16_t high = 0, uint16_t low = 0) : high_us(high), low_us(low) {}
+};
+
+static inline rmt_item32_t make_square_item(SquareWaveDurations durations)
 {
-  rmt_item32_t it{};
-  it.level0 = 1;
-  it.duration0 = high_us;
-  it.level1 = 0;
-  it.duration1 = low_us;
-  return it;
+  rmt_item32_t square_item{};
+  square_item.level0 = 1;
+  square_item.duration0 = durations.high_us;
+  square_item.level1 = 0;
+  square_item.duration1 = durations.low_us;
+  return square_item;
 }
 
 void IRAM_ATTR SharedStepRmtGenerator::onTxEndIsr()
@@ -35,7 +40,7 @@ void IRAM_ATTR SharedStepRmtGenerator::onTxEndIsr()
   if (period < 2) period = 2;
   uint32_t half = period / 2;
   if (half > 32767) half = 32767;
-  rmt_item32_t item = make_square_item((uint16_t)half, (uint16_t)half);
+  rmt_item32_t item = make_square_item(SquareWaveDurations(static_cast<uint16_t>(half), static_cast<uint16_t>(half)));
   // Queue next item without waiting; generator continues seamlessly
   rmt_write_items(kRmtChannel, &item, 1, false);
   if (hook_) {
@@ -96,7 +101,7 @@ void SharedStepRmtGenerator::start()
   if (period < 2) period = 2;
   uint32_t half = period / 2;
   if (half > 32767) half = 32767;
-  rmt_item32_t item = make_square_item((uint16_t)half, (uint16_t)half);
+  rmt_item32_t item = make_square_item(SquareWaveDurations(static_cast<uint16_t>(half), static_cast<uint16_t>(half)));
   rmt_write_items(kRmtChannel, &item, 1, false);
   running_ = true;
 }

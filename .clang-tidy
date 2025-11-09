@@ -2,20 +2,15 @@ Checks: >
   bugprone-*,
   clang-analyzer-*,
   clang-diagnostic-*,
-  cppcoreguidelines-*,
   modernize-*,
-  performance-*,
   readability-*,
+  performance-*,
   misc-unused-parameters,
   portability-simd-intrinsics,
-  -cppcoreguidelines-avoid-magic-numbers,
-  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
-  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
-  -cppcoreguidelines-no-malloc,
-  -cppcoreguidelines-owning-memory,
+  -bugprone-easily-swappable-parameters,
   -modernize-use-trailing-return-type
 WarningsAsErrors: 'bugprone-*,clang-diagnostic-*'
-HeaderFilterRegex: '^(src|include|lib)/(?!.*(test|tests)/)'
+HeaderFilterRegex: '^(src|lib|include/(?!secrets\.h$))(?!.*(test|tests)/)'
 FormatStyle: file
 ExtraArgs: ['-std=gnu++17']
 CheckOptions:

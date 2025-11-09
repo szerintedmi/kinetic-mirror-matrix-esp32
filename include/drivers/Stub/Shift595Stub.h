@@ -1,5 +1,5 @@
 #pragma once
-#include <stdint.h>
+#include <cstdint>
 #include "Hal/Shift595.h"
 
 class Shift595Stub : public IShift595 {
@@ -13,13 +13,12 @@ public:
   }
 
   // Accessors for tests
-  uint8_t last_dir() const { return last_dir_; }
-  uint8_t last_sleep() const { return last_sleep_; }
-  unsigned latch_count() const { return latch_count_; }
+  [[nodiscard]] uint8_t last_dir() const { return last_dir_; }
+  [[nodiscard]] uint8_t last_sleep() const { return last_sleep_; }
+  [[nodiscard]] unsigned latch_count() const { return latch_count_; }
 
 private:
   uint8_t last_dir_ = 0;
   uint8_t last_sleep_ = 0;
   unsigned latch_count_ = 0;
 };
-

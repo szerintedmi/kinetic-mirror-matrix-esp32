@@ -4,6 +4,10 @@
 using namespace SharedStepTiming;
 using namespace SharedStepGuards;
 
+namespace {
+constexpr uint32_t kImmediateFlipDelayUs = 3;
+}
+
 // Static storage for ISR hook
 SharedStepAdapterEsp32* SharedStepAdapterEsp32::self_ = nullptr;
 void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_() {
@@ -12,7 +16,7 @@ void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_() {
   }
 }
 
-SharedStepAdapterEsp32::SharedStepAdapterEsp32() {}
+SharedStepAdapterEsp32::SharedStepAdapterEsp32() = default;
 
 void SharedStepAdapterEsp32::begin() {
   gen_.begin();
@@ -24,7 +28,7 @@ void SharedStepAdapterEsp32::begin() {
   period_us_ = 0;
   dir_bits_ = 0;
   sleep_bits_ = 0;
-  for (uint8_t i = 0; i < 8; ++i) { slots_[i] = Slot{}; flips_[i] = FlipSchedule{}; }
+  for (uint8_t i = 0; i < kMotorSlots; ++i) { slots_[i] = Slot{}; flips_[i] = FlipSchedule{}; }
   v_cur_sps_ = 0;
   v_max_sps_ = 0;
   a_sps2_ = 0;
@@ -34,32 +38,31 @@ void SharedStepAdapterEsp32::begin() {
 }
 
 void SharedStepAdapterEsp32::maybeStartGen_(int speed_sps) const {
+  uint32_t speed_setting = static_cast<uint32_t>((speed_sps > 0) ? speed_sps : static_cast<int>(kMinGenSps));
+  if (speed_setting < kMinGenSps) {
+    speed_setting = kMinGenSps;
+  }
+
+  const bool need_speed_update = !gen_running_ || (speed_setting != static_cast<uint32_t>(current_speed_sps_));
+  if (!need_speed_update) {
+    return;
+  }
+
+  gen_.setSpeed(speed_setting);
   if (!gen_running_) {
-    uint32_t sp = (uint32_t)((speed_sps > 0) ? speed_sps : (int)kMinGenSps);
-    if (sp < kMinGenSps) sp = kMinGenSps;
-    gen_.setSpeed(sp);
     gen_.start();
     gen_running_ = true;
-    current_speed_sps_ = (int)sp;
-    period_us_ = step_period_us(sp);
-    phase_anchor_us_ = micros();
-    
-  } else {
-    if (speed_sps != current_speed_sps_) {
-      uint32_t sp = (uint32_t)((speed_sps > 0) ? speed_sps : (int)kMinGenSps);
-      if (sp < kMinGenSps) sp = kMinGenSps;
-      gen_.setSpeed(sp);
-      current_speed_sps_ = (int)sp;
-      period_us_ = step_period_us(sp);
-      phase_anchor_us_ = micros();
-      
-    }
   }
+  current_speed_sps_ = static_cast<int>(speed_setting);
+  period_us_ = step_period_us(speed_setting);
+  phase_anchor_us_ = micros();
 }
 
 void SharedStepAdapterEsp32::maybeStopGen_() const {
-  for (uint8_t i = 0; i < 8; ++i) {
-    if (slots_[i].moving) return;
+  for (uint8_t i = 0; i < kMotorSlots; ++i) {
+    if (slots_[i].moving) {
+      return;
+    }
   }
   if (gen_running_) {
     gen_.stop();
@@ -68,80 +71,126 @@ void SharedStepAdapterEsp32::maybeStopGen_() const {
 }
 
 void SharedStepAdapterEsp32::flushLatch_() const {
-  if (shift_) {
+  if (shift_ != nullptr) {
     shift_->setDirSleep(dir_bits_, sleep_bits_);
   }
 }
 
-void SharedStepAdapterEsp32::enableOutputs(uint8_t id) {
-  if (id >= 8) return;
-  slots_[id].awake = true;
-  slots_[id].forced_awake = true;
-  sleep_bits_ |= (1u << id);
+void SharedStepAdapterEsp32::setDirectionBit_(uint8_t motor_id, int dir_sign) const { // NOLINT(readability-convert-member-functions-to-static)
+  const uint8_t mask = static_cast<uint8_t>(1u << motor_id);
+  if (dir_sign > 0) {
+    dir_bits_ |= mask;
+    return;
+  }
+  dir_bits_ &= static_cast<uint8_t>(~mask);
+}
+
+bool SharedStepAdapterEsp32::computeMotionWindow_(uint32_t *min_remaining) const { // NOLINT(readability-convert-member-functions-to-static)
+  bool any_moving = false;
+  uint32_t local_min = UINT_MAX;
+  for (uint8_t motor_index = 0; motor_index < kMotorSlots; ++motor_index) {
+    const Slot &slot = slots_[motor_index];
+    if (!slot.moving) {
+      continue;
+    }
+    any_moving = true;
+    long remaining = slot.target - slot.pos;
+    if (remaining < 0) {
+      remaining = -remaining;
+    }
+    const uint32_t remaining_u32 = static_cast<uint32_t>(remaining);
+    if (remaining_u32 < local_min) {
+      local_min = remaining_u32;
+    }
+  }
+  if (any_moving && min_remaining != nullptr) {
+    *min_remaining = local_min;
+  }
+  return any_moving;
+}
+
+void SharedStepAdapterEsp32::enableOutputs(uint8_t motor_id) {
+  if (motor_id >= kMotorSlots) {
+    return;
+  }
+  slots_[motor_id].awake = true;
+  slots_[motor_id].forced_awake = true;
+  sleep_bits_ |= (1u << motor_id);
   flushLatch_();
 }
 
-void SharedStepAdapterEsp32::disableOutputs(uint8_t id) {
-  if (id >= 8) return;
-  slots_[id].awake = false;
-  slots_[id].forced_awake = false;
-  sleep_bits_ &= (uint8_t)~(1u << id);
+void SharedStepAdapterEsp32::disableOutputs(uint8_t motor_id) {
+  if (motor_id >= kMotorSlots) {
+    return;
+  }
+  slots_[motor_id].awake = false;
+  slots_[motor_id].forced_awake = false;
+  sleep_bits_ &= (uint8_t)~(1u << motor_id);
   flushLatch_();
 }
 
-bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, int accel) {
-  if (id >= 8) return false;
-  Slot &s = slots_[id];
-  long delta = target - s.pos;
-  if (delta == 0) { s.moving = false; return true; }
+bool SharedStepAdapterEsp32::startMoveAbs(uint8_t motor_id, long target, int speed, int accel) {
+  if (motor_id >= kMotorSlots) {
+    return false;
+  }
+  Slot &slot = slots_[motor_id];
+  long delta = target - slot.pos;
+  if (delta == 0) {
+    slot.moving = false;
+    return true;
+  }
   int desired_dir = (delta > 0) ? +1 : -1;
-  int cur_dir_sign = (dir_bits_ & (1u << id)) ? +1 : -1;
+  int cur_dir_sign = (dir_bits_ & (1u << motor_id)) ? +1 : -1;
   bool need_flip = (desired_dir != cur_dir_sign);
-  s.target = target;
-  s.speed_sps = speed > 0 ? speed : 1;
+  slot.target = target;
+  slot.speed_sps = speed > 0 ? speed : 1;
   // Update global ramp targets
-  v_max_sps_ = s.speed_sps;
+  v_max_sps_ = slot.speed_sps;
   a_sps2_ = (accel > 0) ? accel : 1;
   // If direction must change, force SLEEP low before scheduling flip
   if (need_flip) {
-    sleep_bits_ &= (uint8_t)~(1u << id);
+    sleep_bits_ &= (uint8_t)~(1u << motor_id);
     flushLatch_();
   }
   
   // Decide safe approach: if generator is running, schedule a guarded flip in the next safe gap.
   // Otherwise, perform immediate safe sequence before starting pulses.
-  FlipSchedule &fs = flips_[id];
-  fs.active = false; fs.phase = 0; fs.new_dir_sign = desired_dir;
+  FlipSchedule &flip_schedule = flips_[motor_id];
+  flip_schedule.active = false;
+  flip_schedule.phase = 0;
+  flip_schedule.new_dir_sign = desired_dir;
   uint32_t now_us = micros();
   if (need_flip && gen_running_ && period_us_ > 0) {
-    DirFlipWindow w{};
+    DirFlipWindow flip_window{};
     uint64_t now_rel = (now_us >= phase_anchor_us_) ? (now_us - phase_anchor_us_) : 0;
-    if (compute_flip_window(now_rel, period_us_, w)) {
-      fs.w.t_sleep_low = w.t_sleep_low + phase_anchor_us_;
-      fs.w.t_dir_flip  = w.t_dir_flip  + phase_anchor_us_;
-      fs.w.t_sleep_high= w.t_sleep_high+ phase_anchor_us_;
-      fs.phase = 0;
-      fs.active = true;
+    if (compute_flip_window(FlipWindowRequest(now_rel, period_us_), flip_window)) {
+      flip_schedule.w.t_sleep_low = flip_window.t_sleep_low + phase_anchor_us_;
+      flip_schedule.w.t_dir_flip  = flip_window.t_dir_flip  + phase_anchor_us_;
+      flip_schedule.w.t_sleep_high= flip_window.t_sleep_high+ phase_anchor_us_;
+      flip_schedule.phase = 0;
+      flip_schedule.active = true;
     }
   }
-  if (!fs.active) {
+  if (!flip_schedule.active) {
     if (need_flip) {
       // Immediate safe flip while generator is idle (or as a fallback)
-      if (desired_dir > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
+      setDirectionBit_(motor_id, desired_dir);
       flushLatch_();
-      delayMicroseconds(3);
+      delayMicroseconds(kImmediateFlipDelayUs);
     }
     // Enable output without delay if direction already matches (no hazard)
-    sleep_bits_ |= (1u << id);
+    sleep_bits_ |= (1u << motor_id);
     flushLatch_();
-    slots_[id].awake = true;
+    slots_[motor_id].awake = true;
   }
   // Start move bookkeeping; s.awake becomes true after SLEEP high phase
-  s.dir_sign = desired_dir;
-  s.moving = true;
-  if (fs.active) s.awake = false; // will set true after guard window
-  s.last_us = micros();
-  s.acc_us = 0;
+  slot.dir_sign = desired_dir;
+  slot.moving = true;
+  if (flip_schedule.active) {
+    slot.awake = false; // will set true after guard window
+  }
+  slot.last_us = micros();
+  slot.acc_us = 0;
   // Ensure generator is running and ramp state initialized/updated
   if (!gen_running_) {
     // Start at a conservative speed for valid RMT durations, ramp from there
@@ -155,38 +204,40 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t id, long target, int speed, in
   return true;
 }
 
-void SharedStepAdapterEsp32::updateProgress_(uint8_t id) const {
-  Slot &s = const_cast<Slot&>(slots_[id]);
-  if (!s.moving) return;
+void SharedStepAdapterEsp32::updateProgress_(uint8_t motor_id) const {
+  Slot &slot = const_cast<Slot&>(slots_[motor_id]);
+  if (!slot.moving) {
+    return;
+  }
   uint32_t now_us = micros();
-  uint32_t dt_us = now_us - s.last_us;
-  s.last_us = now_us;
+  uint32_t dt_us = now_us - slot.last_us;
+  slot.last_us = now_us;
   // Handle any pending guarded flip/gating for this motor
-  runFlipScheduler_(id, now_us);
+  runFlipScheduler_(motor_id, now_us);
   // Integrate position using global generator speed (shared STEP)
-  if (s.awake && current_speed_sps_ > 0) {
-    uint64_t total = (uint64_t)dt_us * (uint64_t)current_speed_sps_ + (uint64_t)s.acc_us;
+  if (slot.awake && current_speed_sps_ > 0) {
+    uint64_t total = (uint64_t)dt_us * (uint64_t)current_speed_sps_ + (uint64_t)slot.acc_us;
     uint32_t steps = (uint32_t)(total / 1000000ULL);
-    s.acc_us = (uint32_t)(total % 1000000ULL);
+    slot.acc_us = (uint32_t)(total % 1000000ULL);
     if (steps > 0) {
-      long new_pos = s.pos + (long)(s.dir_sign * (int)steps);
-      if (s.dir_sign > 0) {
-        if (new_pos >= s.target) { new_pos = s.target; s.moving = false; }
+      long new_pos = slot.pos + (long)(slot.dir_sign * (int)steps);
+      if (slot.dir_sign > 0) {
+        if (new_pos >= slot.target) { new_pos = slot.target; slot.moving = false; }
       } else {
-        if (new_pos <= s.target) { new_pos = s.target; s.moving = false; }
+        if (new_pos <= slot.target) { new_pos = slot.target; slot.moving = false; }
       }
-      s.pos = new_pos;
+      slot.pos = new_pos;
     }
   }
   // Update global ramp after integrating at least one motor
   updateRamp_(now_us);
-  if (!s.moving) {
+  if (!slot.moving) {
     // If no slots moving, stop generator
-    if (!s.forced_awake) {
+    if (!slot.forced_awake) {
       // Auto-sleep this motor when it finishes
-      sleep_bits_ &= (uint8_t)~(1u << id);
+      sleep_bits_ &= (uint8_t)~(1u << motor_id);
       flushLatch_();
-      s.awake = false;
+      slot.awake = false;
       
     }
     maybeStopGen_();
@@ -194,19 +245,8 @@ void SharedStepAdapterEsp32::updateProgress_(uint8_t id) const {
 }
 
 void SharedStepAdapterEsp32::updateRamp_(uint32_t now_us) const {
-  // Determine if any motor is moving
   uint32_t min_remaining = UINT_MAX;
-  bool any_moving = false;
-  for (uint8_t i = 0; i < 8; ++i) {
-    const Slot &s = slots_[i];
-    if (!s.moving) continue;
-    any_moving = true;
-    long d = s.target - s.pos;
-    if (d < 0) d = -d;
-    if ((uint32_t)d < min_remaining) min_remaining = (uint32_t)d;
-  }
-  if (!any_moving) {
-    // No motion requested: stop generator and reset ramp
+  if (!computeMotionWindow_(&min_remaining)) {
     if (gen_running_) {
       gen_.stop();
       gen_running_ = false;
@@ -219,120 +259,121 @@ void SharedStepAdapterEsp32::updateRamp_(uint32_t now_us) const {
     return;
   }
 
-  // Compute dt since last ramp update
-  uint32_t dt_us = (ramp_last_us_ <= now_us) ? (now_us - ramp_last_us_) : 0;
-  if (dt_us == 0) return;
+  const uint32_t elapsed_us = (now_us >= ramp_last_us_) ? (now_us - ramp_last_us_) : 0U;
+  if (elapsed_us == 0U) {
+    return;
+  }
   ramp_last_us_ = now_us;
 
-  // Decide whether to accelerate, coast, or decelerate
-  uint32_t accel_up = (a_sps2_ > 0) ? (uint32_t)a_sps2_ : 1u;
-  uint32_t decel_down = (d_sps2_ > 0) ? (uint32_t)d_sps2_ : 0u;
-  uint32_t vcur = (v_cur_sps_ > 0) ? (uint32_t)v_cur_sps_ : 0u;
-  uint32_t vmax = (v_max_sps_ > 0) ? (uint32_t)v_max_sps_ : (uint32_t)kMinGenSps;
-  // stop distance to zero under accel: ceil(v^2 / (2a))
-  uint32_t d_stop = 0;
-  if (decel_down > 0) {
-    d_stop = ceil_div_u32((uint64_t)vcur * (uint64_t)vcur, 2ull * (uint64_t)decel_down);
-  }
-  bool need_decel = (decel_down > 0) && ((min_remaining <= d_stop) || (vcur > vmax));
-  bool need_accel = (!need_decel) && (vcur < vmax);
-  // Compute dv = accel * dt (sps^2 * us / 1e6)
-  uint32_t a_eff = need_accel ? accel_up : (need_decel ? decel_down : 0u);
-  uint64_t inc = (uint64_t)a_eff * (uint64_t)dt_us + (uint64_t)dv_accum_;
-  uint32_t dv = (uint32_t)(inc / 1000000ull);
-  dv_accum_ = (uint32_t)(inc % 1000000ull);
-  int new_v = (int)vcur;
-  if (need_accel && dv > 0) {
-    new_v += (int)dv;
-    if (new_v > vmax) new_v = (int)vmax;
-  } else if (need_decel && dv > 0) {
-    new_v -= (int)dv;
-    if (new_v < 0) new_v = 0;
-  } else {
-    // Keep dv accumulator from growing unbounded without changes
+  const uint32_t accel_up = (a_sps2_ > 0) ? static_cast<uint32_t>(a_sps2_) : 1U;
+  const uint32_t decel_down = (d_sps2_ > 0) ? static_cast<uint32_t>(d_sps2_) : 0U;
+  const uint32_t current_speed = (v_cur_sps_ > 0) ? static_cast<uint32_t>(v_cur_sps_) : 0U;
+  const uint32_t target_speed = (v_max_sps_ > 0) ? static_cast<uint32_t>(v_max_sps_) : static_cast<uint32_t>(kMinGenSps);
+
+  uint32_t stopping_distance = 0;
+  if (decel_down > 0U) {
+    stopping_distance = ceil_div_u32(DivisionOperands(
+        static_cast<uint64_t>(current_speed) * static_cast<uint64_t>(current_speed),
+        2ULL * static_cast<uint64_t>(decel_down)));
   }
 
-  // Apply minimum running speed clamp for generator hardware when non-zero
-  int apply_v = new_v;
-  if (apply_v > 0 && apply_v < (int)kMinGenSps) apply_v = (int)kMinGenSps;
+  const bool need_decel = (decel_down > 0U) && ((min_remaining <= stopping_distance) || (current_speed > target_speed));
+  const bool need_accel = (!need_decel) && (current_speed < target_speed);
 
-  if (!gen_running_) {
-    maybeStartGen_(apply_v);
-  } else if (apply_v != current_speed_sps_) {
-    maybeStartGen_(apply_v);
+  const uint32_t accel_effective = need_accel ? accel_up : (need_decel ? decel_down : 0U);
+  const uint64_t dv_total = static_cast<uint64_t>(accel_effective) * static_cast<uint64_t>(elapsed_us) + static_cast<uint64_t>(dv_accum_);
+  const uint32_t delta_velocity = static_cast<uint32_t>(dv_total / 1000000ULL);
+  dv_accum_ = static_cast<uint32_t>(dv_total % 1000000ULL);
+
+  int new_speed = static_cast<int>(current_speed);
+  if (need_accel && delta_velocity > 0U) {
+    new_speed += static_cast<int>(delta_velocity);
+    if (new_speed > static_cast<int>(target_speed)) {
+      new_speed = static_cast<int>(target_speed);
+    }
+  } else if (need_decel && delta_velocity > 0U) {
+    new_speed -= static_cast<int>(delta_velocity);
+    if (new_speed < 0) {
+      new_speed = 0;
+    }
   }
-  v_cur_sps_ = new_v;
+
+  int commanded_speed = new_speed;
+  if (commanded_speed > 0 && commanded_speed < static_cast<int>(kMinGenSps)) {
+    commanded_speed = static_cast<int>(kMinGenSps);
+  }
+
+  if (!gen_running_ || commanded_speed != current_speed_sps_) {
+    maybeStartGen_(commanded_speed);
+  }
+  v_cur_sps_ = new_speed;
 }
 
-void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t id, uint32_t now_us) const {
-  FlipSchedule &fs = const_cast<FlipSchedule&>(flips_[id]);
-  if (!fs.active) return;
-  // If we passed the intended window due to coarse polling, recompute a new window
+void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t motor_id, uint32_t now_us) const {
+  FlipSchedule &schedule = const_cast<FlipSchedule&>(flips_[motor_id]);
+  if (!schedule.active) {
+    return;
+  }
   if (period_us_ == 0) {
-    fs.active = false;
+    schedule.active = false;
     return;
   }
-  // Fast-forward: if we've already passed the end of the window, complete in one shot
-  if (now_us >= fs.w.t_sleep_high) {
-    if (fs.new_dir_sign > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
-    sleep_bits_ |= (1u << id);
+    if (now_us >= schedule.w.t_sleep_high) {
+      setDirectionBit_(motor_id, schedule.new_dir_sign);
+      sleep_bits_ |= (1u << motor_id);
+      flushLatch_();
+      slots_[motor_id].awake = true;
+    schedule.active = false;
+    return;
+  }
+  if (schedule.phase == 0) {
+    if (now_us >= schedule.w.t_sleep_low) {
+      sleep_bits_ &= (uint8_t)~(1u << motor_id);
+      flushLatch_();
+      schedule.phase = 1;
+    } else {
+      return;
+    }
+  }
+  if (schedule.phase == 1) {
+    if (now_us >= schedule.w.t_dir_flip) {
+      setDirectionBit_(motor_id, schedule.new_dir_sign);
+      flushLatch_();
+      schedule.phase = 2;
+    } else {
+      return;
+    }
+  }
+  if (schedule.phase == 2 && now_us >= schedule.w.t_sleep_high) {
+    sleep_bits_ |= (1u << motor_id);
     flushLatch_();
-    slots_[id].awake = true;
-    fs.active = false;
-    
+    slots_[motor_id].awake = true;
+    schedule.active = false;
+  }
+}
+
+bool SharedStepAdapterEsp32::isMoving(uint8_t motor_id) const { // NOLINT(readability-convert-member-functions-to-static)
+  if (motor_id >= kMotorSlots) {
+    return false;
+  }
+  updateProgress_(motor_id);
+  return slots_[motor_id].moving;
+}
+
+long SharedStepAdapterEsp32::currentPosition(uint8_t motor_id) const { // NOLINT(readability-convert-member-functions-to-static)
+  if (motor_id >= kMotorSlots) {
+    return 0;
+  }
+  updateProgress_(motor_id);
+  return slots_[motor_id].pos;
+}
+
+void SharedStepAdapterEsp32::setCurrentPosition(uint8_t motor_id, long pos) { // NOLINT(readability-convert-member-functions-to-static)
+  if (motor_id >= kMotorSlots) {
     return;
   }
-  // Phase 0: drop SLEEP low in window (idempotent; we already dropped before scheduling)
-  if (fs.phase == 0) {
-    if (now_us >= fs.w.t_sleep_low) {
-      sleep_bits_ &= (uint8_t)~(1u << id);
-      flushLatch_();
-      fs.phase = 1;
-      
-    } else {
-      return;
-    }
-  }
-  // Phase 1: flip DIR at midpoint
-  if (fs.phase == 1) {
-    if (now_us >= fs.w.t_dir_flip) {
-      if (fs.new_dir_sign > 0) dir_bits_ |= (1u << id); else dir_bits_ &= (uint8_t)~(1u << id);
-      flushLatch_();
-      fs.phase = 2;
-      
-    } else {
-      return;
-    }
-  }
-  // Phase 2: re-enable SLEEP after post-guard
-  if (fs.phase == 2) {
-    if (now_us >= fs.w.t_sleep_high) {
-      sleep_bits_ |= (1u << id);
-      flushLatch_();
-      // Motor is now allowed to step again
-      slots_[id].awake = true;
-      fs.active = false;
-      
-}
-  }
-}
-
-bool SharedStepAdapterEsp32::isMoving(uint8_t id) const {
-  if (id >= 8) return false;
-  updateProgress_(id);
-  return slots_[id].moving;
-}
-
-long SharedStepAdapterEsp32::currentPosition(uint8_t id) const {
-  if (id >= 8) return 0;
-  updateProgress_(id);
-  return slots_[id].pos;
-}
-
-void SharedStepAdapterEsp32::setCurrentPosition(uint8_t id, long pos) {
-  if (id >= 8) return;
-  Slot &s = slots_[id];
-  s.pos = pos;
+  Slot &slot = slots_[motor_id];
+  slot.pos = pos;
 }
 
 // Debug helpers removed after stabilization

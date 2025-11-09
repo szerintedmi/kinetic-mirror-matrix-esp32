@@ -1,5 +1,5 @@
 #pragma once
-#include <stdint.h>
+#include <cstdint>
 #include "Hal/Shift595.h"
 
 class Shift595Esp32 : public IShift595 {

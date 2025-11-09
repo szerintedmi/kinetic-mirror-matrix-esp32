@@ -1,7 +1,14 @@
 #pragma once
 
-#include <stdint.h>
-typedef void (*SharedStepEdgeHook)();
+#include <cstdint>
+
+#if !defined(ARDUINO)
+#ifndef IRAM_ATTR
+#define IRAM_ATTR
+#endif
+#endif
+
+using SharedStepEdgeHook = void (*)();
 
 // Minimal SPIKE interface for a shared STEP generator on ESP32 using RMT/LEDC.
 // This file is safe to include on host; implementation is ESP32-only.
@@ -18,11 +25,10 @@ public:
   // Optional hook called shortly after each STEP rising edge (ISR context!).
   void setEdgeHook(SharedStepEdgeHook hook);
 
-private:
-public:
   void onTxEndIsr();
+
 private:
-  volatile uint32_t speed_sps_;
-  SharedStepEdgeHook hook_;
+  volatile uint32_t speed_sps_ = 0;
+  SharedStepEdgeHook hook_ = nullptr;
   volatile bool running_ = false;
 };

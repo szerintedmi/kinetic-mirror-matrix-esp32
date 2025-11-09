@@ -114,7 +114,7 @@ void HardwareMotorController::startMoveSingle_(uint8_t i, long target, int speed
   sleep_bits_ |= (1u << i);
   latch_();
 #endif
-  fas_->startMoveAbs(i, target, speed, accel);
+  (void)fas_->startMoveAbs(i, target, speed, accel);
 }
 
 void HardwareMotorController::wakeMask(uint32_t mask) {
@@ -255,7 +255,7 @@ bool HardwareMotorController::homeMask(uint32_t mask, long overshoot, long backo
     if (mask & maskForId(i)) {
       long cur = fas_->currentPosition(i);
       long target = cur - (full_range + oshot);
-      fas_->startMoveAbs(i, target, speed, accel);
+      (void)fas_->startMoveAbs(i, target, speed, accel);
     }
   }
   return true;
