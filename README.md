@@ -258,4 +258,4 @@ Runtime Controls (device)
 2. Generate `compile_commands.json` for whichever env you're editing whenever build flags change so clangd and clang-tidy see the right includes: `pio run -t compiledb -e esp32DedicatedStep` (add more `-e` flags as needed).
 3. Format C/C++ files on save (enabled in `.vscode/settings.json`) using the shared [`.clang-format`](./.clang-format).
 4. clangd runs clang-tidy inline using [`.clang-tidy`](./.clang-tidy); open any source file to see diagnostics.
-5. Run `pio check` before committing to execute the same clang-tidy and cppcheck rules that CI will enforce.
+5. Run `pio check` before committing to execute the same clang-tidy and cppcheck rules that CI will enforce. Set `CLANG_FORMAT_FIX=1` to have the same command auto-fix formatting drift via clang-format.
