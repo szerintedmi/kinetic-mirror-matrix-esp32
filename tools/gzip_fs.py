@@ -1,7 +1,7 @@
-import os
 import gzip
+import os
 import shutil
-from typing import Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
 
@@ -51,14 +51,14 @@ def prepare_www_files(target, source, env):
         return
 
     # Walk data_src recursively and mirror structure in data
-    for root, dirs, files in os.walk(data_src_dir):
+    for root, _dirs, files in os.walk(data_src_dir):
         rel_root = os.path.relpath(root, data_src_dir)
         dest_root = data_dir if rel_root == "." else os.path.join(data_dir, rel_root)
         os.makedirs(dest_root, exist_ok=True)
 
         for name in files:
             src_path = os.path.join(root, name)
-            base, ext = os.path.splitext(name)
+            _base, ext = os.path.splitext(name)
             ext = ext.lstrip(".").lower()
 
             if ext in filetypes_to_gzip:
@@ -66,9 +66,7 @@ def prepare_www_files(target, source, env):
                 out_path = os.path.join(dest_root, out_name)
                 print(f"  GZipping: {src_path} → {out_path}")
                 # mtime=0 makes gzip output deterministic; drop it if you want real mtimes
-                with open(src_path, "rb") as src, gzip.GzipFile(
-                    out_path, "wb", mtime=0
-                ) as gz:
+                with open(src_path, "rb") as src, gzip.GzipFile(out_path, "wb", mtime=0) as gz:
                     shutil.copyfileobj(src, gz)
             else:
                 dst_path = os.path.join(dest_root, name)

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from serial_cli import parse_thermal_get_response, extract_est_ms_from_ctrl_ok
+from serial_cli import extract_est_ms_from_ctrl_ok, parse_thermal_get_response
 
 
 def test_parse_thermal_on():
@@ -24,10 +25,12 @@ def test_parse_thermal_off_missing_budget():
 
 
 def test_extract_est_ms_with_warn():
-    s = "\n".join([
-        "CTRL:WARN THERMAL_NO_BUDGET id=0 budget_s=0 ttfc_s=10",
-        "CTRL:ACK msg_id=7 est_ms=1234",
-    ])
+    s = "\n".join(
+        [
+            "CTRL:WARN THERMAL_NO_BUDGET id=0 budget_s=0 ttfc_s=10",
+            "CTRL:ACK msg_id=7 est_ms=1234",
+        ]
+    )
     est = extract_est_ms_from_ctrl_ok(s)
     assert est == 1234
 

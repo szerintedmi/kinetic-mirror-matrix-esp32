@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from serial_cli import make_parser, build_command
+from serial_cli import build_command, make_parser
 
 
 def run_case(argv, expected):
@@ -26,8 +27,12 @@ def main():
     # Legacy per-move speed/accel removed; ensure alias still works
     failures += run_case(["m", "2", "-5"], "MOVE:2,-5\n")
     failures += run_case(["home", "0"], "HOME:0\n")
-    failures += run_case(["home", "ALL", "--overshoot", "800", "--backoff", "150"], "HOME:ALL,800,150\n")
-    failures += run_case(["home", "1", "--overshoot", "900", "--full-range", "2400"], "HOME:1,900,,2400\n")
+    failures += run_case(
+        ["home", "ALL", "--overshoot", "800", "--backoff", "150"], "HOME:ALL,800,150\n"
+    )
+    failures += run_case(
+        ["home", "1", "--overshoot", "900", "--full-range", "2400"], "HOME:1,900,,2400\n"
+    )
     failures += run_case(["h", "7", "--overshoot", "50", "--backoff", "25"], "HOME:7,50,25\n")
     failures += run_case(["last-op"], "GET LAST_OP_TIMING\n")
     failures += run_case(["last-op", "1"], "GET LAST_OP_TIMING:1\n")

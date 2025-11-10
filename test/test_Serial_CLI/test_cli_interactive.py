@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-import sys, os
+import os
+import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 from serial_cli import make_parser, parse_status_lines, render_table
@@ -13,7 +14,19 @@ def test_parse_interactive_args_default():
 
 
 def test_parse_interactive_args_custom():
-    ns = make_parser().parse_args(["interactive", "--port", "/dev/ttyUSB0", "--baud", "9600", "--timeout", "1.5", "--rate", "4.0"])
+    ns = make_parser().parse_args(
+        [
+            "interactive",
+            "--port",
+            "/dev/ttyUSB0",
+            "--baud",
+            "9600",
+            "--timeout",
+            "1.5",
+            "--rate",
+            "4.0",
+        ]
+    )
     assert ns.port == "/dev/ttyUSB0"
     assert ns.baud == 9600
     assert abs(ns.timeout - 1.5) < 1e-6

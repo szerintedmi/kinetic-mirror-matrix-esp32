@@ -162,6 +162,14 @@ ${workspaceFolder}/.platformio/packages/tool-clangtidy/bin/clang-tidy
 
 That path matches the toolchain bundled with this repo, so you never chase system-level version drift.
 
+### Python CLI Lint & Format
+
+- `./scripts/python_lint.sh` runs Ruff against `serial_cli`, `tools`, and `test` with the repo’s `pyproject.toml`. Pass custom targets or flags (e.g., `./scripts/python_lint.sh --fix tools/serial_cli/mqtt_runtime.py`).
+- `./scripts/python_format.sh` invokes Ruff’s formatter with the same config; call it with no args to format the full CLI/tooling tree or pass file paths to limit the scope.
+- `pio run -t lint_python` / `pio run -t format_python` expose the same Ruff flows inside PlatformIO so CI and the VS Code task runner can trigger them without bespoke scripts.
+- VS Code picks up the same configuration automatically through `.vscode/settings.json`, so saving a Python file applies Ruff organize-imports + format-on-save using the identical toolchain.
+- If you rely on a global interpreter, install Ruff once via `pip install ruff` (or set `RUFF_BIN=/path/to/ruff`) so the scripts and editor bindings can find the binary.
+
 ## MQTT Telemetry
 
 - On successful broker handshake the firmware emits `CTRL: MQTT_CONNECTED broker=<host>:<port>` once per boot.

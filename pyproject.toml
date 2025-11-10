@@ -1,0 +1,45 @@
+[tool.ruff]
+line-length = 100
+respect-gitignore = true
+src = [
+  "serial_cli",
+  "tools",
+  "test",
+]
+target-version = "py39"
+extend-exclude = [
+  ".pio",
+  ".venv",
+  "data",
+  "data_src",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",
+  "F",
+  "I",
+  "B",
+  "UP",
+  "RUF",
+]
+ignore = [
+  "E501",  # Existing CLI text tables exceed 100 cols intentionally
+  "UP006",  # TypedDict/List upgrades handled incrementally
+  "UP007",
+  "UP035",
+  "UP045",
+]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+known-first-party = ["serial_cli", "tools"]
+force-single-line = false
+combine-as-imports = true
+
+[tool.ruff.format]
+indent-style = "space"
+skip-magic-trailing-comma = false
+quote-style = "double"
+line-ending = "lf"

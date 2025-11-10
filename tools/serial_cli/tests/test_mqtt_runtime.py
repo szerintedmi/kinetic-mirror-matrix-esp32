@@ -73,7 +73,7 @@ class MqttRuntimeTests(unittest.TestCase):
         payload = self._sample_payload()
         self.worker.ingest_message("devices/02123456789a/status", payload, timestamp=100.0)
 
-        rows, log, err, last_ts, _help = self.worker.get_state()
+        rows, _log, err, last_ts, _help = self.worker.get_state()
 
         self.assertIsNone(err)
         self.assertGreater(last_ts, 0.0)
@@ -103,7 +103,9 @@ class MqttRuntimeTests(unittest.TestCase):
         payload_b["motors"]["0"]["moving"] = False
         payload_b["motors"]["0"]["actual_ms"] = 100
         self.worker.ingest_message("devices/02123456789a/status", payload_a, timestamp=10.0)
-        self.worker.ingest_message("devices/abcdefabcdef/status", json.dumps(payload_b), timestamp=20.0)
+        self.worker.ingest_message(
+            "devices/abcdefabcdef/status", json.dumps(payload_b), timestamp=20.0
+        )
 
         rows, _, _, _, _ = self.worker.get_state()
         devices: List[str] = [row["device"] for row in rows]

@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
-from typing import Optional, Sequence, Tuple, Dict
+from typing import Dict, Sequence, Tuple
 
 try:
     import serial  # type: ignore
@@ -187,9 +187,7 @@ def _send_and_log(ser, cmd: str, timeout: float) -> str:
     is_status = ucmd.startswith("STATUS") or ucmd.startswith("ST")
     idle = STATUS_IDLE_GRACE_S if is_status else CMD_IDLE_GRACE_S
     early_ctrl = not is_status  # return as soon as CTRL appears for non-STATUS
-    resp, _meta = _read_response_fast(
-        ser, timeout, idle, early_ctrl=early_ctrl, trace=False
-    )
+    resp, _meta = _read_response_fast(ser, timeout, idle, early_ctrl=early_ctrl, trace=False)
     if resp:
         print(resp, flush=True)
     else:
@@ -213,9 +211,7 @@ def _wait_for_idle(ser, timeout: float) -> None:
         # Poll STATUS quietly with a tighter idle_grace so we return as soon
         # as the line goes quiet. Avoid spamming the console while waiting.
         ser.write(b"STATUS\n")
-        status_text, _meta = _read_response_fast(
-            ser, min(timeout, 0.25), STATUS_IDLE_GRACE_S
-        )
+        status_text, _meta = _read_response_fast(ser, min(timeout, 0.25), STATUS_IDLE_GRACE_S)
         rows = parse_status_lines(status_text)
         any_moving = any(r.get("moving") == "1" for r in rows)
         if not any_moving:
@@ -277,15 +273,9 @@ def _build_parser() -> argparse.ArgumentParser:
         prog="python tools/bench/manual_sequence_runner.py",
         description="Replay a deterministic MOVE/HOME pattern for manual bench validation.",
     )
-    p.add_argument(
-        "--port", "-p", required=True, help="Serial port (e.g., /dev/ttyUSB0, COM3)"
-    )
-    p.add_argument(
-        "--baud", "-b", type=int, default=115200, help="Baud rate (default: 115200)"
-    )
-    p.add_argument(
-        "--timeout", "-t", type=float, default=2.0, help="Serial read timeout (seconds)"
-    )
+    p.add_argument("--port", "-p", required=True, help="Serial port (e.g., /dev/ttyUSB0, COM3)")
+    p.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default: 115200)")
+    p.add_argument("--timeout", "-t", type=float, default=2.0, help="Serial read timeout (seconds)")
     p.add_argument(
         "--repetitions",
         "-r",

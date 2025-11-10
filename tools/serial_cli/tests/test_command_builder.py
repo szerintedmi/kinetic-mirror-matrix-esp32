@@ -34,8 +34,8 @@ class CommandBuilderTests(unittest.TestCase):
         self.assertEqual(req.params["pass"], "pass")
 
     def test_split_batches(self):
-        parts = split_batches('MOVE:0,100;MOVE:1,200;SET SPEED=4000')
-        self.assertEqual(parts, ['MOVE:0,100', 'MOVE:1,200', 'SET SPEED=4000'])
+        parts = split_batches("MOVE:0,100;MOVE:1,200;SET SPEED=4000")
+        self.assertEqual(parts, ["MOVE:0,100", "MOVE:1,200", "SET SPEED=4000"])
 
     def test_unsupported_command(self):
         with self.assertRaises(UnsupportedCommandError):

@@ -1,18 +1,16 @@
+import io
 import json
 import os
 import sys
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-import io
 import time
 from contextlib import redirect_stdout
 from unittest import mock
 
-import tools.serial_cli
-import serial_cli
-from serial_cli import render_table, main as cli_main
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+
+from serial_cli import main as cli_main, render_table
 from tools.serial_cli.mqtt_runtime import MqttWorker
-from tools.serial_cli.response_events import ResponseEvent, EventType
+from tools.serial_cli.response_events import EventType, ResponseEvent
 
 
 def test_render_status_table():
@@ -92,8 +90,10 @@ class StubMqttClient:
 
     def emit_message(self, topic, payload):
         if self.on_message:
+
             class _Msg:
                 pass
+
             msg = _Msg()
             msg.topic = topic
             msg.payload = payload.encode()
@@ -140,7 +140,7 @@ def test_mqtt_worker_ingest_snapshot():
     worker = MqttWorker(broker={}, client_factory=lambda: None)
     payload = _sample_payload()
     worker.ingest_message("devices/aa/status", payload, timestamp=100.0)
-    rows, log, err, ts, _ = worker.get_state()
+    rows, _log, err, _ts, _ = worker.get_state()
     assert err is None
     assert len(rows) == 2
     first = rows[0]
@@ -221,7 +221,11 @@ def test_cli_mqtt_move_command_outputs_events():
 
 def test_mqtt_worker_queue_cmd_logs_error():
     worker = MqttWorker(broker={}, client_factory=lambda: None)
-    worker.ingest_message("devices/aa/status", json.dumps({"motors": {}, "node_state": "ready", "ip": "1.2.3.4"}), timestamp=0.0)
+    worker.ingest_message(
+        "devices/aa/status",
+        json.dumps({"motors": {}, "node_state": "ready", "ip": "1.2.3.4"}),
+        timestamp=0.0,
+    )
     worker.queue_cmd("MOVE:0,100")
     _, log, _, _, _ = worker.get_state()
     assert log[-2].startswith("> MOVE:0,100 (mqtt")
@@ -269,8 +273,10 @@ def test_status_mqtt_uses_worker():
             return rows, log, None, now, ""
 
     stub = StubWorker()
-    with mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub), \
-         mock.patch("tools.serial_cli.time.sleep", lambda *_: None):
+    with (
+        mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub),
+        mock.patch("tools.serial_cli.time.sleep", lambda *_: None),
+    ):
         buf = io.StringIO()
         with redirect_stdout(buf):
             rc = cli_main(["status", "--transport", "mqtt", "--timeout", "0.5"])
@@ -301,7 +307,7 @@ def test_mqtt_worker_integration_latency_and_debounce():
         payload1 = _sample_payload()
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
-        rows, log, err, last_ts, _ = worker.get_state()
+        rows, log, _err, _last_ts, _ = worker.get_state()
         assert len(rows) == 2
         first = rows[0]
         assert first["device"] == mac
@@ -314,7 +320,7 @@ def test_mqtt_worker_integration_latency_and_debounce():
 
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
-        rows_dup, log_dup, _, _, _ = worker.get_state()
+        _rows_dup, log_dup, _, _, _ = worker.get_state()
         assert len(log_dup) >= len(log)
         for left, right in zip(log_dup[: len(log)], log):
             if left == right:
@@ -324,11 +330,13 @@ def test_mqtt_worker_integration_latency_and_debounce():
         payload2 = _sample_payload(actual_ms=False)
         stub.emit_message(topic, payload2)
         time.sleep(0.05)
-        rows_new, log_new, _, _, _ = worker.get_state()
+        rows_new, _log_new, _, _, _ = worker.get_state()
         assert rows_new[0]["actual_ms"] == ""
     finally:
         worker.stop()
         worker.join(timeout=1)
+
+
 if __name__ == "__main__":
     try:
         import pytest  # type: ignore

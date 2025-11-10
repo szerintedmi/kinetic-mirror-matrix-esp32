@@ -129,7 +129,7 @@ def parse_serial_command(command: str) -> CommandRequest:
         prefix = prefix.strip().upper()
         sub_token = rest.split(",", 1)[0].strip()
         action = f"{prefix}:{sub_token.upper()}"
-        remainder = rest[len(sub_token):]
+        remainder = rest[len(sub_token) :]
         if remainder.startswith(","):
             remainder = remainder[1:]
         if action in {"NET:STATUS", "NET:RESET", "NET:LIST"}:
@@ -281,7 +281,9 @@ def parse_serial_command(command: str) -> CommandRequest:
     if action == "WAKE" or action == "SLEEP":
         if len(tokens) != 2:
             raise CommandParseError(f"{action} requires target selector")
-        return CommandRequest(action=action, params={"target_ids": _parse_target(tokens[1])}, raw=raw)
+        return CommandRequest(
+            action=action, params={"target_ids": _parse_target(tokens[1])}, raw=raw
+        )
 
     if action == "GET":
         if len(tokens) == 1:

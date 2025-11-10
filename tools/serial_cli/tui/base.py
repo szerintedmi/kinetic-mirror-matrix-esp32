@@ -1,4 +1,4 @@
-from typing import Callable, List, Dict, Optional
+from typing import Callable, Dict, List
 
 
 class BaseUI:
@@ -8,4 +8,3 @@ class BaseUI:
 
     def run(self) -> int:  # pragma: no cover
         raise NotImplementedError
-

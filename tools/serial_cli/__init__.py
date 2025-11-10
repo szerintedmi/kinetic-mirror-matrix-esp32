@@ -2,16 +2,15 @@ import argparse
 import shlex
 import sys
 import time
-import threading
-from typing import List, Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 try:
     import serial  # type: ignore
 except Exception:
     serial = None
 
-from .runtime import SerialWorker
 from .response_events import EventType, format_event
+from .runtime import SerialWorker
 
 
 def _join_home_with_placeholders(id_token: str, overshoot, backoff, full_range) -> str:
@@ -97,7 +96,7 @@ def parse_thermal_get_response(text: str) -> Optional[Tuple[bool, Optional[int]]
         for tok in text.strip().split():
             if tok.startswith("THERMAL_LIMITING="):
                 val = tok.split("=", 1)[1].strip().upper()
-                enabled = (val == "ON")
+                enabled = val == "ON"
             elif tok.startswith("max_budget_s="):
                 try:
                     max_budget = int(tok.split("=", 1)[1])
@@ -133,16 +132,26 @@ def extract_est_ms_from_ctrl_ok(text: str) -> Optional[int]:
 def _add_common(sub):
     sub.add_argument("--port", "-p", help="Serial port (e.g., /dev/ttyUSB0, COM3)")
     sub.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)")
-    sub.add_argument("--timeout", "-t", type=float, default=2.0, help="Read timeout seconds (default 2.0)")
-    sub.add_argument("--dry-run", action="store_true", help="Print command only; do not open serial")
-    sub.add_argument("--transport", choices=("serial", "mqtt"), default="mqtt",
-                     help="Transport to use (serial or mqtt). Default mqtt.")
+    sub.add_argument(
+        "--timeout", "-t", type=float, default=2.0, help="Read timeout seconds (default 2.0)"
+    )
+    sub.add_argument(
+        "--dry-run", action="store_true", help="Print command only; do not open serial"
+    )
+    sub.add_argument(
+        "--transport",
+        choices=("serial", "mqtt"),
+        default="mqtt",
+        help="Transport to use (serial or mqtt). Default mqtt.",
+    )
     sub.add_argument("--node", help="Target node id (MQTT transport)")
     return sub
 
 
 def make_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="serial_cli", description="Serial CLI for Mirror Array protocol v1")
+    p = argparse.ArgumentParser(
+        prog="serial_cli", description="Serial CLI for Mirror Array protocol v1"
+    )
     sp = p.add_subparsers(dest="command", required=True)
 
     _add_common(sp.add_parser("help", help="Print device HELP"))
@@ -162,7 +171,9 @@ def make_parser() -> argparse.ArgumentParser:
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
 
-    s = _add_common(sp.add_parser("home", help="HOME with optional params (overshoot/backoff/full_range)"))
+    s = _add_common(
+        sp.add_parser("home", help="HOME with optional params (overshoot/backoff/full_range)")
+    )
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("--overshoot", type=int, help="Optional overshoot steps")
     s.add_argument("--backoff", type=int, help="Optional backoff steps")
@@ -171,27 +182,37 @@ def make_parser() -> argparse.ArgumentParser:
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("--overshoot", type=int, help="Optional overshoot steps")
     s_alias.add_argument("--backoff", type=int, help="Optional backoff steps")
-    s_alias.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
+    s_alias.add_argument(
+        "--full-range", type=int, dest="full_range", help="Optional full_range steps"
+    )
 
     # estimation/measurement helpers
-    s = _add_common(sp.add_parser("check-move", help="Compute estimate and measure actual MOVE duration"))
+    s = _add_common(
+        sp.add_parser("check-move", help="Compute estimate and measure actual MOVE duration")
+    )
     s.add_argument("id", type=str, help="Motor id 0-7")
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
     s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
     s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
     s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
 
-    s = _add_common(sp.add_parser("check-home", help="Compute estimate and measure actual HOME duration"))
+    s = _add_common(
+        sp.add_parser("check-home", help="Compute estimate and measure actual HOME duration")
+    )
     s.add_argument("id", type=str, help="Motor id 0-7 or ALL")
     s.add_argument("--overshoot", type=int, default=800, help="Overshoot steps")
     s.add_argument("--backoff", type=int, default=50, help="Backoff steps")
     s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
     s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
-    s.add_argument("--full-range", type=int, default=2400, dest="full_range", help="Full range steps")
+    s.add_argument(
+        "--full-range", type=int, default=2400, dest="full_range", help="Full range steps"
+    )
     s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
 
     # interactive TUI
-    s = _add_common(sp.add_parser("interactive", help="Interactive TUI (poll STATUS and accept commands)"))
+    s = _add_common(
+        sp.add_parser("interactive", help="Interactive TUI (poll STATUS and accept commands)")
+    )
     s.add_argument("--rate", "-r", type=float, default=2.0, help="Refresh rate in Hz (default 2.0)")
 
     return p
@@ -220,8 +241,8 @@ def parse_status_lines(text: str) -> List[Dict[str, str]]:
             out.append(row)
     return out
 
-def parse_kv_line(text: str) -> Dict[str, str]:
 
+def parse_kv_line(text: str) -> Dict[str, str]:
     out: Dict[str, str] = {}
     if not text:
         return out
@@ -305,8 +326,9 @@ def render_table(rows: List[Dict[str, str]]) -> str:
     return "\n".join(lines)
 
 
-
-def _make_mqtt_worker(*, broker_overrides: Optional[Dict[str, str]] = None, node: Optional[str] = None, **kwargs):
+def _make_mqtt_worker(
+    *, broker_overrides: Optional[Dict[str, str]] = None, node: Optional[str] = None, **kwargs
+):
     from .mqtt_runtime import MqttWorker, load_mqtt_defaults
 
     broker = load_mqtt_defaults()
@@ -325,7 +347,7 @@ def _run_status_mqtt(ns) -> int:
     worker.start()
     try:
         time.sleep(wait_seconds)
-        rows, log, err, last_update, _ = worker.get_state()
+        rows, log, err, _last_update, _ = worker.get_state()
         if err:
             print(f"error: {err}", file=sys.stderr)
             return 1
@@ -427,8 +449,9 @@ def main(argv=None) -> int:
                 return _ceil_div(d * 1000, v) + _ceil_div(v * 1000, a)
             # triangular profile
             import math as _m
+
             scaled = _ceil_div(d * 1_000_000, a)
-            s_ms = int(_m.isqrt(max(0, int(scaled))))
+            s_ms = _m.isqrt(max(0, scaled))
             if s_ms * s_ms < scaled:
                 s_ms += 1
             return 2 * s_ms
@@ -476,18 +499,18 @@ def main(argv=None) -> int:
                     ser.write(f"GET LAST_OP_TIMING:{target_id}\n".encode())
                     txt = read_response(ser, ns.timeout)
                     ongoing = None
-                    est = None
                     last_ms = None
                     for tok in txt.strip().split():
                         if tok.startswith("ongoing="):
-                            try: ongoing = int(tok.split("=",1)[1])
-                            except Exception: pass
+                            try:
+                                ongoing = int(tok.split("=", 1)[1])
+                            except Exception:
+                                continue
                         elif tok.startswith("actual_ms="):
-                            try: last_ms = int(tok.split("=",1)[1])
-                            except Exception: pass
-                        elif tok.startswith("est_ms="):
-                            try: est = int(tok.split("=",1)[1])
-                            except Exception: pass
+                            try:
+                                last_ms = int(tok.split("=", 1)[1])
+                            except Exception:
+                                continue
                     if ongoing == 0 and last_ms is not None:
                         last_ms_val = last_ms
                         break
@@ -496,9 +519,10 @@ def main(argv=None) -> int:
                     print("Timeout waiting for LAST_OP_TIMING", file=sys.stderr)
                     return 1
                 actual_ms = int(last_ms_val)
-                tol = max(0.0, float(ns.tolerance))
-                lower = max(0, est_ms - 100)
-                upper = est_ms + 100
+                tol = max(0.0, float(getattr(ns, "tolerance", 0.25)))
+                margin = max(100, int(est_ms * tol))
+                lower = max(0, est_ms - margin)
+                upper = est_ms + margin
                 print(f"estimate_ms={est_ms} actual_ms={actual_ms} acceptable=[{lower},{upper}]")
                 if actual_ms < lower or actual_ms > upper:
                     return 1
@@ -532,7 +556,10 @@ def run_interactive(ns: argparse.Namespace) -> int:
     try:
         from .tui.textual_ui import TextualUI as UIClass  # type: ignore
     except Exception as e:
-        print("textual is required for interactive mode. Install with: pip install textual rich", file=sys.stderr)
+        print(
+            "textual is required for interactive mode. Install with: pip install textual rich",
+            file=sys.stderr,
+        )
         print(f"Import error: {e}", file=sys.stderr)
         return 2
     if ns.transport == "mqtt":
@@ -547,7 +574,10 @@ def run_interactive(ns: argparse.Namespace) -> int:
             print("'interactive' ignores --dry-run; requires a serial port.", file=sys.stderr)
             return 2
         if serial is None:
-            print("pyserial not installed. Install 'pyserial' to use interactive mode.", file=sys.stderr)
+            print(
+                "pyserial not installed. Install 'pyserial' to use interactive mode.",
+                file=sys.stderr,
+            )
             return 2
         if not ns.port:
             print("--port is required for interactive mode", file=sys.stderr)

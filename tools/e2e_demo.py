@@ -5,13 +5,14 @@ Example end-to-end script for Serial Command Protocol v1.
 If --port is provided, connects to the device and runs a short sequence.
 Otherwise, runs in --dry-run mode and prints the commands that would be sent.
 """
+
 import argparse
+import os
 import sys
 import time
-import os
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from serial_cli import make_parser, build_command, read_response  # type: ignore
+from serial_cli import build_command, make_parser, read_response  # type: ignore
 
 try:
     import serial  # type: ignore
@@ -22,9 +23,7 @@ except Exception:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="E2E demo for Serial Protocol v1")
     ap.add_argument("--port", "-p", help="Serial port (e.g., /dev/ttyUSB0, COM3)")
-    ap.add_argument(
-        "--baud", "-b", type=int, default=115200, help="Baud (default 115200)"
-    )
+    ap.add_argument("--baud", "-b", type=int, default=115200, help="Baud (default 115200)")
     ap.add_argument("--timeout", "-t", type=float, default=2.0, help="Timeout (s)")
     ns = ap.parse_args(argv)
 

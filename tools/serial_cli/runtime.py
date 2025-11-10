@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional, Sequence
+from typing import Callable, Dict, List, Optional
 
 try:
     import serial  # type: ignore
@@ -498,7 +498,11 @@ class SerialWorker(threading.Thread):
         self._maybe_track_background_id(msg_id)
         latency = None
         # Hide DATA events while HELP is active to avoid cluttering the log
-        if pending and pending.name.upper().startswith("HELP") and event.event_type == EventType.DATA:
+        if (
+            pending
+            and pending.name.upper().startswith("HELP")
+            and event.event_type == EventType.DATA
+        ):
             return
         if pending and pending.is_poll:
             if event.event_type == EventType.DATA:
@@ -545,6 +549,8 @@ class SerialWorker(threading.Thread):
             else:
                 self._log.append(recon_prefix + dots)
             self._reconnect_dots += 1
+
+
 def _strip_quotes(value: str) -> str:
     if len(value) >= 2 and value[0] == value[-1] == '"':
         return value[1:-1]

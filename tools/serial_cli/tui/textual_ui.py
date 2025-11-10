@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import ClassVar, Dict, List, Optional, Tuple
 
 from .base import BaseUI
 
@@ -17,9 +17,9 @@ class TextualUI(BaseUI):
                 Vertical,
                 VerticalScroll,
             )
-            from textual.screen import Screen, ModalScreen
             from textual.events import Key
             from textual.reactive import var
+            from textual.screen import ModalScreen
             from textual.widgets import (
                 DataTable,
                 Footer,
@@ -87,7 +87,8 @@ class TextualUI(BaseUI):
                 color = "red"
             elif age_val > 1.0:
                 color = "yellow"
-            return f"age={_color(f"{age_val:.1f}s", color)}"
+            age_text = f"{age_val:.1f}s"
+            return f"age={_color(age_text, color)}"
 
         base_transport = transport.lower()
 
@@ -99,7 +100,7 @@ class TextualUI(BaseUI):
             if transport_mode == "mqtt":
                 host = net.get("host") or "-"
                 port = net.get("port") or "-"
-                parts.append(f"transport=mqtt")
+                parts.append("transport=mqtt")
                 parts.append(f"host={host}:{port}")
             else:
                 parts.append("transport=serial")
@@ -118,11 +119,14 @@ class TextualUI(BaseUI):
                     dev = str(r.get("device", "") or "")
                     if not dev:
                         continue
-                    summaries.setdefault(dev, {
-                        "node_state": r.get("node_state", ""),
-                        "ip": r.get("ip", ""),
-                        "age_s": float(r.get("age_s", 0.0) or 0.0),
-                    })
+                    summaries.setdefault(
+                        dev,
+                        {
+                            "node_state": r.get("node_state", ""),
+                            "ip": r.get("ip", ""),
+                            "age_s": float(r.get("age_s", 0.0) or 0.0),
+                        },
+                    )
 
             device_id = net.get("device")
             if not device_id and summaries:
@@ -182,7 +186,10 @@ class TextualUI(BaseUI):
                 parts.append("thermal limiting=-")
 
             if transport_mode == "mqtt" and summaries:
-                ages = [float(info.get("age_s", float("inf")) or float("inf")) for info in summaries.values()]
+                ages = [
+                    float(info.get("age_s", float("inf")) or float("inf"))
+                    for info in summaries.values()
+                ]
                 min_age = min(ages) if ages else float("inf")
                 parts.append(_fmt_age(min_age))
             else:
@@ -256,9 +263,7 @@ class TextualUI(BaseUI):
                 help_text = state[4] if isinstance(state, (list, tuple)) and len(state) >= 5 else ""
                 if not help_text:
                     worker.queue_cmd("HELP")
-                self.set_interval(
-                    0.25, self._refresh_help, pause=False, name="help-refresh"
-                )
+                self.set_interval(0.25, self._refresh_help, pause=False, name="help-refresh")
 
             def _render_left(self) -> str:
                 left = [
@@ -299,7 +304,7 @@ class TextualUI(BaseUI):
                     self.query_one("#help-right", Static).update(t)
                     self._last_help_text = t
 
-            BINDINGS = [
+            BINDINGS: ClassVar = [
                 ("escape", "dismiss", "Close"),
             ]
 
@@ -326,7 +331,7 @@ class TextualUI(BaseUI):
             #cmd_input { width: 1fr; background: $panel; color: $text; border: none; }
             """
 
-            BINDINGS = [
+            BINDINGS: ClassVar = [
                 Binding("Ctrl+x", "quit", "Quit", show=False),
                 Binding("Ctrl+q", "quit", "Quit", show=True),
                 Binding("Ctrl+i", "help", "Help"),
@@ -369,7 +374,7 @@ class TextualUI(BaseUI):
                 table = self.query_one("#status_table", DataTable)
                 if not self._cols_ready:
                     table.clear(columns=True)
-                    for key, label, width in self._columns:
+                    for _key, label, width in self._columns:
                         table.add_column(label, width=width)
                     table.cursor_type = "row"
                     table.zebra_stripes = True
@@ -560,13 +565,13 @@ class TextualUI(BaseUI):
                     tp = self.query_one("#table_panel")
                     lp = self.query_one("#log_panel")
                     # Apply only if changed to reduce churn
-                    if int(
-                        getattr(tp.styles.height, "value", tp.styles.height or 0) or 0
-                    ) != int(desired_table):
+                    if int(getattr(tp.styles.height, "value", tp.styles.height or 0) or 0) != int(
+                        desired_table
+                    ):
                         tp.styles.height = desired_table
-                    if int(
-                        getattr(lp.styles.height, "value", lp.styles.height or 0) or 0
-                    ) != int(log_h):
+                    if int(getattr(lp.styles.height, "value", lp.styles.height or 0) or 0) != int(
+                        log_h
+                    ):
                         lp.styles.height = log_h
                 except Exception:
                     pass
@@ -580,7 +585,9 @@ class TextualUI(BaseUI):
 
 # Development entrypoint with a simple mock worker
 if __name__ == "__main__":  # pragma: no cover
-    import threading, time, random
+    import random
+    import threading
+    import time
 
     class _MockWorker:
         def __init__(self) -> None:
@@ -620,8 +627,8 @@ if __name__ == "__main__":  # pragma: no cover
                                 "awake": str(awake[mid]),
                                 "homed": str(homed[mid]),
                                 "steps_since_home": str(steps_since_home[mid]),
-                                "budget_s": f"{90.0 - steps_since_home[mid]*0.01:.1f}",
-                                "ttfc_s": f"{(steps_since_home[mid]*0.01)%2:.1f}",
+                                "budget_s": f"{90.0 - steps_since_home[mid] * 0.01:.1f}",
+                                "ttfc_s": f"{(steps_since_home[mid] * 0.01) % 2:.1f}",
                             }
                         )
                     with self._lock:

@@ -91,7 +91,7 @@ class MqttWorker(threading.Thread):
         self,
         *,
         broker: Optional[Dict[str, str]] = None,
-        client_factory: Optional[Callable[[], "mqtt.Client"]] = None,
+        client_factory: Optional[Callable[[], mqtt.Client]] = None,
         node_id: Optional[str] = None,
         cmd_id_factory: Optional[Callable[[], str]] = None,
     ) -> None:
@@ -142,7 +142,7 @@ class MqttWorker(threading.Thread):
             if mqtt is None:
                 raise RuntimeError("paho-mqtt not installed. Install 'paho-mqtt'.")
 
-            def _factory() -> "mqtt.Client":
+            def _factory() -> mqtt.Client:
                 client_id = self._broker.get("client_id")
                 if not client_id:
                     client_id = f"mirrorctl-{os.getpid()}"
@@ -254,7 +254,6 @@ class MqttWorker(threading.Thread):
             return []
 
         handles: List[int] = []
-        published = False
         for request in requests:
             cmd_id = request.cmd_id or self._cmd_id_factory()
             request.cmd_id = cmd_id
@@ -284,7 +283,7 @@ class MqttWorker(threading.Thread):
             try:
                 info = self._client.publish(topic, data, qos=1)  # type: ignore[union-attr]
                 rc = getattr(info, "rc", 0) if info is not None else 0
-                publish_ok = (rc == 0)
+                publish_ok = rc == 0
             except Exception as exc:
                 if not silent:
                     self._append_log(f"[mqtt] publish error: {exc}")
@@ -293,7 +292,6 @@ class MqttWorker(threading.Thread):
                 if not silent:
                     self._append_log(f"[mqtt] publish failed topic={topic}")
                 continue
-            published = True
 
             if silent:
                 continue
@@ -323,7 +321,7 @@ class MqttWorker(threading.Thread):
                 last_seen = float(data.get("last_seen", 0.0))
                 age_s = max(0.0, now - last_seen) if last_seen else 0.0
                 motors = data.get("motors", {})
-                for motor_id, motor in motors.items():
+                for _motor_id, motor in motors.items():
                     row = dict(motor)
                     row["device"] = device
                     row["node_state"] = data.get("node_state", "")
@@ -331,6 +329,7 @@ class MqttWorker(threading.Thread):
                     row["last_seen"] = last_seen
                     row["age_s"] = age_s
                     rows.append(row)
+
             def _id_key(value: object) -> object:
                 try:
                     return int(str(value))
@@ -388,7 +387,9 @@ class MqttWorker(threading.Thread):
             )
             return freshest[0][0] if freshest else None
 
-    def wait_for_completion(self, handles: Sequence[int], timeout: float = 5.0) -> Dict[int, PendingCommand]:
+    def wait_for_completion(
+        self, handles: Sequence[int], timeout: float = 5.0
+    ) -> Dict[int, PendingCommand]:
         deadline = time.time() + max(0.0, timeout)
         handles = list(handles)
         with self._condition:
@@ -451,7 +452,11 @@ class MqttWorker(threading.Thread):
             self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
 
     def _on_message(self, client, userdata, msg):
-        payload_text = msg.payload.decode(errors="ignore") if isinstance(msg.payload, bytes) else str(msg.payload)
+        payload_text = (
+            msg.payload.decode(errors="ignore")
+            if isinstance(msg.payload, bytes)
+            else str(msg.payload)
+        )
         if msg.topic.endswith("/status"):
             self.ingest_message(msg.topic, payload_text)
             return
@@ -530,11 +535,7 @@ class MqttWorker(threading.Thread):
             if not self._requested_net_status and self._node_id:
                 self._requested_net_status = True
                 should_request_net = True
-            if (
-                self._need_thermal_refresh
-                and not self._requested_thermal_status
-                and self._node_id
-            ):
+            if self._need_thermal_refresh and not self._requested_thermal_status and self._node_id:
                 self._requested_thermal_status = True
                 should_request_thermal = True
         if should_request_net:
@@ -595,11 +596,15 @@ class MqttWorker(threading.Thread):
                 pending.events.append(event)
                 if event.event_type == EventType.ACK:
                     pending.ack_event = event
-                    pending.ack_latency_ms = max(0.0, (now_mono - pending.enqueued_monotonic) * 1000.0)
+                    pending.ack_latency_ms = max(
+                        0.0, (now_mono - pending.enqueued_monotonic) * 1000.0
+                    )
                     latency = pending.ack_latency_ms
                 if event.event_type in (EventType.DONE, EventType.ERROR):
                     pending.done_event = event
-                    pending.completion_latency_ms = max(0.0, (now_mono - pending.enqueued_monotonic) * 1000.0)
+                    pending.completion_latency_ms = max(
+                        0.0, (now_mono - pending.enqueued_monotonic) * 1000.0
+                    )
                     latency = pending.completion_latency_ms
                     pending.completed = True
                     pending.completed_at = now_wall
@@ -619,7 +624,9 @@ class MqttWorker(threading.Thread):
             if pending and pending.completed:
                 if pending.cmd_id and pending.cmd_id in self._pending_by_cmd:
                     self._pending_by_cmd.pop(pending.cmd_id, None)
-                self._pending_order = [p for p in self._pending_order if p.local_id != pending.local_id]
+                self._pending_order = [
+                    p for p in self._pending_order if p.local_id != pending.local_id
+                ]
                 self._cleanup_completed_locked(now_mono)
 
             self._condition.notify_all()
@@ -628,7 +635,9 @@ class MqttWorker(threading.Thread):
         stale_handles = [
             local_id
             for local_id, pending in list(self._pending_handles.items())
-            if pending.completed and pending.completed_monotonic and pending.completed_monotonic < now_mono - 30.0
+            if pending.completed
+            and pending.completed_monotonic
+            and pending.completed_monotonic < now_mono - 30.0
         ]
         for local_id in stale_handles:
             self._pending_handles.pop(local_id, None)
@@ -643,8 +652,17 @@ class MqttWorker(threading.Thread):
             raw = event.raw or ""
             if raw:
                 raw_upper = raw.upper()
-                if "STATE=" in raw_upper or "SSID=" in raw_upper or " IP=" in raw_upper or "DEVICE=" in raw_upper:
-                    tokens = {tok.split("=", 1)[0].upper(): tok.split("=", 1)[1] for tok in raw.split() if "=" in tok}
+                if (
+                    "STATE=" in raw_upper
+                    or "SSID=" in raw_upper
+                    or " IP=" in raw_upper
+                    or "DEVICE=" in raw_upper
+                ):
+                    tokens = {
+                        tok.split("=", 1)[0].upper(): tok.split("=", 1)[1]
+                        for tok in raw.split()
+                        if "=" in tok
+                    }
                     state = tokens.get("STATE", state)
                     ssid = tokens.get("SSID", ssid)
                     ip = tokens.get("IP", ip)
@@ -677,7 +695,9 @@ class MqttWorker(threading.Thread):
                 del self._log[: len(self._log) - 800]
 
     # ------------------------------------------------------------------
-    def _maybe_update_thermal_state_locked(self, event: ResponseEvent, pending: Optional[PendingCommand]) -> None:
+    def _maybe_update_thermal_state_locked(
+        self, event: ResponseEvent, pending: Optional[PendingCommand]
+    ) -> None:
         attrs = event.attributes or {}
         thermal_key = None
         for key in ("THERMAL_LIMITING", "thermal_limiting"):
@@ -718,7 +738,10 @@ class MqttWorker(threading.Thread):
                 else:
                     self._need_thermal_refresh = True
         elif command_name.startswith("SET THERMAL_LIMITING") or (
-            not command_name and action_name == "SET" and "THERMAL_LIMITING" in (pending.request.params if pending and pending.request else {})
+            not command_name
+            and action_name == "SET"
+            and "THERMAL_LIMITING"
+            in (pending.request.params if pending and pending.request else {})
         ):
             if event.event_type in (EventType.DONE, EventType.ERROR):
                 self._need_thermal_refresh = True
