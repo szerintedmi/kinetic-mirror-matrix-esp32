@@ -51,7 +51,7 @@ void IRAM_ATTR SharedStepRmtGenerator::onTxEndIsr() {
   // Queue next item without waiting; generator continues seamlessly
   rmt_write_items(kRmtChannel, &item, 1, false);
   if (hook_) {
-    hook_();
+    hook_(hook_context_);
   }
 }
 
@@ -122,8 +122,9 @@ void SharedStepRmtGenerator::stop() {
   running_ = false;
 }
 
-void SharedStepRmtGenerator::setEdgeHook(SharedStepEdgeHook hook) {
+void SharedStepRmtGenerator::setEdgeHook(SharedStepEdgeHook hook, void* context) {
   hook_ = hook;
+  hook_context_ = context;
 }
 
 // ISR: RMT TX end. Requeue the single square item for continuous output.

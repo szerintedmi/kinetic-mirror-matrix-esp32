@@ -2,7 +2,7 @@
 
 #if defined(ARDUINO)
 
-#include "Hal/FasAdapter.h"
+#include "hal/FasAdapter.h"
 
 #include <FastAccelStepper.h>
 #include <cstdint>

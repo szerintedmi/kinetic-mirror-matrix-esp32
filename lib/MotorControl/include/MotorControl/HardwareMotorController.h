@@ -1,6 +1,6 @@
 #pragma once
-#include "Hal/FasAdapter.h"
-#include "Hal/Shift595.h"
+#include "hal/FasAdapter.h"
+#include "hal/shift595.h"
 #include "MotorControl/MotorController.h"
 
 #include <memory>

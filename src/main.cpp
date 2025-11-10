@@ -21,9 +21,12 @@ using net_onboarding::State;
 using ResponseAttribute = std::pair<const char*, std::string>;
 using ResponseAttributeList = std::initializer_list<ResponseAttribute>;
 
-static State g_last_state =
-    State::AP_ACTIVE;  // will be updated after begin() //
-                       // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+namespace {
+State& LastKnownNetState() {
+  static State last_state = State::AP_ACTIVE;
+  return last_state;
+}
+}  // namespace
 constexpr uint32_t kResetHoldMs = 5000;
 constexpr uint32_t kConnectTimeoutMs = 8000;
 
@@ -122,6 +125,7 @@ static String QuoteString(const char* value) {
 
 void setup() {
   serial_console_setup();
+  State& last_state = LastKnownNetState();
 
   // Configure Wi‑Fi onboarding
   Net().configureStatusLed(STATUS_LED_PIN, STATUS_LED_ACTIVE_LOW);
@@ -131,12 +135,12 @@ void setup() {
   Net().clearCredentials();
 #endif
   Net().begin(kConnectTimeoutMs);
-  g_last_state = Net().status().state;
+  last_state = Net().status().state;
   ResetButtonSetup();
 
   // Emit initial state as control event
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
-  if (g_last_state == State::AP_ACTIVE) {
+  if (last_state == State::AP_ACTIVE) {
     auto soft_ap_ip = WiFi.softAPIP();
     String quoted_ssid = QuoteString(WiFi.softAPSSID().c_str());
     std::string ssid = std::string(quoted_ssid.c_str());
@@ -156,7 +160,7 @@ void setup() {
       // RESET path may emit AP_ACTIVE immediately; if so, clear the correlation now
       transport::message_id::ClearActive();
     }
-  } else if (g_last_state == State::CONNECTING) {
+  } else if (last_state == State::CONNECTING) {
     std::string active_request_id =
         transport::message_id::HasActive() ? transport::message_id::Active() : std::string();
     EmitNetEvent(transport::response::EventType::kInfo,
@@ -172,11 +176,12 @@ void loop() {
   serial_console_tick();
   Net().loop();
   ResetButtonTick(millis());
+  State& last_state = LastKnownNetState();
 
   auto status_snapshot = Net().status();
-  if (status_snapshot.state != g_last_state) {
-    State previous_state = g_last_state;
-    g_last_state = status_snapshot.state;
+  if (status_snapshot.state != last_state) {
+    State previous_state = last_state;
+    last_state = status_snapshot.state;
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
     if (status_snapshot.state == State::AP_ACTIVE) {
       if (previous_state == State::CONNECTING) {

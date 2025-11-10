@@ -2,7 +2,7 @@
 
 #if defined(ARDUINO)
 
-#include "Hal/FasAdapter.h"
+#include "hal/FasAdapter.h"
 #include "MotorControl/SharedStepGuards.h"
 #include "MotorControl/SharedStepTiming.h"
 #include "drivers/Esp32/SharedStepRmt.h"
@@ -84,10 +84,7 @@ private:
   }
 
   // Edge hook plumbing (ISR context)
-  // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-  static void IRAM_ATTR onRisingEdgeHook_();
-  static SharedStepAdapterEsp32*
-      self_;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
+  static void onRisingEdgeHook_(void* context);
 
   mutable std::array<Slot, kMotorSlots> slots_{};
   mutable std::array<FlipSchedule, kMotorSlots> flips_{};

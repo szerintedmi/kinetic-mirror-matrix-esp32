@@ -1,5 +1,5 @@
 #pragma once
-#include "Hal/Shift595.h"
+#include "hal/shift595.h"
 
 #include <cstddef>
 #include <cstdint>

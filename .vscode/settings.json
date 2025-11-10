@@ -83,5 +83,6 @@
         "--clang-tidy",
         "--compile-commands-dir=${workspaceFolder}",
         "--header-insertion=never"
-    ]
+    ],
+    "clang-tidy.executable": "${workspaceFolder}/.platformio/packages/tool-clangtidy/bin/clang-tidy"
 }

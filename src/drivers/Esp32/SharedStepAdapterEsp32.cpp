@@ -8,14 +8,13 @@ namespace {
 constexpr uint32_t kImmediateFlipDelayUs = 3;
 }
 
-// Static storage for ISR hook
-SharedStepAdapterEsp32* SharedStepAdapterEsp32::self_ =
-    nullptr;  // NOLINT(cppcoreguidelines-avoid-non-const-global-variables)
-// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables)
-void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_() {
-  if (self_) {
-    self_->phase_anchor_us_ = micros();
+// ISR hook invoked by the shared STEP generator
+void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_(void* context) {
+  if (context == nullptr) {
+    return;
   }
+  auto* self = reinterpret_cast<SharedStepAdapterEsp32*>(context);
+  self->phase_anchor_us_ = micros();
 }
 
 SharedStepAdapterEsp32::SharedStepAdapterEsp32() = default;
@@ -23,8 +22,7 @@ SharedStepAdapterEsp32::SharedStepAdapterEsp32() = default;
 void SharedStepAdapterEsp32::begin() {
   gen_.begin();
   // Attach rising-edge hook to align guard scheduling to generator edges
-  self_ = this;
-  gen_.setEdgeHook(&SharedStepAdapterEsp32::onRisingEdgeHook_);
+  gen_.setEdgeHook(&SharedStepAdapterEsp32::onRisingEdgeHook_, this);
   gen_running_ = false;
   current_speed_sps_ = 0;
   period_us_ = 0;
@@ -87,10 +85,10 @@ void SharedStepAdapterEsp32::setDirectionBit_(uint8_t motor_id, int dir_sign)
     const {  // NOLINT(readability-convert-member-functions-to-static)
   const uint8_t mask = static_cast<uint8_t>(1u << motor_id);
   if (dir_sign > 0) {
-    dir_bits_ |= mask;
+    this->dir_bits_ |= mask;
     return;
   }
-  dir_bits_ &= static_cast<uint8_t>(~mask);
+  this->dir_bits_ &= static_cast<uint8_t>(~mask);
 }
 
 bool SharedStepAdapterEsp32::computeMotionWindow_(
@@ -98,7 +96,7 @@ bool SharedStepAdapterEsp32::computeMotionWindow_(
   bool any_moving = false;
   uint32_t local_min = UINT_MAX;
   for (uint8_t motor_index = 0; motor_index < kMotorSlots; ++motor_index) {
-    const Slot& slot = slots_[motor_index];
+    const Slot& slot = this->slots_[motor_index];
     if (!slot.moving) {
       continue;
     }
@@ -375,8 +373,8 @@ bool SharedStepAdapterEsp32::isMoving(
   if (motor_id >= kMotorSlots) {
     return false;
   }
-  updateProgress_(motor_id);
-  return slots_[motor_id].moving;
+  this->updateProgress_(motor_id);
+  return this->slots_[motor_id].moving;
 }
 
 long SharedStepAdapterEsp32::currentPosition(
@@ -384,8 +382,8 @@ long SharedStepAdapterEsp32::currentPosition(
   if (motor_id >= kMotorSlots) {
     return 0;
   }
-  updateProgress_(motor_id);
-  return slots_[motor_id].pos;
+  this->updateProgress_(motor_id);
+  return this->slots_[motor_id].pos;
 }
 
 void SharedStepAdapterEsp32::setCurrentPosition(
@@ -393,7 +391,7 @@ void SharedStepAdapterEsp32::setCurrentPosition(
   if (motor_id >= kMotorSlots) {
     return;
   }
-  Slot& slot = slots_[motor_id];
+  Slot& slot = this->slots_[motor_id];
   slot.pos = pos;
 }
 

@@ -144,6 +144,24 @@ Tests
 - Native: `pio test -e native`
 - On‑Device: `pio test -e esp32dev`
 
+## Lint, Format, and Static Analysis
+
+PlatformIO orchestrates every linting/formatting step so the CLI, CI, and IDEs stay consistent with the repository configuration.
+
+- `platformio.ini` already pins `check_tool = clangtidy, cppcheck` and the corresponding `check_flags`, so updating `.clang-tidy` or `.clang-format` automatically flows into `pio check` without editing per-machine scripts.
+- Run `pio check -e esp32DedicatedStep -e esp32SharedStep -e native` to execute clang-format (dry-run), clang-tidy, and cppcheck in one pass using the same severity rules across hosts.
+- Set `CLANG_FORMAT_FIX=1 pio check ...` whenever you want the pre-check helper (`tools/clang_format_check.py`) to rewrite files in place; omit the env var for read-only validation.
+
+### IDE Alignment
+
+If you use VS Code’s clang-tidy integration, point it at the PlatformIO-managed binary so the editor emits the exact diagnostics that `pio check` produces:
+
+```
+${workspaceFolder}/.platformio/packages/tool-clangtidy/bin/clang-tidy
+```
+
+That path matches the toolchain bundled with this repo, so you never chase system-level version drift.
+
 ## MQTT Telemetry
 
 - On successful broker handshake the firmware emits `CTRL: MQTT_CONNECTED broker=<host>:<port>` once per boot.

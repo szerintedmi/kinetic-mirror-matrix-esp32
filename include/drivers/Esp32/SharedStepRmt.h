@@ -8,7 +8,7 @@
 #endif
 #endif
 
-using SharedStepEdgeHook = void (*)();
+using SharedStepEdgeHook = void (*)(void* context);
 
 // Minimal SPIKE interface for a shared STEP generator on ESP32 using RMT/LEDC.
 // This file is safe to include on host; implementation is ESP32-only.
@@ -23,12 +23,13 @@ public:
   void start();
   void stop();
   // Optional hook called shortly after each STEP rising edge (ISR context!).
-  void setEdgeHook(SharedStepEdgeHook hook);
+  void setEdgeHook(SharedStepEdgeHook hook, void* context = nullptr);
 
   void onTxEndIsr();
 
 private:
   volatile uint32_t speed_sps_ = 0;
   SharedStepEdgeHook hook_ = nullptr;
+  void* hook_context_ = nullptr;
   volatile bool running_ = false;
 };

@@ -25,16 +25,16 @@ class FasAdapterEsp32Impl : public FasAdapterEsp32 {
 public:
   FasAdapterEsp32Impl()  // NOLINT(modernize-use-equals-default)
   {
-    steppers_.fill(nullptr);
-    step_pins_.fill(-1);
-    last_speed_.fill(-1);
-    last_accel_.fill(-1);
+    this->steppers_.fill(nullptr);
+    this->step_pins_.fill(-1);
+    this->last_speed_.fill(-1);
+    this->last_accel_.fill(-1);
   }
 
   void begin() override {
-    engine_.init();
+    this->engine_.init();
 #if !(USE_SHARED_STEP)
-    engine_.setExternalCallForPin(&FasAdapterEsp32::externalPinHandler);
+    this->engine_.setExternalCallForPin(&FasAdapterEsp32::externalPinHandler);
 #endif
   }
 
@@ -45,10 +45,10 @@ public:
     if (motor_id >= kMotorSlots) {
       return;
     }
-    step_pins_[motor_id] = gpio;
-    if (steppers_[motor_id] == nullptr && gpio >= 0) {
-      FastAccelStepper* stepper = engine_.stepperConnectToPin(static_cast<uint8_t>(gpio));
-      steppers_[motor_id] = stepper;
+    this->step_pins_[motor_id] = gpio;
+    if (this->steppers_[motor_id] == nullptr && gpio >= 0) {
+      FastAccelStepper* stepper = this->engine_.stepperConnectToPin(static_cast<uint8_t>(gpio));
+      this->steppers_[motor_id] = stepper;
       if (stepper != nullptr) {
         const uint8_t dir_pin = static_cast<uint8_t>(DIR_BASE + motor_id) | PIN_EXTERNAL_FLAG;
         const uint8_t sleep_pin = static_cast<uint8_t>(SLEEP_BASE + motor_id) | PIN_EXTERNAL_FLAG;
@@ -72,17 +72,17 @@ public:
     if (motor_id >= kMotorSlots) {
       return false;
     }
-    FastAccelStepper* stepper = steppers_[motor_id];
+    FastAccelStepper* stepper = this->steppers_[motor_id];
     if (stepper == nullptr) {
       return false;
     }
-    if (speed != last_speed_[motor_id]) {
+    if (speed != this->last_speed_[motor_id]) {
       stepper->setSpeedInHz(static_cast<uint32_t>(speed));
-      last_speed_[motor_id] = speed;
+      this->last_speed_[motor_id] = speed;
     }
-    if (accel != last_accel_[motor_id]) {
+    if (accel != this->last_accel_[motor_id]) {
       stepper->setAcceleration(static_cast<int32_t>(accel));
-      last_accel_[motor_id] = accel;
+      this->last_accel_[motor_id] = accel;
     }
     return stepper->moveTo(target) == MOVE_OK;
   }
@@ -93,7 +93,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return false;
     }
-    FastAccelStepper* stepper = steppers_[motor_id];
+    FastAccelStepper* stepper = this->steppers_[motor_id];
     return (stepper != nullptr) && stepper->isRunning();
   }
 
@@ -103,7 +103,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return 0;
     }
-    FastAccelStepper* stepper = steppers_[motor_id];
+    FastAccelStepper* stepper = this->steppers_[motor_id];
     return (stepper != nullptr) ? stepper->getCurrentPosition() : 0;
   }
 
@@ -114,7 +114,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return;
     }
-    FastAccelStepper* stepper = steppers_[motor_id];
+    FastAccelStepper* stepper = this->steppers_[motor_id];
     if (stepper != nullptr) {
       stepper->setCurrentPosition(pos);
     }
@@ -129,7 +129,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return;
     }
-    auto* stepper = steppers_[motor_id];
+    auto* stepper = this->steppers_[motor_id];
     if (stepper == nullptr) {
       return;
     }
@@ -141,7 +141,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return;
     }
-    auto* stepper = steppers_[motor_id];
+    auto* stepper = this->steppers_[motor_id];
     if (stepper == nullptr) {
       return;
     }
@@ -153,7 +153,7 @@ public:
     if (motor_id >= kMotorSlots) {
       return;
     }
-    auto* stepper = steppers_[motor_id];
+    auto* stepper = this->steppers_[motor_id];
     if (stepper == nullptr) {
       return;
     }
@@ -171,18 +171,21 @@ private:
 void FasAdapterEsp32::begin() {}  // NOLINT(readability-convert-member-functions-to-static)
 void FasAdapterEsp32::configureStepPin(uint8_t /*motor_id*/, int /*gpio*/) {
 }  // NOLINT(readability-convert-member-functions-to-static)
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool FasAdapterEsp32::startMoveAbs(uint8_t /*motor_id*/,
                                    long /*target*/,
                                    int /*speed*/,
                                    int /*accel*/) {
   return false;
-}  // NOLINT(readability-convert-member-functions-to-static)
+}
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool FasAdapterEsp32::isMoving(uint8_t /*motor_id*/) const {
   return false;
-}  // NOLINT(readability-convert-member-functions-to-static)
+}
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 long FasAdapterEsp32::currentPosition(uint8_t /*motor_id*/) const {
   return 0;
-}  // NOLINT(readability-convert-member-functions-to-static)
+}
 void FasAdapterEsp32::setCurrentPosition(uint8_t /*motor_id*/, long /*position*/) {
 }  // NOLINT(readability-convert-member-functions-to-static)
 
@@ -191,9 +194,10 @@ IFasAdapter* createEsp32FasAdapter() {
 }
 
 // static
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool FasAdapterEsp32::externalPinHandler(
     uint8_t pin_identifier,
-    uint8_t value)  // NOLINT(readability-convert-member-functions-to-static)
+    uint8_t value)
 {
   uint8_t pin_index = static_cast<uint8_t>(pin_identifier & ~PIN_EXTERNAL_FLAG);
   const bool is_high = (value != 0);
