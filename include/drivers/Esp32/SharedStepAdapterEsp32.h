@@ -1,5 +1,9 @@
 #pragma once
 
+#ifndef IRAM_ATTR
+#define IRAM_ATTR
+#endif
+
 #if defined(ARDUINO)
 
 #include "hal/FasAdapter.h"
@@ -10,12 +14,6 @@
 #include <Arduino.h>
 #include <array>
 #include <climits>
-
-#if !defined(ARDUINO)
-#ifndef IRAM_ATTR
-#define IRAM_ATTR
-#endif
-#endif
 
 // Shared-STEP motion adapter implementing IFasAdapter without FastAccelStepper.
 // Generates a single STEP pulse train and gates per-motor SLEEP via 74HC595.

@@ -13,7 +13,7 @@ void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_(void* context) {
   if (context == nullptr) {
     return;
   }
-  auto* self = reinterpret_cast<SharedStepAdapterEsp32*>(context);
+  auto* self = static_cast<SharedStepAdapterEsp32*>(context);
   self->phase_anchor_us_ = micros();
 }
 
