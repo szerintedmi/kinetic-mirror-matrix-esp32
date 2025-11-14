@@ -161,6 +161,7 @@ bool MqttStatusPublisher::publish() {
   msg.payload = scratch_;
   msg.qos = 0;
   msg.retain = false;
+  msg.is_status = true;
   return publish_(msg);
 }
 

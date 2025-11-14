@@ -1,6 +1,6 @@
 #pragma once
 
-#ifndef IRAM_ATTR
+#if !defined(ARDUINO) && !defined(IRAM_ATTR)
 #define IRAM_ATTR
 #endif
 

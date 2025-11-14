@@ -3,12 +3,14 @@
 #include "mqtt/MqttCommandServer.h"
 #include "mqtt/MqttConfigStore.h"
 #include "mqtt/MqttStatusPublisher.h"
+#include "mqtt/PublishQueuePolicy.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "transport/MessageId.h"
 
 #include <ArduinoJson.h>
 #include <cmath>
 #include <cstdlib>
+#include <deque>
 #include <functional>
 #include <map>
 #include <string>
@@ -71,6 +73,72 @@ struct Harness {
     auto err = deserializeJson(doc, messages[idx].payload);
     TEST_ASSERT_FALSE_MESSAGE(err, err.c_str());
     return doc;
+  }
+};
+
+struct DropTailPublishQueue {
+  explicit DropTailPublishQueue(std::size_t capacity) : capacity(capacity) {}
+
+  bool publish(const mqtt::PublishMessage& msg) {
+    mqtt::EnqueuePublishMessage(queue, capacity, msg);
+    return true;
+  }
+
+  void enqueueStatus(const std::string& label) {
+    mqtt::PublishMessage msg;
+    msg.topic = "devices/test/status";
+    msg.payload = label;
+    msg.is_status = true;
+    mqtt::EnqueuePublishMessage(queue, capacity, msg);
+  }
+
+  std::vector<std::string> flush() {
+    std::vector<std::string> out;
+    while (!queue.empty()) {
+      out.push_back(queue.front().payload);
+      queue.pop_front();
+    }
+    return out;
+  }
+
+  std::size_t capacity;
+  std::deque<mqtt::PublishMessage> queue;
+};
+
+struct SaturatedQueueHarness {
+  MotorCommandProcessor processor;
+  DropTailPublishQueue queue;
+  mqtt::MqttCommandServer::SubscribeCallback callback;
+  uint32_t now_ms = 0;
+  mqtt::MqttCommandServer server;
+  std::vector<std::string> logs;
+
+  SaturatedQueueHarness(std::size_t capacity, const std::string& topic)
+      : queue(capacity),
+        server(
+            processor,
+            [this](const mqtt::PublishMessage& msg) { return queue.publish(msg); },
+            [this](const std::string& /*topic*/,
+                   uint8_t /*qos*/,
+                   mqtt::MqttCommandServer::SubscribeCallback cb) {
+              callback = std::move(cb);
+              return true;
+            },
+            [this](const std::string& line) { logs.push_back(line); },
+            [this]() -> uint32_t { return now_ms; }) {
+    bool bound = server.begin(topic);
+    (void)bound;
+  }
+
+  void send(const std::string& payload) {
+    TEST_ASSERT_TRUE_MESSAGE(static_cast<bool>(callback), "Server not subscribed");
+    callback("devices/test/cmd", payload);
+  }
+
+  void advance(uint32_t delta) {
+    now_ms += delta;
+    processor.tick(now_ms);
+    server.loop(now_ms);
   }
 };
 
@@ -648,6 +716,36 @@ void test_status_parity_matches_status_publisher() {
   }
 }
 
+void test_ack_survives_publish_queue_burst() {
+  SaturatedQueueHarness h(4, "devices/test/status");
+  for (int idx = 0; idx < 4; ++idx) {
+    h.queue.enqueueStatus("prefill-" + std::to_string(idx));
+  }
+
+  h.send(makeMovePayload("cmd-saturated", 0, 120));
+
+  for (int idx = 0; idx < 4; ++idx) {
+    h.queue.enqueueStatus("burst-" + std::to_string(idx));
+  }
+
+  h.advance(2000);
+
+  auto payloads = h.queue.flush();
+  bool ack_found = false;
+  bool done_found = false;
+  for (const auto& payload : payloads) {
+    if (payload.find("\"status\":\"ack\"") != std::string::npos) {
+      ack_found = true;
+    }
+    if (payload.find("\"status\":\"done\"") != std::string::npos) {
+      done_found = true;
+    }
+  }
+
+  TEST_ASSERT_TRUE_MESSAGE(done_found, "Expected DONE to be published");
+  TEST_ASSERT_TRUE_MESSAGE(ack_found, "Expected ACK to survive publish queue saturation");
+}
+
 void test_mqtt_config_json_persists() {
   mqtt::ConfigStore::Instance().ResetForTests();
   transport::message_id::ResetGenerator();
@@ -705,6 +803,7 @@ int main(int, char**) {
   RUN_TEST(test_duplicate_command_logs);
   RUN_TEST(test_busy_rejection);
   RUN_TEST(test_status_parity_matches_status_publisher);
+  RUN_TEST(test_ack_survives_publish_queue_burst);
   RUN_TEST(test_mqtt_config_json_persists);
   return UNITY_END();
 }

@@ -16,6 +16,7 @@ struct PublishMessage {
   std::string payload;
   uint8_t qos = 0;
   bool retain = false;
+  bool is_status = false;
 };
 
 class MqttPresenceClient {

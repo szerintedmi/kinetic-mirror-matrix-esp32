@@ -1,6 +1,8 @@
 #ifdef ARDUINO
 #include <Arduino.h>
 #include <unity.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 
 // Forward declarations of test functions defined across this suite
 void test_auto_sleep_after_move();
@@ -32,10 +34,7 @@ void setup() {
   RUN_TEST(test_net_connect_timeout_to_ap);
   RUN_TEST(test_net_happy_path_if_seeded);
   UNITY_END();
-  // Avoid re-running tests
-  while (true) {
-    delay(1000);
-  }
+  vTaskDelay(portMAX_DELAY);
 }
 
 void loop() {}

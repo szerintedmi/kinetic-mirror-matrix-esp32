@@ -1,5 +1,7 @@
 #include "mqtt/MqttPresenceClient.h"
 
+#include "mqtt/PublishQueuePolicy.h"
+
 #include "mqtt/MqttConfigStore.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/SerialImmediate.h"
@@ -29,7 +31,7 @@ constexpr uint16_t kMqttKeepAliveSeconds = 30;
 constexpr const char* kOfflinePayloadJson = "{\"node_state\":\"offline\",\"motors\":{}}";
 constexpr uint32_t kInitialReconnectDelayMs = 1000;
 constexpr uint32_t kMaxReconnectDelayMs = 30000;
-constexpr size_t kMaxQueuedMessages = 16;
+constexpr size_t kMaxQueuedMessages = 32;
 
 }  // namespace
 
@@ -57,6 +59,7 @@ MqttPresenceClient::MqttPresenceClient(net_onboarding::NetOnboarding& net,
   ready_publish_.topic = topic_;
   ready_publish_.retain = false;
   ready_publish_.qos = 0;
+  ready_publish_.is_status = true;
   offline_payload_ = BuildOfflinePayload();
   last_ip_ = "0.0.0.0";
   updateIdentityIfNeeded();
@@ -204,6 +207,7 @@ void MqttPresenceClient::updateIdentityIfNeeded() {
       mac_topic_ = normalized;
       topic_ = std::string(kTopicPrefix) + mac_topic_ + kTopicSuffix;
       ready_publish_.topic = topic_;
+      ready_publish_.is_status = true;
       publish_pending_ = true;
       if (connected_) {
         immediate_requested_ = true;
@@ -333,11 +337,7 @@ public:
   }
 
   bool enqueue(const PublishMessage& msg) {
-    if (publish_queue_.size() >= kMaxQueuedMessages) {
-      publish_queue_.pop_front();
-    }
-    publish_queue_.push_back(msg);
-    return true;
+    return EnqueuePublishMessage(publish_queue_, kMaxQueuedMessages, msg);
   }
 
   bool

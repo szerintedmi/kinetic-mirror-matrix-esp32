@@ -5,7 +5,12 @@ import sys
 from pathlib import Path
 from typing import Any, List
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+try:
+    _THIS_FILE = Path(__file__).resolve()
+except NameError:  # pragma: no cover - some SCons invocations omit __file__
+    _THIS_FILE = Path.cwd() / "tools" / "python_quality_target.py"
+
+PROJECT_ROOT = _THIS_FILE.parents[1] if _THIS_FILE.parent.parent else Path.cwd()
 PYPROJECT = PROJECT_ROOT / "pyproject.toml"
 DEFAULT_TARGETS = ["serial_cli", "tools", "test"]
 
