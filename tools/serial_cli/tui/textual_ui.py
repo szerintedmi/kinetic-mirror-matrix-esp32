@@ -344,6 +344,7 @@ class TextualUI(BaseUI):
             def __init__(self) -> None:
                 super().__init__()
                 self._last_log_len = 0
+                self._last_log_seq: Optional[int] = None
                 self._cols_ready = False
                 self._hist: List[str] = []
                 self._hist_idx: Optional[int] = None
@@ -425,6 +426,7 @@ class TextualUI(BaseUI):
             def action_clear_log(self) -> None:
                 self.query_one("#log", RichLog).clear()
                 self._last_log_len = 0
+                self._last_log_seq = None
 
             def action_scroll_log_up(self) -> None:
                 self.query_one("#log", RichLog).scroll_page_up()
@@ -493,16 +495,26 @@ class TextualUI(BaseUI):
 
             def _refresh(self) -> None:
                 state = worker.get_state()
-                if len(state) >= 6:
-                    rows, log, err, last_ts, _help_text, net = state[:6]
-                else:
-                    rows, log, err, last_ts, _help_text = state
-                    net = {}
-                    if hasattr(worker, "get_net_info"):
-                        try:
-                            net = worker.get_net_info() or {}
-                        except Exception:
-                            net = {}
+                rows, log, err, last_ts, _help_text = state[:5]
+                net: Dict[str, str] = {}
+                log_seq: Optional[int] = None
+                if len(state) >= 6 and isinstance(state[5], dict):
+                    net = state[5] or {}
+                elif hasattr(worker, "get_net_info"):
+                    try:
+                        net = worker.get_net_info() or {}
+                    except Exception:
+                        net = {}
+                if len(state) >= 7:
+                    try:
+                        log_seq = int(state[6])
+                    except (TypeError, ValueError):
+                        log_seq = None
+                if not net and hasattr(worker, "get_net_info"):
+                    try:
+                        net = worker.get_net_info() or {}
+                    except Exception:
+                        net = {}
 
                 status_text = _render_status_line(rows, net, last_ts)
                 if err:
@@ -541,11 +553,27 @@ class TextualUI(BaseUI):
 
                 # Update log with only new lines
                 rich_log = self.query_one("#log", RichLog)
-                new_lines = log[self._last_log_len :]
-                for ln in new_lines:
-                    rich_log.write(ln)
-                if new_lines:
+                new_lines: List[str] = []
+                if log_seq is not None:
+                    if self._last_log_seq is None or log_seq < self._last_log_seq:
+                        new_lines = list(log)
+                    else:
+                        delta = log_seq - self._last_log_seq
+                        if delta > 0:
+                            take = min(delta, len(log))
+                            new_lines = list(log[-take:])
+                    if new_lines:
+                        for ln in new_lines:
+                            rich_log.write(ln)
+                    self._last_log_seq = log_seq
                     self._last_log_len = len(log)
+                else:
+                    new_lines = log[self._last_log_len :]
+                    for ln in new_lines:
+                        rich_log.write(ln)
+                    if new_lines:
+                        self._last_log_len = len(log)
+                    self._last_log_seq = None
                 # Optionally surface connection error
                 if err:
                     self.status = f"[yellow]{err}[/]"
@@ -598,6 +626,7 @@ if __name__ == "__main__":  # pragma: no cover
             self._lock = threading.Lock()
             self._rows: List[Dict[str, str]] = []
             self._log: List[str] = []
+            self._log_seq: int = 0
             self._err: Optional[str] = None
             self._ts: float = 0.0
             self._help: str = ""
@@ -637,7 +666,9 @@ if __name__ == "__main__":  # pragma: no cover
                         if self._cmdq:
                             cmd = self._cmdq.pop(0).strip()
                             self._log.append(f"> {cmd}")
+                            self._log_seq += 1
                             self._log.append("CTRL:OK est_ms=100")
+                            self._log_seq += 1
                     time.sleep(self.period)
 
             self._thread = threading.Thread(target=_bg, daemon=True)
@@ -655,6 +686,8 @@ if __name__ == "__main__":  # pragma: no cover
                     self._err,
                     self._ts,
                     self._help,
+                    {"transport": "mock", "device": "MOCK"},
+                    self._log_seq,
                 )
 
         def get_thermal_state(self):

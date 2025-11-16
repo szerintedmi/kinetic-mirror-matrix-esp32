@@ -140,7 +140,8 @@ def test_mqtt_worker_ingest_snapshot():
     worker = MqttWorker(broker={}, client_factory=lambda: None)
     payload = _sample_payload()
     worker.ingest_message("devices/aa/status", payload, timestamp=100.0)
-    rows, _log, err, _ts, _ = worker.get_state()
+    state = worker.get_state()
+    rows, _log, err, _ts, _ = state[:5]
     assert err is None
     assert len(rows) == 2
     first = rows[0]
@@ -158,7 +159,8 @@ def test_mqtt_worker_ingest_snapshot():
     assert second["actual_ms"] == ""
 
     worker.ingest_message("devices/aa/status", _sample_payload(actual_ms=False), timestamp=105.0)
-    rows_updated, _, _, _, _ = worker.get_state()
+    state = worker.get_state()
+    rows_updated, _, _, _, _ = state[:5]
     assert rows_updated[0]["actual_ms"] == ""
     assert rows_updated[1]["actual_ms"] == ""
 
@@ -227,7 +229,8 @@ def test_mqtt_worker_queue_cmd_logs_error():
         timestamp=0.0,
     )
     worker.queue_cmd("MOVE:0,100")
-    _, log, _, _, _ = worker.get_state()
+    state = worker.get_state()
+    _, log, _, _, _ = state[:5]
     assert log[-2].startswith("> MOVE:0,100 (mqtt")
     assert log[-1] == "error: mqtt broker not connected"
 
@@ -295,7 +298,8 @@ def test_mqtt_worker_integration_latency_and_debounce():
         deadline = time.time() + 2.0
         connected = False
         while time.time() < deadline:
-            _, logs, _, _, _ = worker.get_state()
+            state = worker.get_state()
+            _, logs, _, _, _ = state[:5]
             if logs and "connected; subscribed" in logs[-1]:
                 connected = True
                 break
@@ -307,7 +311,8 @@ def test_mqtt_worker_integration_latency_and_debounce():
         payload1 = _sample_payload()
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
-        rows, log, _err, _last_ts, _ = worker.get_state()
+        state = worker.get_state()
+        rows, log, _err, _last_ts, _ = state[:5]
         assert len(rows) == 2
         first = rows[0]
         assert first["device"] == mac
@@ -320,7 +325,8 @@ def test_mqtt_worker_integration_latency_and_debounce():
 
         stub.emit_message(topic, payload1)
         time.sleep(0.05)
-        _rows_dup, log_dup, _, _, _ = worker.get_state()
+        state = worker.get_state()
+        _rows_dup, log_dup, _, _, _ = state[:5]
         assert len(log_dup) >= len(log)
         for left, right in zip(log_dup[: len(log)], log):
             if left == right:
@@ -330,7 +336,8 @@ def test_mqtt_worker_integration_latency_and_debounce():
         payload2 = _sample_payload(actual_ms=False)
         stub.emit_message(topic, payload2)
         time.sleep(0.05)
-        rows_new, _log_new, _, _, _ = worker.get_state()
+        state = worker.get_state()
+        rows_new, _log_new, _, _, _ = state[:5]
         assert rows_new[0]["actual_ms"] == ""
     finally:
         worker.stop()

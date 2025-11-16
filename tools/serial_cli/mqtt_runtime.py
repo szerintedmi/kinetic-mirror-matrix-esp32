@@ -21,6 +21,7 @@ from .command_builder import (
     UnsupportedCommandError,
     build_requests,
 )
+from .constants import LOG_HISTORY_LIMIT
 from .response_events import EventType, ResponseEvent, format_event, parse_mqtt_payload
 
 
@@ -102,6 +103,7 @@ class MqttWorker(threading.Thread):
         self.transport = "mqtt"
         self._devices: Dict[str, Dict[str, object]] = {}
         self._log: List[str] = []
+        self._log_seq: int = 0
         self._error: Optional[str] = None
         self._last_update_ts: float = 0.0
         self._client = None
@@ -337,12 +339,23 @@ class MqttWorker(threading.Thread):
                     return str(value)
 
             rows.sort(key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", ""))))
+            net = {
+                "transport": "mqtt",
+                "host": str(self._broker.get("host", "")),
+                "port": str(self._broker.get("port", "")),
+                "state": self._net_state.get("state", ""),
+                "ssid": self._net_state.get("ssid", ""),
+                "ip": self._net_state.get("ip", ""),
+                "device": self._net_state.get("device", ""),
+            }
             return (
                 rows,
-                list(self._log[-800:]),
+                list(self._log),
                 self._error,
                 self._last_update_ts,
                 self._help_text,
+                net,
+                self._log_seq,
             )
 
     def get_net_info(self) -> Dict[str, str]:
@@ -616,9 +629,7 @@ class MqttWorker(threading.Thread):
             self._maybe_update_net_state(event)
             self._maybe_update_thermal_state_locked(event, pending)
             formatted = format_event(event, latency_ms=latency)
-            self._log.append(formatted)
-            if len(self._log) > 800:
-                del self._log[: len(self._log) - 800]
+            self._push_log_locked(formatted)
 
             # Clean up completed commands
             if pending and pending.completed:
@@ -690,9 +701,16 @@ class MqttWorker(threading.Thread):
     # ------------------------------------------------------------------
     def _append_log(self, line: str) -> None:
         with self._lock:
-            self._log.append(line)
-            if len(self._log) > 800:
-                del self._log[: len(self._log) - 800]
+            self._push_log_locked(line)
+
+    def append_log(self, line: str) -> None:
+        self._append_log(line)
+
+    def _push_log_locked(self, line: str) -> None:
+        self._log.append(line)
+        self._log_seq += 1
+        if len(self._log) > LOG_HISTORY_LIMIT:
+            del self._log[: len(self._log) - LOG_HISTORY_LIMIT]
 
     # ------------------------------------------------------------------
     def _maybe_update_thermal_state_locked(

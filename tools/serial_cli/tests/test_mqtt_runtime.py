@@ -73,7 +73,8 @@ class MqttRuntimeTests(unittest.TestCase):
         payload = self._sample_payload()
         self.worker.ingest_message("devices/02123456789a/status", payload, timestamp=100.0)
 
-        rows, _log, err, last_ts, _help = self.worker.get_state()
+        state = self.worker.get_state()
+        rows, _log, err, last_ts, _help = state[:5]
 
         self.assertIsNone(err)
         self.assertGreater(last_ts, 0.0)
@@ -107,7 +108,8 @@ class MqttRuntimeTests(unittest.TestCase):
             "devices/abcdefabcdef/status", json.dumps(payload_b), timestamp=20.0
         )
 
-        rows, _, _, _, _ = self.worker.get_state()
+        state = self.worker.get_state()
+        rows, _, _, _, _ = state[:5]
         devices: List[str] = [row["device"] for row in rows]
         self.assertEqual(sorted(devices), devices)
 
@@ -204,7 +206,8 @@ class MqttRuntimeTests(unittest.TestCase):
         self.assertEqual(net_info.get("ssid"), "DeviceAP")
         self.assertEqual(net_info.get("ip"), "192.168.4.1")
 
-        _, log, _, _, _ = worker.get_state()
+        state = worker.get_state()
+        _, log, _, _, _ = state[:5]
         joined = "\n".join(log)
         self.assertIn("[ACK]", joined)
         self.assertIn("[DONE]", joined)
@@ -223,7 +226,8 @@ class MqttRuntimeTests(unittest.TestCase):
         )
         self.worker.ingest_response("devices/node123/cmd/resp", payload)
 
-        _, log, _, _, _ = self.worker.get_state()
+        state = self.worker.get_state()
+        _, log, _, _, _ = state[:5]
         self.assertTrue(log, "expected log entries")
         entry = log[-1]
         self.assertIn("[DONE]", entry)
@@ -329,7 +333,8 @@ class MqttRuntimeTests(unittest.TestCase):
                 "E04",
             )
 
-            _, log, _, _, _ = worker.get_state()
+            state = worker.get_state()
+            _, log, _, _, _ = state[:5]
             combined = "\n".join(log)
             self.assertIn("BUSY", combined)
         finally:

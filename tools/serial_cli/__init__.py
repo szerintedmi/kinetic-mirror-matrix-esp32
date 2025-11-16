@@ -347,7 +347,8 @@ def _run_status_mqtt(ns) -> int:
     worker.start()
     try:
         time.sleep(wait_seconds)
-        rows, log, err, _last_update, _ = worker.get_state()
+        state = worker.get_state()
+        rows, log, err, _last_update, _ = state[:5]
         if err:
             print(f"error: {err}", file=sys.stderr)
             return 1
@@ -598,7 +599,7 @@ def run_interactive(ns: argparse.Namespace) -> int:
             try:
                 worker.queue_cmd("NET:STATUS")
             except Exception as exc:
-                worker._log.append(f"error: failed to queue NET:STATUS ({exc})")  # type: ignore[attr-defined]
+                worker.append_log(f"error: failed to queue NET:STATUS ({exc})")  # type: ignore[attr-defined]
         ui = UIClass(worker, render_table)  # type: ignore[call-arg]
         rc = ui.run()
     finally:

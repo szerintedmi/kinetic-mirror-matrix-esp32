@@ -10,6 +10,7 @@ try:
 except Exception:  # pragma: no cover - handled by caller
     serial = None  # type: ignore
 
+from .constants import LOG_HISTORY_LIMIT
 from .response_events import EventType, ResponseEvent, format_event, parse_serial_line
 
 ParseStatusFn = Callable[[str], List[Dict[str, str]]]
@@ -57,6 +58,7 @@ class SerialWorker(threading.Thread):
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._log: List[str] = []
+        self._log_seq: int = 0
         self._cmdq: List[str] = []
         self._ser = None
         self._connected_err: Optional[str] = None
@@ -89,7 +91,7 @@ class SerialWorker(threading.Thread):
     def queue_cmd(self, cmd: str) -> None:
         with self._lock:
             line = cmd if cmd.endswith("\n") else cmd + "\n"
-            self._log.append("> " + cmd.strip())
+            self._push_log_locked("> " + cmd.strip())
             self._cmdq.append(line)
 
     def stop(self) -> None:
@@ -99,11 +101,12 @@ class SerialWorker(threading.Thread):
         with self._lock:
             return (
                 list(self._last_status_rows),
-                list(self._log[-800:]),
+                list(self._log),
                 self._connected_err,
                 self._last_update_ts,
                 self._last_help_text,
                 {**self._net_info, "device": self._device_id or ""},
+                self._log_seq,
             )
 
     def get_net_info(self) -> Dict[str, str]:
@@ -164,7 +167,7 @@ class SerialWorker(threading.Thread):
             pass
         with self._lock:
             if self._had_disconnect:
-                self._log.append("[reconnected]")
+                self._push_log_locked("[reconnected]")
             self._had_disconnect = False
             self._reconnect_dots = 0
             self._need_net_status_refresh = True
@@ -491,7 +494,7 @@ class SerialWorker(threading.Thread):
                 return
         self._maybe_track_background_id(self._extract_msg_id(line))
         with self._lock:
-            self._log.append(line)
+            self._push_log_locked(line)
 
     def _log_event(self, event: ResponseEvent, pending: Optional[PendingCommand]) -> None:
         msg_id = event.msg_id or event.cmd_id
@@ -515,7 +518,17 @@ class SerialWorker(threading.Thread):
             latency = pending.ack_latency_ms
         formatted = format_event(event, latency_ms=latency)
         with self._lock:
-            self._log.append(formatted)
+            self._push_log_locked(formatted)
+
+    def _push_log_locked(self, line: str) -> None:
+        self._log.append(line)
+        self._log_seq += 1
+        if len(self._log) > LOG_HISTORY_LIMIT:
+            del self._log[: len(self._log) - LOG_HISTORY_LIMIT]
+
+    def append_log(self, line: str) -> None:
+        with self._lock:
+            self._push_log_locked(line)
 
     def _maybe_track_background_id(self, msg_id: Optional[str]) -> None:
         if not msg_id:
@@ -539,7 +552,7 @@ class SerialWorker(threading.Thread):
         with self._lock:
             self._connected_err = str(exc)
             if not self._had_disconnect:
-                self._log.append(f"[disconnect] {exc}")
+                self._push_log_locked(f"[disconnect] {exc}")
                 self._had_disconnect = True
                 self._reconnect_dots = 0
             recon_prefix = f"Reconnecting to {self.port} "
@@ -547,7 +560,7 @@ class SerialWorker(threading.Thread):
             if self._log and self._log[-1].startswith(recon_prefix):
                 self._log[-1] = recon_prefix + dots
             else:
-                self._log.append(recon_prefix + dots)
+                self._push_log_locked(recon_prefix + dots)
             self._reconnect_dots += 1
 
 
