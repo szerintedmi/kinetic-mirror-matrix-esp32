@@ -71,7 +71,9 @@ class MqttRuntimeTests(unittest.TestCase):
 
     def test_ingest_aggregate_status_rows(self) -> None:
         payload = self._sample_payload()
-        self.worker.ingest_message("devices/02123456789a/status", payload, timestamp=100.0)
+        self.worker.ingest_message(
+            "devices/02123456789a/status", payload, timestamp=100.0
+        )
 
         state = self.worker.get_state()
         rows, _log, err, last_ts, _help = state[:5]
@@ -103,7 +105,9 @@ class MqttRuntimeTests(unittest.TestCase):
         payload_b["motors"]["0"]["position"] = 999
         payload_b["motors"]["0"]["moving"] = False
         payload_b["motors"]["0"]["actual_ms"] = 100
-        self.worker.ingest_message("devices/02123456789a/status", payload_a, timestamp=10.0)
+        self.worker.ingest_message(
+            "devices/02123456789a/status", payload_a, timestamp=10.0
+        )
         self.worker.ingest_message(
             "devices/abcdefabcdef/status", json.dumps(payload_b), timestamp=20.0
         )
@@ -356,7 +360,9 @@ class MqttRuntimeTests(unittest.TestCase):
 
         state = self.worker.get_thermal_state()
         self.assertEqual(state, (True, 120))
-        self.assertEqual(self.worker.get_thermal_status_text(), "thermal limiting=ON (max=120s)")
+        self.assertEqual(
+            self.worker.get_thermal_status_text(), "thermal limiting=ON (max=120s)"
+        )
 
     def test_thermal_state_updates_from_set_response(self) -> None:
         payload = json.dumps(

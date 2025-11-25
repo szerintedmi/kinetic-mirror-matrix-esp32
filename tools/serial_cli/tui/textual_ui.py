@@ -96,7 +96,9 @@ class TextualUI(BaseUI):
             import time as _time
 
             parts: List[str] = []
-            transport_mode = (net.get("transport") or base_transport or "serial").lower()
+            transport_mode = (
+                net.get("transport") or base_transport or "serial"
+            ).lower()
             if transport_mode == "mqtt":
                 host = net.get("host") or "-"
                 port = net.get("port") or "-"
@@ -128,21 +130,43 @@ class TextualUI(BaseUI):
                         },
                     )
 
-            device_id = net.get("device")
-            if not device_id and summaries:
-                device_id = sorted(summaries.keys())[0]
-            if not device_id:
-                device_id = "-"
-            parts.append(f"device={device_id}")
+            device_count = 0
+            try:
+                device_count = int(net.get("device_count") or 0)
+            except Exception:
+                device_count = 0
+
+            selected_device = net.get("selected_device") or net.get("device") or ""
+            if (not selected_device) and summaries:
+                selected_device = sorted(summaries.keys())[0]
+
+            selected_index = 0
+            try:
+                selected_index = int(net.get("selected_index") or 0)
+            except Exception:
+                selected_index = 0
+            if selected_index == 0 and selected_device:
+                order = sorted(summaries.keys())
+                if selected_device in order:
+                    selected_index = order.index(selected_device) + 1
+                    device_count = device_count or len(order)
+
+            device_label = selected_device or "-"
+            if device_count > 0 and selected_index > 0:
+                parts.append(f"device {selected_index}/{device_count}={device_label}")
+            else:
+                parts.append(f"device={device_label}")
 
             # Determine primary state/ip/age from summaries or net info
             primary = {}
-            if device_id and device_id in summaries:
-                primary = summaries[device_id]
+            if selected_device and selected_device in summaries:
+                primary = summaries[selected_device]
             elif summaries:
                 primary = summaries[sorted(summaries.keys())[0]]
 
-            state_val = str(primary.get("node_state", "") or net.get("node_state") or "")
+            state_val = str(
+                primary.get("node_state", "") or net.get("node_state") or ""
+            )
             ip_val = str(primary.get("ip", "") or net.get("ip", "") or "-")
             parts.append(f"ip={ip_val}")
 
@@ -179,7 +203,9 @@ class TextualUI(BaseUI):
                 color = "green" if enabled else "red"
                 text = "ON" if enabled else "OFF"
                 if isinstance(max_budget, int):
-                    parts.append(f"thermal limiting={_color(text, color)} (max={max_budget}s)")
+                    parts.append(
+                        f"thermal limiting={_color(text, color)} (max={max_budget}s)"
+                    )
                 else:
                     parts.append(f"thermal limiting={_color(text, color)}")
             else:
@@ -260,10 +286,16 @@ class TextualUI(BaseUI):
             def on_show(self) -> None:
                 # Request HELP from device if not present
                 state = worker.get_state()
-                help_text = state[4] if isinstance(state, (list, tuple)) and len(state) >= 5 else ""
+                help_text = (
+                    state[4]
+                    if isinstance(state, (list, tuple)) and len(state) >= 5
+                    else ""
+                )
                 if not help_text:
                     worker.queue_cmd("HELP")
-                self.set_interval(0.25, self._refresh_help, pause=False, name="help-refresh")
+                self.set_interval(
+                    0.25, self._refresh_help, pause=False, name="help-refresh"
+                )
 
             def _render_left(self) -> str:
                 left = [
@@ -282,6 +314,9 @@ class TextualUI(BaseUI):
                     "  GET/SET SPEED, ACCEL, DECEL",
                     "  GET LAST_OP_TIMING[:<id|ALL>]",
                     "",
+                    "Driver selection:",
+                    "  /<n>  (e.g., /1 selects driver #1)",
+                    "",
                     "Copy/paste:",
                     "  Tip: Hold Shift to select text in many terminals",
                     "",
@@ -294,7 +329,11 @@ class TextualUI(BaseUI):
 
             def _refresh_help(self) -> None:
                 state = worker.get_state()
-                help_text = state[4] if isinstance(state, (list, tuple)) and len(state) >= 5 else ""
+                help_text = (
+                    state[4]
+                    if isinstance(state, (list, tuple)) and len(state) >= 5
+                    else ""
+                )
                 t = help_text or "(no data)"
                 if t != self._last_help_text:
                     # Trim any leading HELP echo
@@ -438,6 +477,26 @@ class TextualUI(BaseUI):
                 text = (event.value or "").strip()
                 if not text:
                     return
+                # Driver selection shortcut: "/<n>" selects driver sequence number
+                if text.startswith("/") and text[1:].isdigit():
+                    idx = int(text[1:])
+                    if hasattr(worker, "set_selected_device_by_index"):
+                        ok, dev, total = worker.set_selected_device_by_index(idx)  # type: ignore[attr-defined]
+                        if ok:
+                            self.notify(
+                                f"Selected driver {idx}/{total}: {dev}", timeout=2.0
+                            )
+                        else:
+                            self.notify(
+                                f"No driver #{idx} (available: {total})", timeout=2.0
+                            )
+                    else:
+                        self.notify(
+                            "Driver selection not supported for this transport",
+                            timeout=2.0,
+                        )
+                    event.input.value = ""
+                    return
                 # Only device commands are sent; use ctrl+h / ctrl+q for app actions
                 worker.queue_cmd(text)
                 if (not self._hist) or self._hist[-1] != text:
@@ -530,7 +589,11 @@ class TextualUI(BaseUI):
                         for key, _label, _w in self._columns:
                             raw_val = r.get(key, "")
                             if key in ("moving", "awake", "homed"):
-                                val = "1" if str(raw_val) in ("1", "True", "true") else "0"
+                                val = (
+                                    "1"
+                                    if str(raw_val) in ("1", "True", "true")
+                                    else "0"
+                                )
                             else:
                                 val = str(raw_val)
                             row.append(val)
@@ -593,13 +656,13 @@ class TextualUI(BaseUI):
                     tp = self.query_one("#table_panel")
                     lp = self.query_one("#log_panel")
                     # Apply only if changed to reduce churn
-                    if int(getattr(tp.styles.height, "value", tp.styles.height or 0) or 0) != int(
-                        desired_table
-                    ):
+                    if int(
+                        getattr(tp.styles.height, "value", tp.styles.height or 0) or 0
+                    ) != int(desired_table):
                         tp.styles.height = desired_table
-                    if int(getattr(lp.styles.height, "value", lp.styles.height or 0) or 0) != int(
-                        log_h
-                    ):
+                    if int(
+                        getattr(lp.styles.height, "value", lp.styles.height or 0) or 0
+                    ) != int(log_h):
                         lp.styles.height = log_h
                 except Exception:
                     pass

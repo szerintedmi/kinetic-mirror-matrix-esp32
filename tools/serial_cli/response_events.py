@@ -226,7 +226,9 @@ def format_event(event: ResponseEvent, *, latency_ms: Optional[float] = None) ->
             extra_block = "\n".join(f"  {line}" for line in lines)
     if event.warnings:
         formatted = ",".join(
-            f"{w.get('code', 'WARN')}:{w.get('reason', w.get('message', ''))}".strip(":")
+            f"{w.get('code', 'WARN')}:{w.get('reason', w.get('message', ''))}".strip(
+                ":"
+            )
             for w in event.warnings
         )
         if formatted:

@@ -323,12 +323,16 @@ class SerialWorker(threading.Thread):
             pending.stream_deadline = max(
                 pending.stream_deadline, now + max(3.0, self.base_timeout * 2.0)
             )
-            pending.deadline = max(pending.deadline, now + max(6.0, self.base_timeout * 3.0))
+            pending.deadline = max(
+                pending.deadline, now + max(6.0, self.base_timeout * 3.0)
+            )
         elif upper.startswith("NET:LIST"):
             pending.stream_deadline = max(
                 pending.stream_deadline, now + max(2.0, self.base_timeout * 1.5)
             )
-            pending.deadline = max(pending.deadline, now + max(4.0, self.base_timeout * 2.0))
+            pending.deadline = max(
+                pending.deadline, now + max(4.0, self.base_timeout * 2.0)
+            )
         elif upper.startswith("SSID="):
             pending.stream_deadline = max(
                 pending.stream_deadline, now + max(0.5, self.base_timeout / 3.0)
@@ -431,7 +435,9 @@ class SerialWorker(threading.Thread):
                 elif low.startswith("ip="):
                     metadata.setdefault("ip", _strip_quotes(tok.split("=", 1)[1]))
                 elif low.startswith("node_state="):
-                    metadata.setdefault("node_state", _strip_quotes(tok.split("=", 1)[1]))
+                    metadata.setdefault(
+                        "node_state", _strip_quotes(tok.split("=", 1)[1])
+                    )
         with self._lock:
             self._last_status_rows = rows
             self._last_status_text = payload
@@ -496,7 +502,9 @@ class SerialWorker(threading.Thread):
         with self._lock:
             self._push_log_locked(line)
 
-    def _log_event(self, event: ResponseEvent, pending: Optional[PendingCommand]) -> None:
+    def _log_event(
+        self, event: ResponseEvent, pending: Optional[PendingCommand]
+    ) -> None:
         msg_id = event.msg_id or event.cmd_id
         self._maybe_track_background_id(msg_id)
         latency = None
@@ -514,7 +522,11 @@ class SerialWorker(threading.Thread):
                 return
             if event.event_type == EventType.ACK:
                 pending.ack_latency_ms = None
-        elif pending and event.event_type == EventType.ACK and pending.ack_latency_ms is not None:
+        elif (
+            pending
+            and event.event_type == EventType.ACK
+            and pending.ack_latency_ms is not None
+        ):
             latency = pending.ack_latency_ms
         formatted = format_event(event, latency_ms=latency)
         with self._lock:

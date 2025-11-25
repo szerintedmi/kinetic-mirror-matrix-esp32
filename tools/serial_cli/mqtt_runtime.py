@@ -137,6 +137,7 @@ class MqttWorker(threading.Thread):
         self._requested_thermal_status = False
         self._help_text: str = ""
         self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
+        self._selected_device: Optional[str] = None
 
         if client_factory is not None:
             self._client_factory = client_factory
@@ -197,7 +198,9 @@ class MqttWorker(threading.Thread):
                         delay = None
                         with self._lock:
                             delay = self._reconnect_backoff
-                            self._reconnect_backoff = min(self._reconnect_backoff * 2.0, 30.0)
+                            self._reconnect_backoff = min(
+                                self._reconnect_backoff * 2.0, 30.0
+                            )
                             self._next_connect_ts = time.time() + delay
                         self._append_log(f"[mqtt error] {exc}")
                         self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
@@ -231,6 +234,24 @@ class MqttWorker(threading.Thread):
     # ------------------------------------------------------------------
     # Control/compatibility helpers (mirrors SerialWorker)
     # ------------------------------------------------------------------
+    def _ordered_devices_locked(self) -> List[str]:
+        # Stable ordering for sequence numbers (alphabetical by device id)
+        return sorted(self._devices.keys())
+
+    def set_selected_device_by_index(
+        self, index: int
+    ) -> Tuple[bool, Optional[str], int]:
+        with self._lock:
+            devices = self._ordered_devices_locked()
+            total = len(devices)
+            if index < 1 or index > total:
+                return False, None, total
+            self._selected_device = devices[index - 1]
+            self._push_log_locked(
+                f"[ui] selected device {index}/{total}: {self._selected_device}"
+            )
+            return True, self._selected_device, total
+
     def queue_cmd(self, cmd: str, *, silent: bool = False) -> List[int]:
         stripped = cmd.strip()
         if not stripped:
@@ -338,7 +359,22 @@ class MqttWorker(threading.Thread):
                 except (ValueError, TypeError):
                     return str(value)
 
-            rows.sort(key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", ""))))
+            rows.sort(
+                key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", "")))
+            )
+            devices_ordered = self._ordered_devices_locked()
+            selected = None
+            if self._selected_device and self._selected_device in self._devices:
+                selected = self._selected_device
+            elif self._node_id and self._node_id in self._devices:
+                selected = self._node_id
+            elif devices_ordered:
+                selected = devices_ordered[0]
+
+            selected_index = None
+            if selected and selected in devices_ordered:
+                selected_index = devices_ordered.index(selected) + 1
+
             net = {
                 "transport": "mqtt",
                 "host": str(self._broker.get("host", "")),
@@ -347,6 +383,9 @@ class MqttWorker(threading.Thread):
                 "ssid": self._net_state.get("ssid", ""),
                 "ip": self._net_state.get("ip", ""),
                 "device": self._net_state.get("device", ""),
+                "selected_device": selected or "",
+                "selected_index": selected_index or 0,
+                "device_count": len(devices_ordered),
             }
             return (
                 rows,
@@ -360,6 +399,17 @@ class MqttWorker(threading.Thread):
 
     def get_net_info(self) -> Dict[str, str]:
         with self._lock:
+            devices_ordered = self._ordered_devices_locked()
+            selected = None
+            if self._selected_device and self._selected_device in self._devices:
+                selected = self._selected_device
+            elif self._node_id and self._node_id in self._devices:
+                selected = self._node_id
+            elif devices_ordered:
+                selected = devices_ordered[0]
+            selected_index = 0
+            if selected and selected in devices_ordered:
+                selected_index = devices_ordered.index(selected) + 1
             return {
                 "transport": "mqtt",
                 "host": str(self._broker.get("host", "")),
@@ -368,6 +418,9 @@ class MqttWorker(threading.Thread):
                 "ssid": self._net_state.get("ssid", ""),
                 "ip": self._net_state.get("ip", ""),
                 "device": self._net_state.get("device", ""),
+                "selected_device": selected or "",
+                "selected_index": selected_index,
+                "device_count": len(devices_ordered),
             }
 
     def get_thermal_state(self):  # pragma: no cover - compatibility stub
@@ -385,9 +438,13 @@ class MqttWorker(threading.Thread):
         return prefix
 
     def _resolve_node_id(self) -> Optional[str]:
-        if self._node_id:
-            return self._node_id
         with self._lock:
+            if self._selected_device and self._selected_device in self._devices:
+                return self._selected_device
+            if self._selected_device and self._selected_device not in self._devices:
+                self._selected_device = None
+            if self._node_id:
+                return self._node_id
             if not self._devices:
                 return None
             if len(self._devices) == 1:
@@ -450,7 +507,9 @@ class MqttWorker(threading.Thread):
             self._reconnect_backoff = 1.0
             self._next_connect_ts = float("inf")
             self._condition.notify_all()
-        self._append_log("[mqtt] connected; subscribed to devices/+/status, devices/+/cmd/resp")
+        self._append_log(
+            "[mqtt] connected; subscribed to devices/+/status, devices/+/cmd/resp"
+        )
 
     def _on_disconnect(self, client, userdata, rc):
         with self._lock:
@@ -479,7 +538,9 @@ class MqttWorker(threading.Thread):
         self._append_log(f"[mqtt] ignored topic {msg.topic}")
 
     # ------------------------------------------------------------------
-    def ingest_message(self, topic: str, payload: str, timestamp: Optional[float] = None) -> None:
+    def ingest_message(
+        self, topic: str, payload: str, timestamp: Optional[float] = None
+    ) -> None:
         mac = topic.split("/")[1] if topic.startswith("devices/") else topic
         ts = timestamp if timestamp is not None else time.time()
 
@@ -548,7 +609,11 @@ class MqttWorker(threading.Thread):
             if not self._requested_net_status and self._node_id:
                 self._requested_net_status = True
                 should_request_net = True
-            if self._need_thermal_refresh and not self._requested_thermal_status and self._node_id:
+            if (
+                self._need_thermal_refresh
+                and not self._requested_thermal_status
+                and self._node_id
+            ):
                 self._requested_thermal_status = True
                 should_request_thermal = True
         if should_request_net:
@@ -595,7 +660,11 @@ class MqttWorker(threading.Thread):
                 for candidate in self._pending_order:
                     if candidate.completed:
                         continue
-                    if candidate.cmd_id and event.cmd_id and candidate.cmd_id != event.cmd_id:
+                    if (
+                        candidate.cmd_id
+                        and event.cmd_id
+                        and candidate.cmd_id != event.cmd_id
+                    ):
                         continue
                     if node_id and candidate.node_id != node_id:
                         continue

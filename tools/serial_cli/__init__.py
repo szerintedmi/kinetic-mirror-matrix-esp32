@@ -30,7 +30,9 @@ def _join_home_with_placeholders(id_token: str, overshoot, backoff, full_range) 
             break
     parts = [id_token]
     if hi >= 0:
-        parts.extend([fields[i] if fields[i] is not None else "" for i in range(0, hi + 1)])
+        parts.extend(
+            [fields[i] if fields[i] is not None else "" for i in range(0, hi + 1)]
+        )
     return f"HOME:{','.join(parts)}\n"
 
 
@@ -54,7 +56,9 @@ def build_command(ns: argparse.Namespace) -> str:
         return f"MOVE:{','.join(parts)}\n"
     if cmd == "home" or cmd == "h":
         # Simplified grammar: no per-home speed/accel
-        return _join_home_with_placeholders(str(ns.id), ns.overshoot, ns.backoff, ns.full_range)
+        return _join_home_with_placeholders(
+            str(ns.id), ns.overshoot, ns.backoff, ns.full_range
+        )
     raise SystemExit(f"Unknown command: {cmd}")
 
 
@@ -131,9 +135,15 @@ def extract_est_ms_from_ctrl_ok(text: str) -> Optional[int]:
 
 def _add_common(sub):
     sub.add_argument("--port", "-p", help="Serial port (e.g., /dev/ttyUSB0, COM3)")
-    sub.add_argument("--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)")
     sub.add_argument(
-        "--timeout", "-t", type=float, default=2.0, help="Read timeout seconds (default 2.0)"
+        "--baud", "-b", type=int, default=115200, help="Baud rate (default 115200)"
+    )
+    sub.add_argument(
+        "--timeout",
+        "-t",
+        type=float,
+        default=2.0,
+        help="Read timeout seconds (default 2.0)",
     )
     sub.add_argument(
         "--dry-run", action="store_true", help="Print command only; do not open serial"
@@ -157,27 +167,37 @@ def make_parser() -> argparse.ArgumentParser:
     _add_common(sp.add_parser("help", help="Print device HELP"))
     _add_common(sp.add_parser("status", help="Print STATUS"))
     _add_common(sp.add_parser("st", help="Alias for status"))
-    s_lo = _add_common(sp.add_parser("last-op", help="Show last MOVE/HOME timing (device)"))
+    s_lo = _add_common(
+        sp.add_parser("last-op", help="Show last MOVE/HOME timing (device)")
+    )
     s_lo.add_argument("id", nargs="?", help="Motor id 0-7 or ALL; omit to list all")
 
     for name in ("wake", "sleep"):
         s = _add_common(sp.add_parser(name, help=f"{name.upper()} a motor or ALL"))
         s.add_argument("id", help="Motor id 0-7 or ALL")
 
-    s = _add_common(sp.add_parser("move", help="MOVE absolute position (uses global SPEED/ACCEL)"))
+    s = _add_common(
+        sp.add_parser("move", help="MOVE absolute position (uses global SPEED/ACCEL)")
+    )
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
     s_alias = _add_common(sp.add_parser("m", help="Alias for move"))
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
-    s_alias.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
+    s_alias.add_argument(
+        "abs_steps", type=int, help="Absolute target steps (-1200..1200)"
+    )
 
     s = _add_common(
-        sp.add_parser("home", help="HOME with optional params (overshoot/backoff/full_range)")
+        sp.add_parser(
+            "home", help="HOME with optional params (overshoot/backoff/full_range)"
+        )
     )
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("--overshoot", type=int, help="Optional overshoot steps")
     s.add_argument("--backoff", type=int, help="Optional backoff steps")
-    s.add_argument("--full-range", type=int, dest="full_range", help="Optional full_range steps")
+    s.add_argument(
+        "--full-range", type=int, dest="full_range", help="Optional full_range steps"
+    )
     s_alias = _add_common(sp.add_parser("h", help="Alias for home"))
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("--overshoot", type=int, help="Optional overshoot steps")
@@ -188,16 +208,22 @@ def make_parser() -> argparse.ArgumentParser:
 
     # estimation/measurement helpers
     s = _add_common(
-        sp.add_parser("check-move", help="Compute estimate and measure actual MOVE duration")
+        sp.add_parser(
+            "check-move", help="Compute estimate and measure actual MOVE duration"
+        )
     )
     s.add_argument("id", type=str, help="Motor id 0-7")
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
     s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
     s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
-    s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
+    s.add_argument(
+        "--tolerance", type=float, default=0.25, help="Allowed relative deviation"
+    )
 
     s = _add_common(
-        sp.add_parser("check-home", help="Compute estimate and measure actual HOME duration")
+        sp.add_parser(
+            "check-home", help="Compute estimate and measure actual HOME duration"
+        )
     )
     s.add_argument("id", type=str, help="Motor id 0-7 or ALL")
     s.add_argument("--overshoot", type=int, default=800, help="Overshoot steps")
@@ -205,15 +231,25 @@ def make_parser() -> argparse.ArgumentParser:
     s.add_argument("--speed", type=int, default=4000, help="Speed (steps/s)")
     s.add_argument("--accel", type=int, default=16000, help="Accel (steps/s^2)")
     s.add_argument(
-        "--full-range", type=int, default=2400, dest="full_range", help="Full range steps"
+        "--full-range",
+        type=int,
+        default=2400,
+        dest="full_range",
+        help="Full range steps",
     )
-    s.add_argument("--tolerance", type=float, default=0.25, help="Allowed relative deviation")
+    s.add_argument(
+        "--tolerance", type=float, default=0.25, help="Allowed relative deviation"
+    )
 
     # interactive TUI
     s = _add_common(
-        sp.add_parser("interactive", help="Interactive TUI (poll STATUS and accept commands)")
+        sp.add_parser(
+            "interactive", help="Interactive TUI (poll STATUS and accept commands)"
+        )
     )
-    s.add_argument("--rate", "-r", type=float, default=2.0, help="Refresh rate in Hz (default 2.0)")
+    s.add_argument(
+        "--rate", "-r", type=float, default=2.0, help="Refresh rate in Hz (default 2.0)"
+    )
 
     return p
 
@@ -227,7 +263,10 @@ def parse_status_lines(text: str) -> List[Dict[str, str]]:
         rows = []
         for ln in lines[1:]:
             parts = [p.strip() for p in ln.split(",")]
-            row = {headers[i]: parts[i] if i < len(parts) else "" for i in range(len(headers))}
+            row = {
+                headers[i]: parts[i] if i < len(parts) else ""
+                for i in range(len(headers))
+            }
             rows.append(row)
         return rows
     out = []
@@ -299,7 +338,12 @@ def _render_presence_table(rows: List[Dict[str, str]]) -> str:
 
 
 def render_table(rows: List[Dict[str, str]]) -> str:
-    if rows and isinstance(rows[0], dict) and "device" in rows[0] and "id" not in rows[0]:
+    if (
+        rows
+        and isinstance(rows[0], dict)
+        and "device" in rows[0]
+        and "id" not in rows[0]
+    ):
         return _render_presence_table(rows)
     cols = [
         ("id", 2, "id"),
@@ -327,7 +371,10 @@ def render_table(rows: List[Dict[str, str]]) -> str:
 
 
 def _make_mqtt_worker(
-    *, broker_overrides: Optional[Dict[str, str]] = None, node: Optional[str] = None, **kwargs
+    *,
+    broker_overrides: Optional[Dict[str, str]] = None,
+    node: Optional[str] = None,
+    **kwargs,
 ):
     from .mqtt_runtime import MqttWorker, load_mqtt_defaults
 
@@ -524,7 +571,9 @@ def main(argv=None) -> int:
                 margin = max(100, int(est_ms * tol))
                 lower = max(0, est_ms - margin)
                 upper = est_ms + margin
-                print(f"estimate_ms={est_ms} actual_ms={actual_ms} acceptable=[{lower},{upper}]")
+                print(
+                    f"estimate_ms={est_ms} actual_ms={actual_ms} acceptable=[{lower},{upper}]"
+                )
                 if actual_ms < lower or actual_ms > upper:
                     return 1
         except Exception as e:
@@ -537,7 +586,10 @@ def main(argv=None) -> int:
         sys.stdout.write(cmd)
         return 0
     if serial is None:
-        print("pyserial not installed. Use --dry-run or install 'pyserial'.", file=sys.stderr)
+        print(
+            "pyserial not installed. Use --dry-run or install 'pyserial'.",
+            file=sys.stderr,
+        )
         return 2
     if not ns.port:
         print("--port is required without --dry-run", file=sys.stderr)
@@ -572,7 +624,10 @@ def run_interactive(ns: argparse.Namespace) -> int:
             return 2
     else:
         if ns.dry_run:
-            print("'interactive' ignores --dry-run; requires a serial port.", file=sys.stderr)
+            print(
+                "'interactive' ignores --dry-run; requires a serial port.",
+                file=sys.stderr,
+            )
             return 2
         if serial is None:
             print(
