@@ -24,6 +24,8 @@ public:
 
   // Public static to allow engine registration
   static bool externalPinHandler(uint8_t pin, uint8_t value);
+  // Poll for deferred SPI latch (call from main loop/tick)
+  static void pollLatchStatic();
 };
 
 // Factory for HardwareMotorController default construction

@@ -9,6 +9,7 @@ constexpr uint32_t kImmediateFlipDelayUs = 3;
 }
 
 // ISR hook invoked by the shared STEP generator
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables) - IRAM_ATTR is a function attribute, not a variable
 void IRAM_ATTR SharedStepAdapterEsp32::onRisingEdgeHook_(void* context) {
   if (context == nullptr) {
     return;
@@ -212,7 +213,8 @@ bool SharedStepAdapterEsp32::startMoveAbs(uint8_t motor_id, long target, int spe
 }
 
 void SharedStepAdapterEsp32::updateProgress_(uint8_t motor_id) const {
-  Slot& slot = const_cast<Slot&>(slots_[motor_id]);
+  // slots_ is mutable, so direct access is safe in const methods
+  Slot& slot = slots_[motor_id];
   if (!slot.moving) {
     return;
   }
@@ -326,7 +328,8 @@ void SharedStepAdapterEsp32::updateRamp_(uint32_t now_us) const {
 }
 
 void SharedStepAdapterEsp32::runFlipScheduler_(uint8_t motor_id, uint32_t now_us) const {
-  FlipSchedule& schedule = const_cast<FlipSchedule&>(flips_[motor_id]);
+  // flips_ is mutable, so direct access is safe in const methods
+  FlipSchedule& schedule = flips_[motor_id];
   if (!schedule.active) {
     return;
   }

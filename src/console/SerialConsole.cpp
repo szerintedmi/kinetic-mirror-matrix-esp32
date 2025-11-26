@@ -25,8 +25,9 @@ constexpr char kDeleteChar = 0x7F;
 
 struct SerialConsoleState {
   MotorCommandProcessor* command_processor = nullptr;
-  std::array<char, 256> input_buffer{};
+  std::array<char, 512> input_buffer{};  // Increased for batch commands
   size_t input_length = 0;
+  bool overflow_pending = false;  // Track overflow state until newline
   uint32_t ignore_until_ms = 0;  // grace period to ignore deploy-time noise
   mqtt::AsyncMqttPresenceClient* presence_client = nullptr;
   mqtt::MqttStatusPublisher* status_publisher = nullptr;
@@ -87,12 +88,24 @@ void ProcessSerialInput(SerialConsoleState& state) {
     }
     if (input_char == '\n') {
       Serial.println();
+      if (state.overflow_pending) {
+        // Overflow occurred - emit error and reset for next command
+        Serial.println("CTRL:ERR E03 BAD_PARAM buffer_overflow");
+        state.overflow_pending = false;
+        state.input_length = 0;
+        continue;
+      }
       state.input_buffer[state.input_length] = '\0';
       if (state.command_processor == nullptr) {
         return;
       }
       (void)state.command_processor->execute(std::string(state.input_buffer.data()), millis());
       state.input_length = 0;
+      continue;
+    }
+
+    // If overflow pending, discard characters until newline
+    if (state.overflow_pending) {
       continue;
     }
 
@@ -110,8 +123,8 @@ void ProcessSerialInput(SerialConsoleState& state) {
       state.input_buffer[state.input_length++] = input_char;
       Serial.write(input_char);
     } else {
-      state.input_length = 0;
-      Serial.println("CTRL:ERR E03 BAD_PARAM buffer_overflow");
+      // Buffer full - mark overflow, error will be emitted on newline
+      state.overflow_pending = true;
     }
   }
 }

@@ -7,12 +7,19 @@
 #include <Arduino.h>
 #include <FastAccelStepper.h>
 #include <array>
+#include <atomic>
 
 // External pin integration state
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 static IShift595* g_shift = nullptr;
-static uint8_t g_dir_bits = 0;
-static uint8_t g_sleep_bits = 0;
+// Use atomics for ISR-safe access - these are modified from FastAccelStepper ISR
+static std::atomic<uint8_t> g_dir_bits{0};
+static std::atomic<uint8_t> g_sleep_bits{0};
+// Dirty flag: set in ISR, cleared after SPI latch in main loop
+static std::atomic<bool> g_latch_dirty{false};
+// Shadow copies for main-loop latch (avoids repeated atomic loads)
+static uint8_t g_last_latched_dir{0};
+static uint8_t g_last_latched_sleep{0};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
 static constexpr uint8_t DIR_BASE = 0;     // virtual range [0..7]
 static constexpr uint8_t SLEEP_BASE = 32;  // virtual range [32..39]
@@ -160,6 +167,8 @@ public:
     stepper->disableOutputs();
   }
 
+  void pollLatch() override { FasAdapterEsp32::pollLatchStatic(); }
+
 private:
   FastAccelStepperEngine engine_{};
   std::array<FastAccelStepper*, kMotorSlots> steppers_{};
@@ -203,23 +212,43 @@ bool FasAdapterEsp32::externalPinHandler(
   const bool is_high = (value != 0);
   if (pin_index >= SLEEP_BASE) {
     uint8_t motor_id = pin_index - SLEEP_BASE;
+    const uint8_t mask = static_cast<uint8_t>(1U << motor_id);
+    // NOLINTNEXTLINE(bugprone-branch-clone) - false positive: fetch_or vs fetch_and are different
     if (is_high) {
-      g_sleep_bits |= (1U << motor_id);
+      g_sleep_bits.fetch_or(mask, std::memory_order_relaxed);
     } else {
-      g_sleep_bits &= static_cast<uint8_t>(~(1U << motor_id));
+      g_sleep_bits.fetch_and(static_cast<uint8_t>(~mask), std::memory_order_relaxed);
     }
   } else {
     uint8_t motor_id = pin_index - DIR_BASE;
+    const uint8_t mask = static_cast<uint8_t>(1U << motor_id);
+    // NOLINTNEXTLINE(bugprone-branch-clone) - false positive: fetch_or vs fetch_and are different
     if (is_high) {
-      g_dir_bits |= (1U << motor_id);
+      g_dir_bits.fetch_or(mask, std::memory_order_relaxed);
     } else {
-      g_dir_bits &= static_cast<uint8_t>(~(1U << motor_id));
+      g_dir_bits.fetch_and(static_cast<uint8_t>(~mask), std::memory_order_relaxed);
     }
   }
-  if (g_shift != nullptr) {
-    g_shift->setDirSleep(g_dir_bits, g_sleep_bits);
-  }
+  // Mark dirty for main-loop latch; DO NOT call SPI from ISR context
+  g_latch_dirty.store(true, std::memory_order_release);
   return is_high;
+}
+
+void FasAdapterEsp32::pollLatchStatic() {
+  if (!g_latch_dirty.load(std::memory_order_acquire)) {
+    return;
+  }
+  uint8_t dir = g_dir_bits.load(std::memory_order_relaxed);
+  uint8_t sleep = g_sleep_bits.load(std::memory_order_relaxed);
+  // Only latch if bits actually changed (reduces SPI traffic)
+  if (dir != g_last_latched_dir || sleep != g_last_latched_sleep) {
+    if (g_shift != nullptr) {
+      g_shift->setDirSleep(dir, sleep);
+    }
+    g_last_latched_dir = dir;
+    g_last_latched_sleep = sleep;
+  }
+  g_latch_dirty.store(false, std::memory_order_release);
 }
 
 #endif

@@ -1,5 +1,6 @@
 .platformio/
 .tmp
+.cache
 include/secrets.h
 
 # data is generated from data_src at build by tools/gzip_fs.py

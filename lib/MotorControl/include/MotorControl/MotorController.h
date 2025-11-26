@@ -14,6 +14,7 @@ struct MotorState {
   int32_t steps_since_home;  // absolute steps accumulated since last HOME
   int32_t budget_tenths;     // remaining runtime budget in tenths of seconds (can go < 0)
   uint32_t last_update_ms;   // last time budget bookkeeping ran
+  uint16_t budget_accum_ms;  // sub-second accumulator for budget (0-99ms)
   // Last operation timing (for host queries)
   uint32_t last_op_started_ms;  // device ms when last MOVE/HOME began (0 if none)
   uint32_t last_op_last_ms;     // duration of last completed MOVE/HOME in ms

@@ -33,6 +33,7 @@ HardwareMotorController::HardwareMotorController(IShift595& shift,
                             0,
                             MotorControlConstants::BUDGET_TENTHS_MAX,
                             0,
+                            0,  // budget_accum_ms
                             0,
                             0,
                             0,
@@ -81,6 +82,7 @@ HardwareMotorController::HardwareMotorController() {
                             0,
                             MotorControlConstants::BUDGET_TENTHS_MAX,
                             0,
+                            0,  // budget_accum_ms
                             0,
                             0,
                             0,
@@ -311,30 +313,45 @@ bool HardwareMotorController::homeMask(uint32_t mask,
 }
 
 void HardwareMotorController::tick(uint32_t now_ms) {
+  // Flush any ISR-deferred shift register updates (SPI not safe in ISR)
+  fas_->pollLatch();
+
   // Pull runtime state from adapter; awake reflects running or WAKE override
   for (uint8_t i = 0; i < count_; ++i) {
+    // Thermal budget bookkeeping with sub-second accumulator to prevent drift
     if (now_ms >= motors_[i].last_update_ms) {
       uint32_t dt_ms = now_ms - motors_[i].last_update_ms;
-      uint32_t whole_sec = dt_ms / 1000;
-      if (whole_sec > 0) {
+      motors_[i].last_update_ms = now_ms;  // Always update timestamp
+
+      // Accumulate milliseconds and apply budget changes at 100ms granularity (1 tenth)
+      uint32_t total_ms = motors_[i].budget_accum_ms + dt_ms;
+      uint32_t tenths = total_ms / 100;  // Each tenth = 100ms
+      motors_[i].budget_accum_ms = static_cast<uint16_t>(total_ms % 100);
+
+      if (tenths > 0) {
         const int32_t kBudgetFloor =
             (int32_t)(MotorControlConstants::BUDGET_TENTHS_MAX -
                       MotorControlConstants::REFILL_TENTHS_PER_SEC *
                           (int32_t)MotorControlConstants::MAX_COOL_DOWN_TIME_S);
         if (motors_[i].awake) {
-          motors_[i].budget_tenths -=
-              (int32_t)(MotorControlConstants::SPEND_TENTHS_PER_SEC * (int32_t)whole_sec);
+          // Spend: 10 tenths per second = 1 tenth per 100ms
+          motors_[i].budget_tenths -= (int32_t)tenths;
           if (motors_[i].budget_tenths < kBudgetFloor)
             motors_[i].budget_tenths = kBudgetFloor;
         } else {
-          motors_[i].budget_tenths +=
-              (int32_t)(MotorControlConstants::REFILL_TENTHS_PER_SEC * (int32_t)whole_sec);
+          // Refill: 1.5 tenths per second = 0.15 tenths per 100ms
+          // Apply per-second rate scaled: (tenths * REFILL_TENTHS_PER_SEC) / 10
+          int32_t refill = ((int32_t)tenths * MotorControlConstants::REFILL_TENTHS_PER_SEC) / 10;
+          if (refill < 1 && tenths > 0)
+            refill = 1;  // Ensure at least some refill for long intervals
+          motors_[i].budget_tenths += refill;
           if (motors_[i].budget_tenths > MotorControlConstants::BUDGET_TENTHS_MAX)
             motors_[i].budget_tenths = MotorControlConstants::BUDGET_TENTHS_MAX;
         }
-        motors_[i].last_update_ms += whole_sec * 1000;
       }
     }
+
+    // Position tracking (no critical section needed - reads are atomic on ESP32)
     bool running = fas_->isMoving(i);
     motors_[i].moving = running;
     long pos = fas_->currentPosition(i);

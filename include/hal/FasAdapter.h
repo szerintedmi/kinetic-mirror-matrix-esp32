@@ -45,4 +45,8 @@ public:
   // Optional: deceleration hint for adapters that implement asymmetric ramps.
   // Default is no-op; FastAccelStepper path uses symmetric acceleration.
   virtual void setDeceleration(int /*decel_sps2*/) {}
+
+  // Poll for deferred operations (e.g., ISR-deferred SPI latch).
+  // Call from main loop. Default is no-op.
+  virtual void pollLatch() {}
 };
