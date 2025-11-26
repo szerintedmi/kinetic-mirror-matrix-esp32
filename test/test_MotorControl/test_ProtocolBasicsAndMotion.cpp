@@ -4,11 +4,14 @@
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
+#include "test_common/TestHelpers.h"
 #include "test_common/TestTimeout.h"
 
 #include <string>
 #include <unity.h>
 #include <vector>
+
+using test_helpers::SplitLines;
 
 static MotorCommandProcessor proto;
 
@@ -17,21 +20,6 @@ void setUp() {
 }
 
 void tearDown() {}
-
-static std::vector<std::string> split_lines(const std::string& s) {
-  std::vector<std::string> out;
-  size_t start = 0;
-  while (start <= s.size()) {
-    size_t pos = s.find('\n', start);
-    if (pos == std::string::npos) {
-      out.push_back(s.substr(start));
-      break;
-    }
-    out.push_back(s.substr(start, pos - start));
-    start = pos + 1;
-  }
-  return out;
-}
 
 // Protocol basics
 void test_bad_cmd() {
@@ -86,7 +74,7 @@ void test_get_all_settings_single_line() {
 
 void test_status_format_lines() {
   std::string st = proto.processLine("STATUS", 0);
-  auto lines = split_lines(st);
+  auto lines = SplitLines(st);
   TEST_ASSERT_TRUE((int)lines.size() >= 1);
   // Skip any leading CTRL lines (ACK)
   size_t idx = 0;
@@ -179,7 +167,7 @@ void test_wake_sleep_single_and_status() {
   auto r1 = proto.processLine("WAKE:1", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:DONE", 0) == 0);
   auto st1 = proto.processLine("STATUS", 1);
-  auto lines1 = split_lines(st1);
+  auto lines1 = SplitLines(st1);
   bool found_awake = false;
   for (const auto& L : lines1) {
     if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
@@ -192,7 +180,7 @@ void test_wake_sleep_single_and_status() {
   auto r2 = proto.processLine("SLEEP:1", 2);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
   auto st2 = proto.processLine("STATUS", 3);
-  auto lines2 = split_lines(st2);
+  auto lines2 = SplitLines(st2);
   bool found_asleep = false;
   for (const auto& L : lines2) {
     if (L.find("id=1 ") == 0 || L.find("id=1") == 0) {
@@ -215,7 +203,7 @@ void test_move_sets_speed_accel_in_status() {
   auto r1 = proto.processLine("MOVE:0,10", 0);
   TEST_ASSERT_TRUE(r1.rfind("CTRL:ACK", 0) == 0);
   auto st = proto.processLine("STATUS", 1);
-  auto lines = split_lines(st);
+  auto lines = SplitLines(st);
   bool ok = false;
   for (const auto& L : lines) {
     if (L.find("id=0 ") == 0 || L.find("id=0") == 0) {
@@ -230,7 +218,7 @@ void test_move_sets_speed_accel_in_status() {
 // Multi-command parsing (semicolon-separated)
 void test_multi_cmd_accept_disjoint() {
   auto r = proto.processLine("WAKE:0;WAKE:1", 0);
-  auto lines = split_lines(r);
+  auto lines = SplitLines(r);
   TEST_ASSERT_EQUAL_INT(2, (int)lines.size());
   TEST_ASSERT_TRUE(lines[0].rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(lines[1].rfind("CTRL:DONE", 0) == 0);
@@ -251,7 +239,7 @@ void test_multi_cmd_reject_overlap_all() {
 
 void test_multi_cmd_sequence_responses() {
   auto r = proto.processLine("WAKE:0;MOVE:1,10", 0);
-  auto lines = split_lines(r);
+  auto lines = SplitLines(r);
   TEST_ASSERT_TRUE(lines.size() >= 2);
   TEST_ASSERT_TRUE(lines[0].rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(lines[1].rfind("CTRL:ACK", 0) == 0);
@@ -259,7 +247,7 @@ void test_multi_cmd_sequence_responses() {
 
 void test_multi_cmd_whitespace_and_case() {
   auto r = proto.processLine("  m:0,10 ;  h:1  ", 0);
-  auto lines = split_lines(r);
+  auto lines = SplitLines(r);
   // With aggregation, MOVE/HOME batch returns single consolidated OK with est_ms
   TEST_ASSERT_EQUAL_INT(1, (int)lines.size());
   TEST_ASSERT_TRUE(lines[0].rfind("CTRL:ACK msg_id=", 0) == 0);
@@ -284,12 +272,12 @@ void test_home_parsing_comma_skips() {
   auto r = proto.processLine(cmd, 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
   auto st0 = proto.processLine("STATUS", 1);
-  auto lines0 = split_lines(st0);
+  auto lines0 = SplitLines(st0);
   TEST_ASSERT_TRUE(line_for_id_has(lines0, 2, " moving=1"));
   // After sufficient time, post-state should be zeroed and asleep
   proto.tick(1000);
   auto st1 = proto.processLine("STATUS", 1001);
-  auto lines1 = split_lines(st1);
+  auto lines1 = SplitLines(st1);
   TEST_ASSERT_TRUE(line_for_id_has(lines1, 2, " pos=0"));
   TEST_ASSERT_TRUE(line_for_id_has(lines1, 2, " moving=0"));
   TEST_ASSERT_TRUE(line_for_id_has(lines1, 2, " awake=0"));
@@ -312,7 +300,7 @@ void test_home_all_concurrency_and_post_state() {
   auto r = proto.processLine("HOME:ALL", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
   auto st0 = proto.processLine("STATUS", 1);
-  auto lines0 = split_lines(st0);
+  auto lines0 = SplitLines(st0);
   int moving_cnt = 0;
   for (int i = 0; i < 8; ++i) {
     if (line_for_id_has(lines0, i, " moving=1"))
@@ -323,7 +311,7 @@ void test_home_all_concurrency_and_post_state() {
   // Advance time past default homing duration (~(800+150)/4000 s => < 300ms)
   proto.tick(1000);
   auto st1 = proto.processLine("STATUS", 1001);
-  auto lines1 = split_lines(st1);
+  auto lines1 = SplitLines(st1);
   for (int i = 0; i < 8; ++i) {
     TEST_ASSERT_TRUE(line_for_id_has(lines1, i, " pos=0"));
     TEST_ASSERT_TRUE(line_for_id_has(lines1, i, " moving=0"));

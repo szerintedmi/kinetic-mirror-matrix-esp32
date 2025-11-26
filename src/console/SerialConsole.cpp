@@ -6,13 +6,13 @@
 #include "mqtt/MqttStatusPublisher.h"
 #include "net_onboarding/NetSingleton.h"
 #include "net_onboarding/SerialImmediate.h"
+#include "serial_buffer/SerialInputBuffer.h"
 #include "transport/CommandSchema.h"
 #include "transport/CompletionTracker.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
 
 #include <Arduino.h>
-#include <array>
 #include <cstring>
 #include <string>
 #include <utility>
@@ -20,14 +20,10 @@
 namespace {
 
 constexpr uint32_t kSerialGracePeriodMs = 500;
-constexpr char kBackspaceChar = 0x08;
-constexpr char kDeleteChar = 0x7F;
 
 struct SerialConsoleState {
   MotorCommandProcessor* command_processor = nullptr;
-  std::array<char, 512> input_buffer{};  // Increased for batch commands
-  size_t input_length = 0;
-  bool overflow_pending = false;  // Track overflow state until newline
+  SerialInputBuffer input_buffer{};
   uint32_t ignore_until_ms = 0;  // grace period to ignore deploy-time noise
   mqtt::AsyncMqttPresenceClient* presence_client = nullptr;
   mqtt::MqttStatusPublisher* status_publisher = nullptr;
@@ -83,48 +79,39 @@ void ProcessSerialInput(SerialConsoleState& state) {
   while (Serial.available() > 0) {
     const char input_char =
         static_cast<char>(Serial.read());  // NOLINT(cppcoreguidelines-init-variables)
-    if (input_char == '\r') {
-      continue;
-    }
-    if (input_char == '\n') {
-      Serial.println();
-      if (state.overflow_pending) {
-        // Overflow occurred - emit error and reset for next command
+
+    // Track previous length for echo handling
+    const size_t prev_len = state.input_buffer.length();
+    const auto result = state.input_buffer.addChar(input_char);
+
+    switch (result) {
+      case SerialInputBuffer::AddResult::kContinue:
+        // Echo handling for normal characters
+        if (input_char == SerialInputBuffer::kBackspaceChar ||
+            input_char == SerialInputBuffer::kDeleteChar) {
+          if (prev_len > state.input_buffer.length()) {
+            Serial.write('\b');
+            Serial.write(' ');
+            Serial.write('\b');
+          }
+        } else if (input_char != '\r' && !state.input_buffer.isOverflowPending()) {
+          Serial.write(input_char);
+        }
+        break;
+
+      case SerialInputBuffer::AddResult::kLineReady:
+        Serial.println();
+        if (state.command_processor != nullptr) {
+          (void)state.command_processor->execute(
+              std::string(state.input_buffer.getLine()), millis());
+        }
+        state.input_buffer.reset();
+        break;
+
+      case SerialInputBuffer::AddResult::kOverflowError:
+        Serial.println();
         Serial.println("CTRL:ERR E03 BAD_PARAM buffer_overflow");
-        state.overflow_pending = false;
-        state.input_length = 0;
-        continue;
-      }
-      state.input_buffer[state.input_length] = '\0';
-      if (state.command_processor == nullptr) {
-        return;
-      }
-      (void)state.command_processor->execute(std::string(state.input_buffer.data()), millis());
-      state.input_length = 0;
-      continue;
-    }
-
-    // If overflow pending, discard characters until newline
-    if (state.overflow_pending) {
-      continue;
-    }
-
-    if (input_char == kBackspaceChar || input_char == kDeleteChar) {
-      if (state.input_length > 0) {
-        state.input_length--;
-        Serial.write('\b');
-        Serial.write(' ');
-        Serial.write('\b');
-      }
-      continue;
-    }
-
-    if (state.input_length + 1 < state.input_buffer.size()) {
-      state.input_buffer[state.input_length++] = input_char;
-      Serial.write(input_char);
-    } else {
-      // Buffer full - mark overflow, error will be emitted on newline
-      state.overflow_pending = true;
+        break;
     }
   }
 }

@@ -122,31 +122,41 @@ bool StubMotorController::homeMask(uint32_t mask,
 }
 
 void StubMotorController::tick(uint32_t now_ms) {
-  // Budget bookkeeping (tenths of seconds)
+  // Budget bookkeeping (tenths of seconds, 100ms granularity)
 
   for (uint8_t i = 0; i < count_; ++i) {
-    // Update budget based on awake state; accumulate in whole seconds
+    // Update budget based on awake state; accumulate at 100ms (1 tenth) granularity
     if (now_ms >= motors_[i].last_update_ms) {
       uint32_t dt_ms = now_ms - motors_[i].last_update_ms;
-      uint32_t whole_sec = dt_ms / 1000;
-      if (whole_sec > 0) {
+      motors_[i].last_update_ms = now_ms;  // Always update timestamp
+
+      // Accumulate milliseconds and apply budget changes at 100ms granularity (1 tenth)
+      uint32_t total_ms = motors_[i].budget_accum_ms + dt_ms;
+      uint32_t tenths = total_ms / 100;  // Each tenth = 100ms
+      motors_[i].budget_accum_ms = static_cast<uint16_t>(total_ms % 100);
+
+      if (tenths > 0) {
+        const int32_t kBudgetFloor =
+            (int32_t)(MotorControlConstants::BUDGET_TENTHS_MAX -
+                      MotorControlConstants::REFILL_TENTHS_PER_SEC *
+                          (int32_t)MotorControlConstants::MAX_COOL_DOWN_TIME_S);
+
         if (motors_[i].awake) {
-          motors_[i].budget_tenths -=
-              (int32_t)(MotorControlConstants::SPEND_TENTHS_PER_SEC * (int32_t)whole_sec);
+          // Spend budget: 10 tenths per second = 1 tenth per 100ms
+          motors_[i].budget_tenths -= (int32_t)tenths;
           // Clamp minimum so max cooldown is bounded
-          const int32_t kBudgetFloor =
-              (int32_t)(MotorControlConstants::BUDGET_TENTHS_MAX -
-                        MotorControlConstants::REFILL_TENTHS_PER_SEC *
-                            (int32_t)MotorControlConstants::MAX_COOL_DOWN_TIME_S);
           if (motors_[i].budget_tenths < kBudgetFloor)
             motors_[i].budget_tenths = kBudgetFloor;
         } else {
-          motors_[i].budget_tenths +=
-              (int32_t)(MotorControlConstants::REFILL_TENTHS_PER_SEC * (int32_t)whole_sec);
+          // Refill: 1.5 tenths per second = 0.15 tenths per 100ms
+          // Apply per-second rate scaled: (tenths * REFILL_TENTHS_PER_SEC) / 10
+          int32_t refill = ((int32_t)tenths * MotorControlConstants::REFILL_TENTHS_PER_SEC) / 10;
+          if (refill < 1 && tenths > 0)
+            refill = 1;  // Ensure at least some refill for long intervals
+          motors_[i].budget_tenths += refill;
           if (motors_[i].budget_tenths > MotorControlConstants::BUDGET_TENTHS_MAX)
             motors_[i].budget_tenths = MotorControlConstants::BUDGET_TENTHS_MAX;
         }
-        motors_[i].last_update_ms += whole_sec * 1000;
       }
     }
 

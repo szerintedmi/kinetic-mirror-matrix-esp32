@@ -30,6 +30,19 @@ void test_budget_clamps_and_ttfc_non_negative();
 void test_ttfc_clamp_and_recovery();
 void test_homed_resets_on_reboot();
 void test_steps_since_home_resets_after_second_home();
+void test_budget_subsecond_accumulation();
+void test_budget_100ms_granularity();
+void test_budget_no_drift_over_small_intervals();
+
+// SerialBuffer
+void test_buffer_normal_input();
+void test_buffer_ignores_cr();
+void test_buffer_overflow_sets_flag();
+void test_buffer_overflow_discards_until_newline();
+void test_buffer_recovery_after_overflow();
+void test_buffer_backspace_handling();
+void test_buffer_exactly_max_size();
+void test_buffer_reset();
 
 // Thermal
 void test_help_includes_thermal_get_set();
@@ -172,6 +185,30 @@ int main(int, char**) {
   RUN_TEST(test_homed_resets_on_reboot);
   setUp();
   RUN_TEST(test_steps_since_home_resets_after_second_home);
+  setUp();
+  RUN_TEST(test_budget_subsecond_accumulation);
+  setUp();
+  RUN_TEST(test_budget_100ms_granularity);
+  setUp();
+  RUN_TEST(test_budget_no_drift_over_small_intervals);
+
+  // SerialBuffer
+  setUp();
+  RUN_TEST(test_buffer_normal_input);
+  setUp();
+  RUN_TEST(test_buffer_ignores_cr);
+  setUp();
+  RUN_TEST(test_buffer_overflow_sets_flag);
+  setUp();
+  RUN_TEST(test_buffer_overflow_discards_until_newline);
+  setUp();
+  RUN_TEST(test_buffer_recovery_after_overflow);
+  setUp();
+  RUN_TEST(test_buffer_backspace_handling);
+  setUp();
+  RUN_TEST(test_buffer_exactly_max_size);
+  setUp();
+  RUN_TEST(test_buffer_reset);
 
   // Thermal flag GET/SET (preflight/enforcement)
   setUp();

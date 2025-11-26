@@ -1,9 +1,12 @@
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorCommandProcessor.h"
 #include "MotorControl/MotorControlConstants.h"
+#include "test_common/TestHelpers.h"
 
 #include <string>
 #include <unity.h>
+
+using test_helpers::ParseEstMs;
 
 void test_get_set_speed_ok() {
   MotorCommandProcessor proto;
@@ -64,16 +67,6 @@ void test_set_speed_busy_reject() {
   TEST_ASSERT_TRUE(r2.find(" E04 BUSY") != std::string::npos);
 }
 
-static uint32_t parse_est_ms(const std::string& s) {
-  auto pos = s.find("est_ms=");
-  TEST_ASSERT_TRUE(pos != std::string::npos);
-  pos += 7;
-  size_t end = pos;
-  while (end < s.size() && isdigit((unsigned char)s[end]))
-    ++end;
-  return (uint32_t)strtoul(s.substr(pos, end - pos).c_str(), nullptr, 10);
-}
-
 void test_home_uses_speed_accel_globals() {
   MotorCommandProcessor proto;
   // Set globals to known values
@@ -82,7 +75,8 @@ void test_home_uses_speed_accel_globals() {
   // Issue HOME with no explicit speed/accel params
   auto r = proto.processLine("HOME:0", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK", 0) == 0);
-  uint32_t est = parse_est_ms(r);
+  uint32_t est = ParseEstMs(r);
+  TEST_ASSERT_TRUE(est > 0);
   // Compute expected using defaults for overshoot/backoff/full_range
   using namespace MotorControlConstants;
   uint32_t expected = MotionKinematics::estimateHomeTimeMsWithFullRange(
