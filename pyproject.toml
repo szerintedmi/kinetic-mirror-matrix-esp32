@@ -1,3 +1,31 @@
+[tool.poetry]
+name = "kinetic-mirror-cli"
+version = "0.1.0"
+description = "Python CLI tools for Kinetic Mirror ESP32 motor control"
+authors = ["Petro <petro@example.com>"]
+readme = "README.md"
+packages = [
+  { include = "serial_cli", from = "tools" },
+]
+
+[tool.poetry.dependencies]
+python = "^3.13"
+pyserial = "3.5"
+paho-mqtt = "2.1.0"
+textual = "6.6.0"
+rich = "14.2.0"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "9.0.1"
+ruff = "0.14.6"
+
+[tool.poetry.scripts]
+serial-cli = "serial_cli:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
 [tool.ruff]
 line-length = 100
 respect-gitignore = true

@@ -32,3 +32,9 @@ Open the relevant folder above and follow the contained steps (files are numbere
 **Notes**
 
 - This file intentionally avoids restating procedures. Always follow the detailed instructions in the command files and the standards documents referenced above.
+
+**Python Environment**
+
+- Python dependencies are managed via Poetry (requires Python ≥3.13).
+- Run `poetry install` to set up the virtual environment.
+- Use `poetry run <command>` or `poetry shell` to execute Python tools.

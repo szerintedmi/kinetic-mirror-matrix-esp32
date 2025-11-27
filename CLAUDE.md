@@ -34,7 +34,7 @@ pio test -e native -f test_MotorControl/test_CommandPipeline
 pio test -e esp32DedicatedStep
 
 # Run Python CLI tests
-pytest test/test_Serial_CLI/
+poetry run pytest test/test_Serial_CLI/
 ```
 
 ## Linting and Formatting
@@ -120,7 +120,7 @@ python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800
 - **Expansion**: 2×74HC595 shift registers for DIR/SLEEP lines
 - **Networking**: AsyncMqttClient for MQTT; Wi-Fi via SoftAP portal + NVS
 - **Storage**: LittleFS for presets and gzipped web assets
-- **Host tools**: Python 3 CLI (`pyserial`, `paho-mqtt`, `textual`)
+- **Host tools**: Python 3.13+ CLI (`pyserial`, `paho-mqtt`, `textual`), managed via Poetry
 
 ## Hardware Pin Configuration
 

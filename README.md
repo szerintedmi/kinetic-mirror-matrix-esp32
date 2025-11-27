@@ -104,7 +104,7 @@ sequenceDiagram
 Prereqs
 
 - PlatformIO Core (CLI)
-- Python 3.9+ (for host CLI)
+- Python 3.13+ with Poetry (for host CLI)
 
 Build and Upload (ESP32)
 
@@ -119,9 +119,12 @@ Build and Upload (ESP32)
 Host CLI
 
 - From repo root: `python -m serial_cli --help`
-- Dependencies:
-  - Serial transport: `pip install pyserial`
-  - MQTT presence transport / TUI: `pip install paho-mqtt textual rich`
+- Dependencies managed via Poetry (Python ≥3.13):
+  ```bash
+  poetry install          # Install all dependencies
+  poetry run pytest ...   # Run commands in the venv
+  poetry shell            # Activate the venv
+  ```
 
 - Examples:
 - `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
