@@ -210,7 +210,7 @@ def test_cli_mqtt_move_command_outputs_events():
             return {1: pending}
 
     stub = StubWorker()
-    with mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub):
+    with mock.patch("serial_cli._make_mqtt_worker", return_value=stub):
         buf = io.StringIO()
         with redirect_stdout(buf):
             rc = cli_main(["move", "0", "100", "--transport", "mqtt"])
@@ -277,8 +277,8 @@ def test_status_mqtt_uses_worker():
 
     stub = StubWorker()
     with (
-        mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub),
-        mock.patch("tools.serial_cli.time.sleep", lambda *_: None),
+        mock.patch("serial_cli._make_mqtt_worker", return_value=stub),
+        mock.patch("serial_cli.time.sleep", lambda *_: None),
     ):
         buf = io.StringIO()
         with redirect_stdout(buf):

@@ -198,9 +198,7 @@ class MqttWorker(threading.Thread):
                         delay = None
                         with self._lock:
                             delay = self._reconnect_backoff
-                            self._reconnect_backoff = min(
-                                self._reconnect_backoff * 2.0, 30.0
-                            )
+                            self._reconnect_backoff = min(self._reconnect_backoff * 2.0, 30.0)
                             self._next_connect_ts = time.time() + delay
                         self._append_log(f"[mqtt error] {exc}")
                         self._append_log(f"[mqtt] reconnect in {delay:.1f}s")
@@ -238,18 +236,14 @@ class MqttWorker(threading.Thread):
         # Stable ordering for sequence numbers (alphabetical by device id)
         return sorted(self._devices.keys())
 
-    def set_selected_device_by_index(
-        self, index: int
-    ) -> Tuple[bool, Optional[str], int]:
+    def set_selected_device_by_index(self, index: int) -> Tuple[bool, Optional[str], int]:
         with self._lock:
             devices = self._ordered_devices_locked()
             total = len(devices)
             if index < 1 or index > total:
                 return False, None, total
             self._selected_device = devices[index - 1]
-            self._push_log_locked(
-                f"[ui] selected device {index}/{total}: {self._selected_device}"
-            )
+            self._push_log_locked(f"[ui] selected device {index}/{total}: {self._selected_device}")
             return True, self._selected_device, total
 
     def queue_cmd(self, cmd: str, *, silent: bool = False) -> List[int]:
@@ -359,9 +353,7 @@ class MqttWorker(threading.Thread):
                 except (ValueError, TypeError):
                     return str(value)
 
-            rows.sort(
-                key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", "")))
-            )
+            rows.sort(key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", ""))))
             devices_ordered = self._ordered_devices_locked()
             selected = None
             if self._selected_device and self._selected_device in self._devices:
@@ -507,9 +499,7 @@ class MqttWorker(threading.Thread):
             self._reconnect_backoff = 1.0
             self._next_connect_ts = float("inf")
             self._condition.notify_all()
-        self._append_log(
-            "[mqtt] connected; subscribed to devices/+/status, devices/+/cmd/resp"
-        )
+        self._append_log("[mqtt] connected; subscribed to devices/+/status, devices/+/cmd/resp")
 
     def _on_disconnect(self, client, userdata, rc):
         with self._lock:
@@ -538,9 +528,7 @@ class MqttWorker(threading.Thread):
         self._append_log(f"[mqtt] ignored topic {msg.topic}")
 
     # ------------------------------------------------------------------
-    def ingest_message(
-        self, topic: str, payload: str, timestamp: Optional[float] = None
-    ) -> None:
+    def ingest_message(self, topic: str, payload: str, timestamp: Optional[float] = None) -> None:
         mac = topic.split("/")[1] if topic.startswith("devices/") else topic
         ts = timestamp if timestamp is not None else time.time()
 
@@ -609,11 +597,7 @@ class MqttWorker(threading.Thread):
             if not self._requested_net_status and self._node_id:
                 self._requested_net_status = True
                 should_request_net = True
-            if (
-                self._need_thermal_refresh
-                and not self._requested_thermal_status
-                and self._node_id
-            ):
+            if self._need_thermal_refresh and not self._requested_thermal_status and self._node_id:
                 self._requested_thermal_status = True
                 should_request_thermal = True
         if should_request_net:
@@ -660,11 +644,7 @@ class MqttWorker(threading.Thread):
                 for candidate in self._pending_order:
                     if candidate.completed:
                         continue
-                    if (
-                        candidate.cmd_id
-                        and event.cmd_id
-                        and candidate.cmd_id != event.cmd_id
-                    ):
+                    if candidate.cmd_id and event.cmd_id and candidate.cmd_id != event.cmd_id:
                         continue
                     if node_id and candidate.node_id != node_id:
                         continue

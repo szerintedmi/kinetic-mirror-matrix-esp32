@@ -25,9 +25,7 @@ _BATCH_SPLIT_RE = re.compile(r';(?=(?:[^"]*"[^"]*")*[^"]*$)')
 
 
 def split_batches(command: str) -> List[str]:
-    return [
-        part.strip() for part in _BATCH_SPLIT_RE.split(command.strip()) if part.strip()
-    ]
+    return [part.strip() for part in _BATCH_SPLIT_RE.split(command.strip()) if part.strip()]
 
 
 def _parse_target(token: str) -> object:

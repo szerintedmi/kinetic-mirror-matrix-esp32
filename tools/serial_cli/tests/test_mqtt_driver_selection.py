@@ -101,9 +101,7 @@ def test_get_state_reports_selection_metadata():
 def test_out_of_range_selection_is_rejected():
     worker = _make_worker()
     with worker._lock:
-        worker._devices = {
-            "only": {"last_seen": 1, "node_state": "ready", "motors": {}}
-        }
+        worker._devices = {"only": {"last_seen": 1, "node_state": "ready", "motors": {}}}
 
     ok, dev, total = worker.set_selected_device_by_index(3)
     assert ok is False
