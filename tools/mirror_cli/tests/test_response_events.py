@@ -2,7 +2,7 @@
 
 import unittest
 
-from tools.serial_cli.response_events import (
+from tools.mirror_cli.response_events import (
     EventType,
     ResponseEvent,
     format_event,

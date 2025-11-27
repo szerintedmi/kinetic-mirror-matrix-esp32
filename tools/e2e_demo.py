@@ -12,7 +12,7 @@ import sys
 import time
 
 sys.path.append(os.path.abspath(os.path.dirname(__file__)))
-from serial_cli import build_command, make_parser, read_response  # type: ignore
+from mirror_cli import build_command, make_parser, read_response  # type: ignore
 
 try:
     import serial  # type: ignore
@@ -45,7 +45,7 @@ def main(argv=None) -> int:
             time.sleep(0.1)
             _ = ser.read(4096)
             for name, kw in cmds:
-                # Build command string by reusing serial_cli parser
+                # Build command string by reusing mirror_cli parser
                 p = make_parser()
                 args = [name]
                 for k, v in kw.items():

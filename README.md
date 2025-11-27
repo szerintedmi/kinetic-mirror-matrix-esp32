@@ -19,7 +19,7 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 ```mermaid
 flowchart LR
   subgraph "Host PC"
-    CLI["serial_cli"]
+    CLI["mirror_cli"]
   end
 
   subgraph "ESP32 Firmware"
@@ -69,21 +69,21 @@ poetry install                             # Install dependencies
 poetry shell                               # Activate venv
 
 # Interactive TUI
-python -m serial_cli interactive --port /dev/ttyUSB0
-python -m serial_cli interactive --transport mqtt
+python -m mirror_cli interactive --port /dev/ttyUSB0
+python -m mirror_cli interactive --transport mqtt
 
 # Single commands
-python -m serial_cli help --port /dev/ttyUSB0
-python -m serial_cli status --port /dev/ttyUSB0
-python -m serial_cli move --port /dev/ttyUSB0 0 800
-python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800
+python -m mirror_cli help --port /dev/ttyUSB0
+python -m mirror_cli status --port /dev/ttyUSB0
+python -m mirror_cli move --port /dev/ttyUSB0 0 800
+python -m mirror_cli home --port /dev/ttyUSB0 0 --overshoot 800
 
 # MQTT transport
-python -m serial_cli status --transport mqtt --timeout 1.5
-python -m serial_cli move --transport mqtt --node <mac> 0 800
+python -m mirror_cli status --transport mqtt --timeout 1.5
+python -m mirror_cli move --transport mqtt --node <mac> 0 800
 ```
 
-CLI source: [tools/serial_cli](./tools/serial_cli/)
+CLI source: [tools/mirror_cli](./tools/mirror_cli/)
 
 ## Testing
 
@@ -98,7 +98,7 @@ pio test -e esp32DedicatedStep             # On-device tests
 ### Python Tests
 
 ```bash
-poetry run pytest tools/serial_cli/tests/  # Direct pytest (228 tests)
+poetry run pytest tools/mirror_cli/tests/  # Direct pytest (228 tests)
 pio run -t test_python                     # Via PlatformIO target
 pio test -e native                         # Also runs Python tests via shim
 ```
@@ -205,7 +205,7 @@ Full spec: [Serial command protocol v1](./agent-os/specs/2025-10-15-serial-comma
 | Constants | [lib/MotorControl/include/MotorControl/MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h) |
 | Board pins | [include/boards/Esp32Dev.hpp](./include/boards/Esp32Dev.hpp) |
 | Wi-Fi onboarding | [lib/net_onboarding/src/NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp) |
-| Host CLI | [tools/serial_cli/](./tools/serial_cli/) |
+| Host CLI | [tools/mirror_cli/](./tools/mirror_cli/) |
 | C++ tests | [test/test_MotorControl/](./test/test_MotorControl/), [test/test_Drivers/](./test/test_Drivers/) |
 
 ## Configuration

@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from serial_cli import build_command, make_parser
+from mirror_cli import build_command, make_parser
 
 
 def run_case(argv, expected):

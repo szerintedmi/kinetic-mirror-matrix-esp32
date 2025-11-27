@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from tools.serial_cli.mqtt_runtime import MqttWorker
+from tools.mirror_cli.mqtt_runtime import MqttWorker
 
 
 class DummyPublishInfo:

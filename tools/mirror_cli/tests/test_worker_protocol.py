@@ -3,7 +3,7 @@
 import unittest
 from typing import Dict, List, Optional, Tuple
 
-from tools.serial_cli.worker_protocol import WorkerProtocol
+from tools.mirror_cli.worker_protocol import WorkerProtocol
 
 
 class MockSerialModule:
@@ -76,7 +76,7 @@ class TestSerialWorkerImplementsProtocol(unittest.TestCase):
     """Test that SerialWorker implements WorkerProtocol."""
 
     def setUp(self):
-        from tools.serial_cli.runtime import SerialWorker
+        from tools.mirror_cli.runtime import SerialWorker
 
         self.worker = SerialWorker(
             port="/dev/test",
@@ -141,7 +141,7 @@ class TestMqttWorkerImplementsProtocol(unittest.TestCase):
     """Test that MqttWorker implements WorkerProtocol."""
 
     def setUp(self):
-        from tools.serial_cli.mqtt_runtime import MqttWorker
+        from tools.mirror_cli.mqtt_runtime import MqttWorker
 
         self.worker = MqttWorker(client_factory=lambda: MockMqttClient())
 

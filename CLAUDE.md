@@ -34,7 +34,7 @@ pio test -e native -f test_MotorControl/test_CommandPipeline
 pio test -e esp32DedicatedStep
 
 # Run Python CLI tests (any of these methods)
-poetry run pytest tools/serial_cli/tests/    # Direct pytest
+poetry run pytest tools/mirror_cli/tests/    # Direct pytest
 pio run -t test_python                       # Via PlatformIO target
 ```
 
@@ -85,7 +85,7 @@ MotorController interface (HardwareMotorController or StubMotorController)
 - `src/drivers/Esp32/` - ESP32-specific hardware drivers
 - `lib/net_onboarding/` - Wi-Fi provisioning (SoftAP portal + NVS storage)
 - `lib/transport/` - MQTT command/response envelope handling
-- `tools/serial_cli/` - Python host CLI with interactive TUI
+- `tools/mirror_cli/` - Python host CLI with interactive TUI
 
 ### Build Configurations
 
@@ -104,14 +104,14 @@ Full spec: `agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md`
 
 ```bash
 # Interactive TUI (serial)
-python -m serial_cli interactive --port /dev/ttyUSB0
+python -m mirror_cli interactive --port /dev/ttyUSB0
 
 # Interactive TUI (MQTT)
-python -m serial_cli interactive --transport mqtt
+python -m mirror_cli interactive --transport mqtt
 
 # Single commands
-python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000
-python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800
+python -m mirror_cli move --port /dev/ttyUSB0 0 800
+python -m mirror_cli home --port /dev/ttyUSB0 0 --overshoot 800
 ```
 
 ## Tech Stack Summary

@@ -2,8 +2,8 @@ import json
 import unittest
 from typing import List, Tuple
 
-from tools.serial_cli import render_table
-from tools.serial_cli.mqtt_runtime import MqttWorker
+from tools.mirror_cli import render_table
+from tools.mirror_cli.mqtt_runtime import MqttWorker
 
 
 class _NoOpClient:

@@ -6,7 +6,7 @@ import unittest
 from typing import Dict, List, Optional, Tuple
 from unittest.mock import MagicMock, patch
 
-from tools.serial_cli.runtime import SerialWorker, _MAX_BUFFER_SIZE
+from tools.mirror_cli.runtime import SerialWorker, _MAX_BUFFER_SIZE
 
 
 class MockSerial:

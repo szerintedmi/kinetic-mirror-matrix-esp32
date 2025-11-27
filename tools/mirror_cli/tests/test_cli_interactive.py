@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from serial_cli import make_parser, parse_status_lines, render_table
+from mirror_cli import make_parser, parse_status_lines, render_table
 
 
 def test_parse_interactive_args_default():

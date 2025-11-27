@@ -3,7 +3,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
-from serial_cli import extract_est_ms_from_ctrl_ok, parse_thermal_get_response
+from mirror_cli import extract_est_ms_from_ctrl_ok, parse_thermal_get_response
 
 
 def test_parse_thermal_on():

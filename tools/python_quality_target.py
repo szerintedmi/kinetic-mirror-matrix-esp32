@@ -12,7 +12,7 @@ except NameError:  # pragma: no cover - some SCons invocations omit __file__
 
 PROJECT_ROOT = _THIS_FILE.parents[1] if _THIS_FILE.parent.parent else Path.cwd()
 PYPROJECT = PROJECT_ROOT / "pyproject.toml"
-DEFAULT_TARGETS = ["serial_cli", "tools", "test"]
+DEFAULT_TARGETS = ["mirror_cli", "tools", "test"]
 
 try:  # PlatformIO provides SCons' Import
     from SCons.Script import Import as scons_import  # type: ignore[import-not-found]
@@ -67,7 +67,7 @@ def _pytest_invocation() -> List[str]:
 
 def _test_action(target, source, env):  # pylint: disable=unused-argument
     cmd = _pytest_invocation() + [
-        str(PROJECT_ROOT / "tools" / "serial_cli" / "tests"),
+        str(PROJECT_ROOT / "tools" / "mirror_cli" / "tests"),
         "-v",
         "--tb=short",
     ]
@@ -83,7 +83,7 @@ if SCONS_ENV is not None:
         None,
         env.VerboseAction(_lint_action, "Linting Python host tooling with Ruff"),
         title="Python Ruff Lint",
-        description="Run Ruff check across serial_cli/, tools/, and test/.",
+        description="Run Ruff check across mirror_cli/, tools/, and test/.",
     )
 
     env.AddCustomTarget(
@@ -99,5 +99,5 @@ if SCONS_ENV is not None:
         None,
         env.VerboseAction(_test_action, "Running Python CLI tests with pytest"),
         title="Python Tests",
-        description="Run pytest on tools/serial_cli/tests/.",
+        description="Run pytest on tools/mirror_cli/tests/.",
     )

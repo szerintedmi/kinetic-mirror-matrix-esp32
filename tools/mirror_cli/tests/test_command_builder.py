@@ -2,7 +2,7 @@
 
 import unittest
 
-from tools.serial_cli.command_builder import (
+from tools.mirror_cli.command_builder import (
     CommandParseError,
     CommandRequest,
     UnsupportedCommandError,

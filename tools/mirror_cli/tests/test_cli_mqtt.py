@@ -8,9 +8,9 @@ from unittest import mock
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
-from serial_cli import main as cli_main, render_table
-from tools.serial_cli.mqtt_runtime import MqttWorker
-from tools.serial_cli.response_events import EventType, ResponseEvent
+from mirror_cli import main as cli_main, render_table
+from tools.mirror_cli.mqtt_runtime import MqttWorker
+from tools.mirror_cli.response_events import EventType, ResponseEvent
 
 
 def test_render_status_table():
@@ -210,7 +210,7 @@ def test_cli_mqtt_move_command_outputs_events():
             return {1: pending}
 
     stub = StubWorker()
-    with mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub):
+    with mock.patch("tools.mirror_cli._make_mqtt_worker", return_value=stub):
         buf = io.StringIO()
         with redirect_stdout(buf):
             rc = cli_main(["move", "0", "100", "--transport", "mqtt"])
@@ -277,8 +277,8 @@ def test_status_mqtt_uses_worker():
 
     stub = StubWorker()
     with (
-        mock.patch("tools.serial_cli._make_mqtt_worker", return_value=stub),
-        mock.patch("tools.serial_cli.time.sleep", lambda *_: None),
+        mock.patch("tools.mirror_cli._make_mqtt_worker", return_value=stub),
+        mock.patch("tools.mirror_cli.time.sleep", lambda *_: None),
     ):
         buf = io.StringIO()
         with redirect_stdout(buf):

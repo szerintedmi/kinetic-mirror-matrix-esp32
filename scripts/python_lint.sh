@@ -18,4 +18,4 @@ if [[ $# -gt 0 ]]; then
   exec "$RUFF_CMD" check --config "$ROOT_DIR/pyproject.toml" "$@"
 fi
 
-exec "$RUFF_CMD" check --config "$ROOT_DIR/pyproject.toml" serial_cli tools test
+exec "$RUFF_CMD" check --config "$ROOT_DIR/pyproject.toml" mirror_cli tools test

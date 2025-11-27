@@ -1,4 +1,4 @@
-"""CLI argument parsing and command building for serial_cli."""
+"""CLI argument parsing and command building for mirror_cli."""
 
 from __future__ import annotations
 
@@ -84,9 +84,9 @@ def _add_common(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 
 def make_parser() -> argparse.ArgumentParser:
-    """Create the main argument parser for serial_cli."""
+    """Create the main argument parser for mirror_cli."""
     p = argparse.ArgumentParser(
-        prog="serial_cli", description="Serial CLI for Mirror Array protocol v1"
+        prog="mirror_cli", description="CLI for Mirror Array protocol v1"
     )
     sp = p.add_subparsers(dest="command", required=True)
 

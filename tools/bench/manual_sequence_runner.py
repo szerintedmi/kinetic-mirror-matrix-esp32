@@ -24,7 +24,7 @@ try:  # Python 3.7+
 except Exception:
     pass
 
-from tools.serial_cli import (  # type: ignore[import-not-found]
+from tools.mirror_cli import (  # type: ignore[import-not-found]
     parse_status_lines,
 )
 
