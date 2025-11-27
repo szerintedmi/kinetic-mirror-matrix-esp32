@@ -22,6 +22,8 @@ class CommandRequest:
 
 
 _BATCH_SPLIT_RE = re.compile(r';(?=(?:[^"]*"[^"]*")*[^"]*$)')
+_INTEGER_RE = re.compile(r"-?\d+")
+_UNSIGNED_INT_RE = re.compile(r"\d+")
 
 
 def split_batches(command: str) -> List[str]:
@@ -35,14 +37,14 @@ def _parse_target(token: str) -> object:
     upper = token.upper()
     if upper == "ALL":
         return "ALL"
-    if not re.fullmatch(r"-?\d+", token):
+    if not _INTEGER_RE.fullmatch(token):
         raise CommandParseError("target selector invalid")
     return int(token)
 
 
 def _parse_int(token: str, field: str) -> int:
     token = token.strip()
-    if not re.fullmatch(r"-?\d+", token):
+    if not _INTEGER_RE.fullmatch(token):
         raise CommandParseError(f"{field} must be integer")
     return int(token)
 
@@ -212,7 +214,7 @@ def parse_serial_command(command: str) -> CommandRequest:
                 if key == "host":
                     params["host"] = value
                 elif key == "port":
-                    if not re.fullmatch(r"\d+", value):
+                    if not _UNSIGNED_INT_RE.fullmatch(value):
                         raise CommandParseError("port must be integer")
                     iv = int(value)
                     if iv <= 0 or iv > 65535:

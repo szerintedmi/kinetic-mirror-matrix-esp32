@@ -35,7 +35,8 @@ class ResponseEvent:
         return self.attributes.get(key, default)
 
 
-def _strip_quotes(value: str) -> str:
+def strip_quotes(value: str) -> str:
+    """Remove surrounding double quotes from a string value."""
     if len(value) >= 2 and value[0] == value[-1] == '"':
         return value[1:-1]
     return value
@@ -123,7 +124,7 @@ def parse_serial_line(line: str) -> Optional[ResponseEvent]:
         for part in parts:
             if "=" in part:
                 key, value = part.split("=", 1)
-                attrs[key] = _strip_quotes(value)
+                attrs[key] = strip_quotes(value)
         return ResponseEvent(
             source="serial",
             raw=raw,
@@ -252,4 +253,5 @@ __all__ = [
     "format_event",
     "parse_mqtt_payload",
     "parse_serial_line",
+    "strip_quotes",
 ]

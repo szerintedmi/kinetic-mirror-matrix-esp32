@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import threading
 import time
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Optional
+from typing import Callable, Deque, Dict, List, Optional
 
 try:
     import serial  # type: ignore
@@ -11,7 +12,17 @@ except Exception:  # pragma: no cover - handled by caller
     serial = None  # type: ignore
 
 from .constants import LOG_HISTORY_LIMIT
-from .response_events import EventType, ResponseEvent, format_event, parse_serial_line
+from .response_events import (
+    EventType,
+    ResponseEvent,
+    format_event,
+    parse_serial_line,
+    strip_quotes,
+)
+
+# Maximum size for the serial read buffer before truncation (prevents memory exhaustion
+# if device sends malformed data without newlines)
+_MAX_BUFFER_SIZE = 64 * 1024  # 64KB
 
 ParseStatusFn = Callable[[str], List[Dict[str, str]]]
 ParseKvFn = Callable[[str], Dict[str, str]]
@@ -57,7 +68,7 @@ class SerialWorker(threading.Thread):
         self.poll_interval = 1.0 / max(0.1, poll_rate_hz)
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
-        self._log: List[str] = []
+        self._log: Deque[str] = deque(maxlen=LOG_HISTORY_LIMIT)
         self._log_seq: int = 0
         self._cmdq: List[str] = []
         self._ser = None
@@ -88,11 +99,14 @@ class SerialWorker(threading.Thread):
     # ------------------------------------------------------------------
     # External API (used by CLI / TUI)
     # ------------------------------------------------------------------
-    def queue_cmd(self, cmd: str) -> None:
+    def queue_cmd(self, cmd: str, *, silent: bool = False) -> List[int]:
+        """Queue a command for sending. Returns empty list (serial doesn't use handles)."""
         with self._lock:
             line = cmd if cmd.endswith("\n") else cmd + "\n"
-            self._push_log_locked("> " + cmd.strip())
+            if not silent:
+                self._push_log_locked("> " + cmd.strip())
             self._cmdq.append(line)
+        return []
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -270,6 +284,12 @@ class SerialWorker(threading.Thread):
         except Exception:
             text = chunk.decode(errors="ignore")
         self._buffer += text
+
+        # Prevent unbounded buffer growth if device sends data without newlines
+        if len(self._buffer) > _MAX_BUFFER_SIZE:
+            # Keep the tail (more recent data), discard the head
+            self._buffer = self._buffer[-(_MAX_BUFFER_SIZE // 2) :]
+
         while True:
             idx = self._buffer.find("\n")
             if idx == -1:
@@ -425,13 +445,13 @@ class SerialWorker(threading.Thread):
             for tok in ln.split():
                 low = tok.lower()
                 if low.startswith("device="):
-                    metadata["device"] = _strip_quotes(tok.split("=", 1)[1])
+                    metadata["device"] = strip_quotes(tok.split("=", 1)[1])
                 elif low.startswith("ssid="):
-                    metadata.setdefault("ssid", _strip_quotes(tok.split("=", 1)[1]))
+                    metadata.setdefault("ssid", strip_quotes(tok.split("=", 1)[1]))
                 elif low.startswith("ip="):
-                    metadata.setdefault("ip", _strip_quotes(tok.split("=", 1)[1]))
+                    metadata.setdefault("ip", strip_quotes(tok.split("=", 1)[1]))
                 elif low.startswith("node_state="):
-                    metadata.setdefault("node_state", _strip_quotes(tok.split("=", 1)[1]))
+                    metadata.setdefault("node_state", strip_quotes(tok.split("=", 1)[1]))
         with self._lock:
             self._last_status_rows = rows
             self._last_status_text = payload
@@ -470,7 +490,7 @@ class SerialWorker(threading.Thread):
         with self._lock:
             merged = dict(self._net_info)
             for key, value in net.items():
-                merged[key] = _strip_quotes(value)
+                merged[key] = strip_quotes(value)
             self._net_info = merged
             device = merged.get("device")
             if device:
@@ -521,10 +541,8 @@ class SerialWorker(threading.Thread):
             self._push_log_locked(formatted)
 
     def _push_log_locked(self, line: str) -> None:
-        self._log.append(line)
+        self._log.append(line)  # deque maxlen handles truncation automatically
         self._log_seq += 1
-        if len(self._log) > LOG_HISTORY_LIMIT:
-            del self._log[: len(self._log) - LOG_HISTORY_LIMIT]
 
     def append_log(self, line: str) -> None:
         with self._lock:
@@ -562,9 +580,3 @@ class SerialWorker(threading.Thread):
             else:
                 self._push_log_locked(recon_prefix + dots)
             self._reconnect_dots += 1
-
-
-def _strip_quotes(value: str) -> str:
-    if len(value) >= 2 and value[0] == value[-1] == '"':
-        return value[1:-1]
-    return value

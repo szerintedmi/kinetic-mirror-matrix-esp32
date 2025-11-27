@@ -8,7 +8,8 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Sequence, Tuple
+from collections import deque
+from typing import Callable, Deque, Dict, List, Optional, Sequence, Tuple
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
@@ -102,7 +103,7 @@ class MqttWorker(threading.Thread):
         self._stop_event = threading.Event()
         self.transport = "mqtt"
         self._devices: Dict[str, Dict[str, object]] = {}
-        self._log: List[str] = []
+        self._log: Deque[str] = deque(maxlen=LOG_HISTORY_LIMIT)
         self._log_seq: int = 0
         self._error: Optional[str] = None
         self._last_update_ts: float = 0.0
@@ -237,6 +238,13 @@ class MqttWorker(threading.Thread):
         return sorted(self._devices.keys())
 
     def set_selected_device_by_index(self, index: int) -> Tuple[bool, Optional[str], int]:
+        # Explicit type coercion for safety (index may come from string parsing)
+        try:
+            index = int(index)
+        except (TypeError, ValueError):
+            with self._lock:
+                return False, None, len(self._devices)
+
         with self._lock:
             devices = self._ordered_devices_locked()
             total = len(devices)
@@ -311,6 +319,8 @@ class MqttWorker(threading.Thread):
                 continue
 
             if silent:
+                # For silent calls, use negative handle to indicate success without tracking
+                handles.append(-1)
                 continue
 
             pending = PendingCommand(
@@ -594,25 +604,29 @@ class MqttWorker(threading.Thread):
             self._last_update_ts = ts
             if not self._node_id:
                 self._node_id = mac
+            # Only check if we should request - don't set flags until success
             if not self._requested_net_status and self._node_id:
-                self._requested_net_status = True
                 should_request_net = True
             if self._need_thermal_refresh and not self._requested_thermal_status and self._node_id:
-                self._requested_thermal_status = True
                 should_request_thermal = True
+
+        # Attempt requests outside lock, then update flags atomically on success
+        # This prevents race where flag is set True, request fails, flag reset to False,
+        # but another thread already skipped because it saw True
         if should_request_net:
-            handles = self.queue_cmd("NET:STATUS")
-            if not handles:
+            handles = self.queue_cmd("NET:STATUS", silent=True)
+            if handles:
                 with self._lock:
-                    self._requested_net_status = False
+                    self._requested_net_status = True
+            # If failed, leave flag False so next message triggers retry
+
         if should_request_thermal:
-            handles = self.queue_cmd("GET THERMAL_LIMITING")
-            if not handles:
+            handles = self.queue_cmd("GET THERMAL_LIMITING", silent=True)
+            if handles:
                 with self._lock:
-                    self._requested_thermal_status = False
-            else:
-                with self._lock:
+                    self._requested_thermal_status = True
                     self._need_thermal_refresh = False
+            # If failed, leave flags unchanged so next message triggers retry
 
     def ingest_response(self, topic: str, payload: str) -> None:
         node_id = topic.split("/")[1] if topic.startswith("devices/") else ""
@@ -756,10 +770,8 @@ class MqttWorker(threading.Thread):
         self._append_log(line)
 
     def _push_log_locked(self, line: str) -> None:
-        self._log.append(line)
+        self._log.append(line)  # deque maxlen handles truncation automatically
         self._log_seq += 1
-        if len(self._log) > LOG_HISTORY_LIMIT:
-            del self._log[: len(self._log) - LOG_HISTORY_LIMIT]
 
     # ------------------------------------------------------------------
     def _maybe_update_thermal_state_locked(
@@ -800,10 +812,9 @@ class MqttWorker(threading.Thread):
         ):
             if event.event_type in (EventType.DONE, EventType.ERROR):
                 self._requested_thermal_status = False
-                if event.event_type == EventType.ERROR:
-                    self._need_thermal_refresh = True
-                else:
-                    self._need_thermal_refresh = True
+                # Refresh needed: ERROR means retry, DONE without thermal_key in attrs
+                # means response didn't include expected data
+                self._need_thermal_refresh = True
         elif command_name.startswith("SET THERMAL_LIMITING") or (
             not command_name
             and action_name == "SET"

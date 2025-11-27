@@ -70,7 +70,8 @@ def test_queue_cmd_targets_selected_device(monkeypatch):
     worker.set_selected_device_by_index(2)
 
     handles = worker.queue_cmd("HELP", silent=True)
-    assert handles == []  # silent mode skips pending tracking
+    # silent mode returns [-1] to indicate success without full tracking
+    assert handles == [-1]
 
     assert client.published, "Command should have been published"
     topic, payload, _qos = client.published[0]
