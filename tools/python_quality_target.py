@@ -55,6 +55,27 @@ def _format_action(target, source, env):  # pylint: disable=unused-argument
     _run_ruff(["format", "--config", str(PYPROJECT), *DEFAULT_TARGETS])
 
 
+def _pytest_invocation() -> List[str]:
+    """Prefer the repo virtualenv pytest binary, fall back to poetry run."""
+    venv_bin = PROJECT_ROOT / ".venv"
+    candidates = [venv_bin / "bin" / "pytest", venv_bin / "Scripts" / "pytest.exe"]
+    for candidate in candidates:
+        if candidate.exists():
+            return [str(candidate)]
+    return ["poetry", "run", "pytest"]
+
+
+def _test_action(target, source, env):  # pylint: disable=unused-argument
+    cmd = _pytest_invocation() + [
+        str(PROJECT_ROOT / "tools" / "serial_cli" / "tests"),
+        "-v",
+        "--tb=short",
+    ]
+    result = subprocess.call(cmd, cwd=str(PROJECT_ROOT))
+    if result != 0:
+        raise SystemExit(result)
+
+
 if SCONS_ENV is not None:
     env = SCONS_ENV
     env.AddCustomTarget(
@@ -71,4 +92,12 @@ if SCONS_ENV is not None:
         env.VerboseAction(_format_action, "Formatting Python host tooling with Ruff"),
         title="Python Ruff Format",
         description="Reformat Python sources with Ruff to enforce repo standards.",
+    )
+
+    env.AddCustomTarget(
+        "test_python",
+        None,
+        env.VerboseAction(_test_action, "Running Python CLI tests with pytest"),
+        title="Python Tests",
+        description="Run pytest on tools/serial_cli/tests/.",
     )

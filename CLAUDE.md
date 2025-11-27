@@ -24,7 +24,7 @@ pio device monitor -b 115200
 ## Testing
 
 ```bash
-# Run all native tests (fast, no hardware)
+# Run all native tests (fast, no hardware) - includes Python tests via shim
 pio test -e native
 
 # Run a single native test file
@@ -33,8 +33,9 @@ pio test -e native -f test_MotorControl/test_CommandPipeline
 # Run on-device tests
 pio test -e esp32DedicatedStep
 
-# Run Python CLI tests
-poetry run pytest test/test_Serial_CLI/
+# Run Python CLI tests (any of these methods)
+poetry run pytest tools/serial_cli/tests/    # Direct pytest
+pio run -t test_python                       # Via PlatformIO target
 ```
 
 ## Linting and Formatting

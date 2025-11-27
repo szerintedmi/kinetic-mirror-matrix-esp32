@@ -1,45 +1,25 @@
 # Kinetic Mirror Matrix (ESP32)
 
-Firmware + host tools to drive up to 8 stepper‑driven mirrors from a single ESP32 using FastAccelStepper for motion and two 74HC595 shift registers for per‑motor DIR and SLEEP. A simple human‑readable serial protocol provides immediate control from any laptop; diagnostics and thermal run‑time limits keep demos stable and safe.
+Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP32 using FastAccelStepper for motion and two 74HC595 shift registers for per-motor DIR and SLEEP. A simple human-readable serial protocol provides immediate control from any laptop; diagnostics and thermal run-time limits keep demos stable and safe.
 
-- [Roadmap](./agent-os/product/roadmap.md)
-- [Tech stack](./agent-os/product/tech-stack.md)
-- [Wiring guide](./docs/esp32-74hc595-wiring.md)
-- [mirror-matrix-control-ui](https://github.com/szerintedmi/mirror-matrix-control-ui)
+**Quick Links:** [Roadmap](./agent-os/product/roadmap.md) · [Tech Stack](./agent-os/product/tech-stack.md) · [Wiring Guide](./docs/esp32-74hc595-wiring.md) · [Control UI](https://github.com/szerintedmi/mirror-matrix-control-ui)
 
 ## What It Does
 
-- Exposes a USB serial protocol (v1) with commands: HELP, STATUS, MOVE, HOME, WAKE, SLEEP
-- Drives 8 DRV8825 steppers concurrently (full‑step for v1). DIR and SLEEP are via 74HC595 shift registers to reduce GPIO use.
-- Auto-sleeps motors by default to avoid overheating and to reduce power consumption.
-- Implements bump‑stop homing, zeroing at midpoint
-- Reports per‑motor status including homed, steps since home, and thermal budget metrics
-- Enforces runtime/cooldown budgets; toggleable at runtime for lab work
-- Ships a Python CLI for quick tests and an interactive TUI view
-
-## Features (High‑Level)
-
-- Serial protocol v1 with stable grammar and shortcuts
-  - See: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp) and the modular pipeline under [`lib/MotorControl/src/command`](./lib/MotorControl/src/command/), spec: [Serial command protocol v1](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
-- Wi‑Fi onboarding library with serial/MQTT-ready commands, SoftAP portal, and device status feedback
-  - See: [NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp), portal assets in [data_src/net](./data_src/net), spec: [Wi‑Fi Onboarding via NVS](./agent-os/specs/2025-10-28-wifi-onboarding-via-nvs/spec.md)
-- 8‑motor hardware bring‑up via FastAccelStepper + 2×74HC595 (DIR/SLEEP)
-  - See: [FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp), [Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp), [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp)
-- Homing & baseline calibration (bump‑stop)
-  - See: [HardwareMotorController.cpp](./lib/MotorControl/src/HardwareMotorController.cpp), spec: [Homing & baseline calibration spec](./agent-os/specs/2025-10-17-homing-baseline-calibration-bump-stop/spec.md)
-- Status & diagnostics (homed, steps_since_home, budget_s, ttfc_s)
-  - See: [CommandHandlers.cpp](./lib/MotorControl/src/command/CommandHandlers.cpp) (status handler) and [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), spec: [Status & diagnostics spec](./agent-os/specs/2025-10-17-status-diagnostics/spec.md)
-- Thermal limits enforcement (preflight checks, WARN/ERR, last‑op timing)
-  - See: [CommandHandlers.cpp](./lib/MotorControl/src/command/CommandHandlers.cpp) (motor handler paths), [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp), [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h), spec: [Thermal limits enforcement spec](./agent-os/specs/2025-10-17-thermal-limits-enforcement/spec.md)
-- Host CLI (Python) incl. interactive TUI
-  - See: [tools/serial_cli](./tools/serial_cli/)
+- USB serial protocol (v1): `HELP`, `STATUS`, `MOVE`, `HOME`, `WAKE`, `SLEEP`
+- Drives 8 DRV8825 steppers concurrently (full-step). DIR/SLEEP via 74HC595 shift registers
+- Auto-sleeps motors to avoid overheating and reduce power consumption
+- Bump-stop homing, zeroing at midpoint
+- Reports per-motor status: homed, steps since home, thermal budget metrics
+- Enforces runtime/cooldown budgets (toggleable at runtime)
+- Python CLI for quick tests and interactive TUI
 
 ## Architecture
 
 ```mermaid
 flowchart LR
   subgraph "Host PC"
-    CLI["serial_cli (Component)"]
+    CLI["serial_cli"]
   end
 
   subgraph "ESP32 Firmware"
@@ -47,9 +27,7 @@ flowchart LR
     MCP["MotorCommandProcessor"]
     MC["MotorController"]
     HWC["HardwareMotorController"]
-    STUB["StubMotorController"]
     FAS["FasAdapterEsp32"]
-    FASLib["FastAccelStepper (Library)"]
     SR["Shift595Vspi"]
   end
 
@@ -60,231 +38,185 @@ flowchart LR
   end
 
   CLI -->|USB Serial| Console
-  Console --> MCP
-  MCP --> MC
-  MC --> HWC
-  MC --> STUB
-  HWC --> FAS
-  HWC --> SR
-  FAS -->|uses| FASLib
-  FAS -->|STEP GPIO| DRV
-  SR -->|VSPI| SRIC
-  SRIC -->|DIR/SLEEP lines| DRV
+  Console --> MCP --> MC --> HWC
+  HWC --> FAS -->|STEP GPIO| DRV
+  HWC --> SR -->|VSPI| SRIC -->|DIR/SLEEP| DRV
   DRV --> Motors
-```
-
-### MOVE/HOME Command Flow
-
-```mermaid
-sequenceDiagram
-  participant CLI as Host CLI
-  participant Dev as SerialConsole ESP32
-  participant MCP as MotorCommandProcessor
-  participant CTR as MotorController HW/Stub
-  participant FAS as FastAccelStepper
-  participant SR as Shift595 DIR-SLEEP
-  CLI->>Dev: MOVE:0,1000,4000,16000
-  Dev->>MCP: parse line
-  MCP->>CTR: tick(now) and preflight checks
-  alt OK or WARN (limits OFF)
-    MCP-->>CLI: CTRL:ACK est_ms=...
-    MCP->>CTR: moveAbsMask(mask,...)
-    CTR->>SR: set DIR/SLEEP and latch
-    CTR->>FAS: startMoveAbs(id,target,...)
-    FAS-->>CTR: running
-    CTR-->>MCP: update last-op timing
-    Note over CTR: On completion — auto-sleep, update homed/steps
-  else ERR (limits ON)
-    MCP-->>CLI: CTRL:ERR E10/E11
-  end
 ```
 
 ## Quickstart
 
-Prereqs
+### Prerequisites
 
 - PlatformIO Core (CLI)
 - Python 3.13+ with Poetry (for host CLI)
 
-Build and Upload (ESP32)
+### Build & Upload (ESP32)
 
-- Configure your board pins/wiring: [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp), [wiring guide](./docs/esp32-74hc595-wiring.md)
-- Build firmware: `pio run -e esp32DedicatedStep`
-- Upload firmware: `pio run -e esp32DedicatedStep -t upload`
-- Build portal filesystem image: `pio run -e esp32DedicatedStep -t buildfs`
-- Upload portal filesystem: `pio run -e esp32DedicatedStep -t uploadfs`
-- Monitor: `pio device monitor -b 115200`
-  - On boot you should see: `CTRL:READY Serial v1 — send HELP`
-
-Host CLI
-
-- From repo root: `python -m serial_cli --help`
-- Dependencies managed via Poetry (Python ≥3.13):
-  ```bash
-  poetry install          # Install all dependencies
-  poetry run pytest ...   # Run commands in the venv
-  poetry shell            # Activate the venv
-  ```
-
-- Examples:
-- `python -m serial_cli interactive --port /dev/ttyUSB0`  #  polls and displays STATUS at ~2 Hz, displays device responses to commands
-- `python -m serial_cli interactive --transport mqtt`  # subscribes to aggregate MQTT status snapshots and issues commands over MQTT (use --node to target a device)
-- `python -m serial_cli help --port /dev/ttyUSB0`
-- `python -m serial_cli help --transport mqtt --node <mac>`
-- `python -m serial_cli status --port /dev/ttyUSB0`
-- `python -m serial_cli status --transport mqtt --timeout 1.5`
-- `python -m serial_cli move --port /dev/ttyUSB0 0 800 --speed 4000 --accel 16000`
-- `python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800 --backoff 150`
-- `python -m serial_cli move --transport mqtt --node <mac> 0 800`
-- `python -m serial_cli home --transport mqtt --node <mac> 0 --overshoot 800`
-- The MQTT worker automatically reconnects with exponential backoff and logs `[mqtt] reconnect in <delay>s` alongside connect/disconnect events.
-- CLI module: [tools/serial_cli](./tools/serial_cli/)
-
-MQTT transport routes STATUS/TUI tables from aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained). Command requests published with `--transport mqtt` translate familiar serial syntax (e.g., `MOVE:0,1200`) into the unified dispatcher JSON envelope, publish to `devices/<mac>/cmd`, and stream ACK/DONE events back to the CLI/TUI log with correlated `cmd_id` metadata. Duplicate QoS1 deliveries are collapsed automatically via the dispatcher cache; host tools surface `[ACK]` and `[DONE]` entries with latency annotations instead of legacy `CTRL:*` strings. The `HELP` command is also supported over MQTT and returns a single completion payload with `result.lines` containing the same help text as serial.
-
-Tests
-
-- Native: `pio test -e native`
-- On‑Device: `pio test -e esp32dev`
-
-## Lint, Format, and Static Analysis
-
-PlatformIO orchestrates every linting/formatting step so the CLI, CI, and IDEs stay consistent with the repository configuration.
-
-- `platformio.ini` already pins `check_tool = clangtidy, cppcheck` and the corresponding `check_flags`, so updating `.clang-tidy` or `.clang-format` automatically flows into `pio check` without editing per-machine scripts.
-- Run `pio check -e esp32DedicatedStep -e esp32SharedStep -e native` to execute clang-format (dry-run), clang-tidy, and cppcheck in one pass using the same severity rules across hosts.
-- Set `CLANG_FORMAT_FIX=1 pio check ...` whenever you want the pre-check helper (`tools/clang_format_check.py`) to rewrite files in place; omit the env var for read-only validation.
-
-### IDE Alignment
-
-If you use VS Code’s clang-tidy integration, point it at the PlatformIO-managed binary so the editor emits the exact diagnostics that `pio check` produces:
-
-```
-${workspaceFolder}/.platformio/packages/tool-clangtidy/bin/clang-tidy
+```bash
+# Configure pins: include/boards/Esp32Dev.hpp, docs/esp32-74hc595-wiring.md
+pio run -e esp32DedicatedStep              # Build firmware
+pio run -e esp32DedicatedStep -t upload    # Upload firmware
+pio run -e esp32DedicatedStep -t buildfs   # Build portal filesystem
+pio run -e esp32DedicatedStep -t uploadfs  # Upload portal filesystem
+pio device monitor -b 115200               # Monitor (expect: CTRL:READY Serial v1)
 ```
 
-That path matches the toolchain bundled with this repo, so you never chase system-level version drift.
+### Host CLI
 
-### Python CLI Lint & Format
+```bash
+poetry install                             # Install dependencies
+poetry shell                               # Activate venv
 
-- `./scripts/python_lint.sh` runs Ruff against `serial_cli`, `tools`, and `test` with the repo’s `pyproject.toml`. Pass custom targets or flags (e.g., `./scripts/python_lint.sh --fix tools/serial_cli/mqtt_runtime.py`).
-- `./scripts/python_format.sh` invokes Ruff’s formatter with the same config; call it with no args to format the full CLI/tooling tree or pass file paths to limit the scope.
-- `pio run -t lint_python` / `pio run -t format_python` expose the same Ruff flows inside PlatformIO so CI and the VS Code task runner can trigger them without bespoke scripts.
-- VS Code picks up the same configuration automatically through `.vscode/settings.json`, so saving a Python file applies Ruff organize-imports + format-on-save using the identical toolchain.
-- If you rely on a global interpreter, install Ruff once via `pip install ruff` (or set `RUFF_BIN=/path/to/ruff`) so the scripts and editor bindings can find the binary.
+# Interactive TUI
+python -m serial_cli interactive --port /dev/ttyUSB0
+python -m serial_cli interactive --transport mqtt
 
-## MQTT Telemetry
+# Single commands
+python -m serial_cli help --port /dev/ttyUSB0
+python -m serial_cli status --port /dev/ttyUSB0
+python -m serial_cli move --port /dev/ttyUSB0 0 800
+python -m serial_cli home --port /dev/ttyUSB0 0 --overshoot 800
 
-- On successful broker handshake the firmware emits `CTRL: MQTT_CONNECTED broker=<host>:<port>` once per boot.
-- Publishes aggregate snapshots on `devices/<mac>/status` using QoS0/non-retained semantics.
-- Snapshot payload format: `{"node_state":"ready","ip":"<ipv4>","motors":{"0":{...}}}`; fields mirror the serial STATUS columns (see [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md)).
-- Offline LWT payload: `{"node_state":"offline","motors":{}}` published on the same topic.
-- Maintains a 1 Hz cadence while idle and 5 Hz while any motor is moving, with change-driven bursts between ticks.
-- On broker loss logs `CTRL: MQTT_DISCONNECTED …` once, schedules exponential-backoff retries with `CTRL: MQTT_RECONNECT delay=<ms>`, and resumes with `CTRL: MQTT_CONNECTED broker=…` upon success.
-- Single `CTRL:WARN MQTT_CONNECT_FAILED` log surfaces broker connection failures without blocking motor tasks.
-- Inspect or update broker overrides at runtime via `MQTT:GET_CONFIG` and `MQTT:SET_CONFIG`; changes persist in Preferences and apply without reflashing.
+# MQTT transport
+python -m serial_cli status --transport mqtt --timeout 1.5
+python -m serial_cli move --transport mqtt --node <mac> 0 800
+```
 
-### Runtime MQTT configuration
+CLI source: [tools/serial_cli](./tools/serial_cli/)
 
-- `MQTT:GET_CONFIG` prints the active broker host/port/user/pass.
-- `MQTT:SET_CONFIG host=<fqdn> port=<port> user=<user> pass=<secret>` updates only the fields you specify; values are stored under the `mqtt` Preferences namespace and the broker client reconnects automatically with the new credentials.
-- Send `MQTT:SET_CONFIG RESET` to roll back to the compile-time defaults defined in `include/secrets.h`.
-- The serial console and the MQTT transport share the same grammar—`tools/serial_cli` will translate these lines into the JSON envelope described in [`docs/mqtt-command-schema.md`](./docs/mqtt-command-schema.md).
+## Testing
 
-## Wi‑Fi Onboarding
+### C++ Tests (PlatformIO)
 
-### SoftAP portal
+```bash
+pio test -e native                         # All native tests (fast, no hardware)
+pio test -e native -f test_MotorControl/test_CommandPipeline  # Single test
+pio test -e esp32DedicatedStep             # On-device tests
+```
 
-1. Power the device with no credentials saved (hold the BOOT button for 5 seconds if you need to clear existing credentials; see **Long‑press reset** below).
-2. Join the broadcast SSID `SOFT_AP_SSID_PREFIX + MAC suffix` using the password from [`include/secrets.h`](./include/secrets.h) (`SOFT_AP_PASS`).
-3. Browse to `http://192.168.4.1/` from any phone or laptop connected to the SoftAP.
-4. Use the portal to refresh nearby networks, tap one to prefill the form, or manually enter SSID/PSK. Submitting triggers an immediate connect attempt and streams status updates.
+### Python Tests
 
-The UI is built with Pico.css + Alpine.js and lives under [`data_src/net`](./data_src/net). Assets are gzipped into LittleFS at build time via [`tools/gzip_fs.py`](./tools/gzip_fs.py).
-
-### Serial fallback commands
-
-When a USB cable is convenient, the existing `NET:*` actions remain available:
-
-- `NET:STATUS` — prints current state, IP, and RSSI (when connected).
-- `NET:LIST` — scans nearby SSIDs (top 12) ordered by RSSI; available only while the device SoftAP is active.
-- `NET:SET,"ssid","pass"` — quoted CSV payload with validation/error codes identical to the portal.
-- `NET:RESET` — clears saved credentials; the device re-enters SoftAP mode automatically.
-
-Use `tools/serial_cli` or the interactive TUI to issue these commands (`python -m serial_cli interactive --port <PORT>`).
-
-### Status indicators
-
-- **LED (GPIO2, active-low):**
-  - Fast blink ≈125 ms — SoftAP active and waiting for credentials.
-  - Slow blink ≈400 ms — Connecting to the configured network.
-  - Solid on — STA connected successfully.
-- **Serial events:** each transition emits `CTRL: NET:...` lines with correlation IDs so host tools can pair async updates with user commands.
-
-### Long-press reset
-
-Hold the ESP32 BOOT button (GPIO0) for ≥5 seconds to clear NVS credentials and drop back into SoftAP mode. Short taps are ignored to avoid accidental wipes.
-
-### HTTP API quick reference
-
-| Endpoint | Method | Description |
-| --- | --- | --- |
-| `/api/status` | GET | Current onboarding state, SSID, IP, RSSI (if connected), and active SoftAP password. |
-| `/api/scan` | GET | Top nearby networks ordered by RSSI (`ssid`, `rssi`, `secure`, `channel`). |
-| `/api/wifi` | POST | Accepts JSON `{"ssid":"...","pass":"..."}` to persist credentials and trigger a connect attempt. Returns `409` while a connection is already in progress. |
-
-All endpoints respond with compact JSON (`Content-Type: application/json`) and set `Cache-Control: no-store` to avoid stale data inside captive portal flows.
-
-## Setup & Tuning Knobs
-
-- Build flags and test routing: [platformio.ini](./platformio.ini)
-- `-DUSE_STUB_BACKEND` selects the stub backend (hardware is default)
-- Default test filter limits on‑device tests to driver layer
-- Motion/limits constants: [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h)
-  - Defaults: `DEFAULT_SPEED_SPS`, `DEFAULT_ACCEL_SPS2`
-  - Limits: `MIN_POS_STEPS`, `MAX_POS_STEPS`
-  - Thermal: `MAX_RUNNING_TIME_S`, `MAX_COOL_DOWN_TIME_S`, refill rate (derived)
-- FastAccelStepper integration: [FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp)
-  - Auto‑enable, `setDelayToEnable(2000)` µs, external‑pin callbacks
-- Shift‑register I/O and OE gating: [Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp)
-- Board pin map: [Esp32Dev.hpp](./include/boards/Esp32Dev.hpp)
-- Filesystem for static assets/presets (optional):
-  - [platformio.ini](./platformio.ini) → littlefs, prebuild gzip: [tools/gzip_fs.py](./tools/gzip_fs.py), sources in `data_src/`
-
-Runtime Controls (device)
-
-- `GET THERMAL_LIMITING` → `CTRL:ACK THERMAL_LIMITING=ON|OFF max_budget_s=N`
-- `GET` or `GET ALL` → `CTRL:ACK SPEED=<N> ACCEL=<N> DECEL=<N> THERMAL_LIMITING=ON|OFF max_budget_s=<N> free_heap_bytes=<N>`
-- `SET THERMAL_LIMITING=OFF|ON`
-- `GET LAST_OP_TIMING[:<id|ALL>]` to validate estimates (`est_ms`) and actual durations
-
-## Protocol Cheatsheet (links)
-
-- Highlights (grammar):
-  - `MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]`
-  - `HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]`
-  - `STATUS`, `WAKE:<id|ALL>`, `SLEEP:<id|ALL>`
-  - `GET` (all settings), `GET ALL`
-  - `GET LAST_OP_TIMING[:<id|ALL>]`, `GET THERMAL_LIMITING`, `SET THERMAL_LIMITING=OFF|ON`
-  - Responses: `CTRL:ACK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, and `CTRL:WARN ...` when enforcement is OFF
-- Full spec: [Serial command protocol v1 spec](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
-- HELP source: [`QueryCommandHandler::handleHelp`](./lib/MotorControl/src/command/CommandHandlers.cpp)
-
-## Repo Map (quick links)
-
-- Firmware console: [SerialConsole.cpp](./src/console/SerialConsole.cpp)
-- Command processor: [MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp) (façade) and [`lib/MotorControl/src/command/`](./lib/MotorControl/src/command/) (pipeline modules)
-- Hardware controller: [HardwareMotorController.cpp](./lib/MotorControl/src/HardwareMotorController.cpp)
-- FastAccelStepper adapter: [FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp)
-- 74HC595 driver: [Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp)
-- Constants: [MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h)
-- Tests (C++): [test_MotorControl](./test/test_MotorControl/), [test_Drivers](./test/test_Drivers/)
-- Host CLI: [tools/serial_cli](./tools/serial_cli/)
+```bash
+poetry run pytest tools/serial_cli/tests/  # Direct pytest (228 tests)
+pio run -t test_python                     # Via PlatformIO target
+pio test -e native                         # Also runs Python tests via shim
+```
 
 ## Linting & Formatting
 
-1. Install the VS Code `llvm-vs-code-extensions.vscode-clangd` extension (recommended via `.vscode/extensions.json`).
-2. Generate `compile_commands.json` for whichever env you're editing whenever build flags change so clangd and clang-tidy see the right includes: `pio run -t compiledb -e esp32DedicatedStep` (add more `-e` flags as needed).
-3. Format C/C++ files on save (enabled in `.vscode/settings.json`) using the shared [`.clang-format`](./.clang-format).
-4. clangd runs clang-tidy inline using [`.clang-tidy`](./.clang-tidy); open any source file to see diagnostics.
-5. Run `pio check` before committing to execute the same clang-tidy and cppcheck rules that CI will enforce. Set `CLANG_FORMAT_FIX=1` to have the same command auto-fix formatting drift via clang-format.
+### C++ (clang-tidy + cppcheck)
+
+```bash
+pio check -e esp32DedicatedStep -e native  # Lint all environments
+CLANG_FORMAT_FIX=1 pio check ...           # Auto-fix formatting
+pio run -t compiledb -e esp32DedicatedStep # Generate compile_commands.json
+```
+
+### Python (Ruff)
+
+```bash
+pio run -t lint_python                     # Lint
+pio run -t format_python                   # Format
+./scripts/python_lint.sh                   # Direct Ruff lint
+./scripts/python_format.sh                 # Direct Ruff format
+```
+
+VS Code picks up the same configuration via `.vscode/settings.json` for format-on-save.
+
+## MQTT Telemetry
+
+- Publishes aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained)
+- Payload: `{"node_state":"ready","ip":"<ipv4>","motors":{"0":{...}}}`
+- Offline LWT: `{"node_state":"offline","motors":{}}`
+- Cadence: 1 Hz idle, 5 Hz while motors moving, change-driven bursts between ticks
+- Auto-reconnects with exponential backoff on broker loss
+
+### Runtime MQTT Configuration
+
+```
+MQTT:GET_CONFIG                            # Show active broker config
+MQTT:SET_CONFIG host=<fqdn> port=<port>    # Update specific fields
+MQTT:SET_CONFIG RESET                      # Reset to compile-time defaults
+```
+
+Schema: [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md), [`docs/mqtt-command-schema.md`](./docs/mqtt-command-schema.md)
+
+## Wi-Fi Onboarding
+
+### SoftAP Portal
+
+1. Power device with no credentials (hold BOOT 5s to clear existing)
+2. Join `SOFT_AP_SSID_PREFIX + MAC` using password from `include/secrets.h`
+3. Browse to `http://192.168.4.1/`
+4. Select network and enter credentials
+
+### Serial Commands
+
+```
+NET:STATUS                                 # Current state, IP, RSSI
+NET:LIST                                   # Scan nearby SSIDs (SoftAP mode only)
+NET:SET,"ssid","pass"                      # Set credentials
+NET:RESET                                  # Clear credentials, enter SoftAP mode
+```
+
+### Status LED (GPIO2, active-low)
+
+- Fast blink ~125ms: SoftAP active, waiting for credentials
+- Slow blink ~400ms: Connecting to configured network
+- Solid on: STA connected
+
+### HTTP API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/status` | GET | Onboarding state, SSID, IP, RSSI |
+| `/api/scan` | GET | Nearby networks (ssid, rssi, secure, channel) |
+| `/api/wifi` | POST | `{"ssid":"...","pass":"..."}` to connect |
+
+## Protocol Reference
+
+```
+MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]
+HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]
+STATUS
+WAKE:<id|ALL>
+SLEEP:<id|ALL>
+GET [ALL]
+GET LAST_OP_TIMING[:<id|ALL>]
+GET THERMAL_LIMITING
+SET THERMAL_LIMITING=OFF|ON
+```
+
+Responses: `CTRL:ACK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, `CTRL:WARN ...`
+
+Full spec: [Serial command protocol v1](./agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md)
+
+## Key Files
+
+| Component | Location |
+|-----------|----------|
+| Firmware console | [src/console/SerialConsole.cpp](./src/console/SerialConsole.cpp) |
+| Command processor | [lib/MotorControl/src/MotorCommandProcessor.cpp](./lib/MotorControl/src/MotorCommandProcessor.cpp) |
+| Command pipeline | [lib/MotorControl/src/command/](./lib/MotorControl/src/command/) |
+| Hardware controller | [lib/MotorControl/src/HardwareMotorController.cpp](./lib/MotorControl/src/HardwareMotorController.cpp) |
+| FastAccelStepper adapter | [src/drivers/Esp32/FasAdapterEsp32.cpp](./src/drivers/Esp32/FasAdapterEsp32.cpp) |
+| 74HC595 driver | [src/drivers/Esp32/Shift595Vspi.cpp](./src/drivers/Esp32/Shift595Vspi.cpp) |
+| Constants | [lib/MotorControl/include/MotorControl/MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h) |
+| Board pins | [include/boards/Esp32Dev.hpp](./include/boards/Esp32Dev.hpp) |
+| Wi-Fi onboarding | [lib/net_onboarding/src/NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp) |
+| Host CLI | [tools/serial_cli/](./tools/serial_cli/) |
+| C++ tests | [test/test_MotorControl/](./test/test_MotorControl/), [test/test_Drivers/](./test/test_Drivers/) |
+
+## Configuration
+
+### Build Flags
+
+- `-DUSE_STUB_BACKEND`: Use StubMotorController (no hardware), default for `native`
+- `-DUSE_SHARED_STEP=1`: Shared-step RMT pulse generation for 16+ motors
+
+### Motion Constants ([MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h))
+
+- `DEFAULT_SPEED_SPS`, `DEFAULT_ACCEL_SPS2`: Motion defaults
+- `MIN_POS_STEPS`, `MAX_POS_STEPS`: Position limits
+- `MAX_RUNNING_TIME_S`, `MAX_COOL_DOWN_TIME_S`: Thermal budget
