@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -47,6 +48,8 @@ def get_git_info() -> tuple[str, str]:
 
         if status:
             commit_hash += "-dirty"
+            # Use current build timestamp for dirty builds (commit timestamp is stale)
+            commit_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S%z")
 
         return commit_hash, commit_date
 

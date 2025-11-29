@@ -200,9 +200,9 @@ Firmware can be updated over the network using ArduinoOTA. The device must be co
 
 ### Firmware Version
 
-Version is tracked via git commit hash and displayed in:
+Version is tracked via git commit hash and timestamp. Dirty builds (uncommitted changes) use the build timestamp instead of the commit timestamp for uniqueness.
 
-- Serial output at boot: `Firmware: 41a147e`
+- Serial output at boot: `Firmware: 41a147e` (or `41a147e-dirty`)
 - `GET ALL` command: includes `firmware_version` and `firmware_date`
 - Web portal: shows version in status card
 - `/api/status`: includes `firmwareVersion` and `firmwareDate`
