@@ -95,7 +95,11 @@ def _parse_set_assignments(tokens: Sequence[str]) -> Dict[str, object]:
     key, value = token.split("=", 1)
     name = key.strip().upper()
     value = value.strip()
-    # Passthrough all SET fields to firmware for validation
+    # Convert numeric values to int for MQTT JSON serialization
+    if name in ("SPEED", "ACCEL", "DECEL"):
+        if not _INTEGER_RE.fullmatch(value):
+            raise CommandParseError(f"{name} must be integer")
+        return {name: int(value)}
     return {name: value}
 
 
@@ -230,9 +234,9 @@ def parse_serial_command(command: str) -> CommandRequest:
                 "position_steps": position,
             }
             if len(args) >= 3 and args[2] != "":
-                params["speed_sps"] = _parse_int(args[2], "speed")
+                params["speed"] = _parse_int(args[2], "speed")
             if len(args) >= 4 and args[3] != "":
-                params["accel_sps2"] = _parse_int(args[3], "accel")
+                params["accel"] = _parse_int(args[3], "accel")
             return CommandRequest(action="MOVE", params=params, raw=raw)
         if action in {"HOME", "H"}:
             args = _parse_csv_arguments(arg_string)
@@ -243,8 +247,8 @@ def parse_serial_command(command: str) -> CommandRequest:
             optional_fields = [
                 ("overshoot_steps", 1),
                 ("backoff_steps", 2),
-                ("speed_sps", 3),
-                ("accel_sps2", 4),
+                ("speed", 3),
+                ("accel", 4),
                 ("full_range_steps", 5),
             ]
             for key, idx in optional_fields:

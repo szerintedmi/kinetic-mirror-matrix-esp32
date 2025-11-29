@@ -65,12 +65,12 @@ class TestMoveCommand(unittest.TestCase):
         req = parse_serial_command("MOVE:0,500,4000")
         self.assertEqual(req.params["target_ids"], 0)
         self.assertEqual(req.params["position_steps"], 500)
-        self.assertEqual(req.params["speed_sps"], 4000)
+        self.assertEqual(req.params["speed"], 4000)
 
     def test_move_with_speed_and_accel(self):
         req = parse_serial_command("MOVE:2,1000,5000,10000")
-        self.assertEqual(req.params["speed_sps"], 5000)
-        self.assertEqual(req.params["accel_sps2"], 10000)
+        self.assertEqual(req.params["speed"], 5000)
+        self.assertEqual(req.params["accel"], 10000)
 
     def test_move_all_target(self):
         req = parse_serial_command("MOVE:ALL,800")
@@ -98,8 +98,8 @@ class TestMoveCommand(unittest.TestCase):
     def test_move_skip_speed_set_accel(self):
         # Empty speed, explicit accel
         req = parse_serial_command("MOVE:0,100,,5000")
-        self.assertNotIn("speed_sps", req.params)
-        self.assertEqual(req.params["accel_sps2"], 5000)
+        self.assertNotIn("speed", req.params)
+        self.assertEqual(req.params["accel"], 5000)
 
     def test_move_missing_position_raises(self):
         with self.assertRaises(CommandParseError) as ctx:
@@ -151,8 +151,8 @@ class TestHomeCommand(unittest.TestCase):
         self.assertEqual(req.params["target_ids"], "ALL")
         self.assertEqual(req.params["overshoot_steps"], 800)
         self.assertEqual(req.params["backoff_steps"], 150)
-        self.assertEqual(req.params["speed_sps"], 3000)
-        self.assertEqual(req.params["accel_sps2"], 12000)
+        self.assertEqual(req.params["speed"], 3000)
+        self.assertEqual(req.params["accel"], 12000)
         self.assertEqual(req.params["full_range_steps"], 2400)
 
     def test_home_skip_optional_fields(self):
@@ -258,24 +258,24 @@ class TestSetCommand(unittest.TestCase):
     def test_set_speed(self):
         req = parse_serial_command("SET SPEED=4000")
         self.assertEqual(req.action, "SET")
-        self.assertEqual(req.params["SPEED"], "4000")
+        self.assertEqual(req.params["SPEED"], 4000)
 
     def test_set_accel(self):
         req = parse_serial_command("SET ACCEL=10000")
-        self.assertEqual(req.params["ACCEL"], "10000")
+        self.assertEqual(req.params["ACCEL"], 10000)
 
     def test_set_decel(self):
         req = parse_serial_command("SET DECEL=8000")
-        self.assertEqual(req.params["DECEL"], "8000")
+        self.assertEqual(req.params["DECEL"], 8000)
 
     def test_set_decel_zero(self):
         req = parse_serial_command("SET DECEL=0")
-        self.assertEqual(req.params["DECEL"], "0")
+        self.assertEqual(req.params["DECEL"], 0)
 
     def test_set_decel_negative_passthrough(self):
         # Negative values passthrough to firmware for validation
         req = parse_serial_command("SET DECEL=-100")
-        self.assertEqual(req.params["DECEL"], "-100")
+        self.assertEqual(req.params["DECEL"], -100)
 
     def test_set_thermal_limiting_on(self):
         req = parse_serial_command("SET THERMAL_LIMITING=ON")
@@ -316,10 +316,11 @@ class TestSetCommand(unittest.TestCase):
             parse_serial_command("SET SPEED")
         self.assertIn("missing '='", str(ctx.exception))
 
-    def test_set_non_integer_value_passthrough(self):
-        # Non-integer values passthrough to firmware for validation
-        req = parse_serial_command("SET SPEED=fast")
-        self.assertEqual(req.params["SPEED"], "fast")
+    def test_set_speed_non_integer_raises(self):
+        # Non-integer values for SPEED/ACCEL/DECEL raise error
+        with self.assertRaises(CommandParseError) as ctx:
+            parse_serial_command("SET SPEED=fast")
+        self.assertIn("must be integer", str(ctx.exception))
 
     def test_set_colon_syntax(self):
         # SET:KEY=VALUE works like SET KEY=VALUE
@@ -330,7 +331,7 @@ class TestSetCommand(unittest.TestCase):
     def test_set_colon_syntax_lowercase(self):
         req = parse_serial_command("set:speed=4000")
         self.assertEqual(req.action, "SET")
-        self.assertEqual(req.params["SPEED"], "4000")
+        self.assertEqual(req.params["SPEED"], 4000)
 
 
 # =============================================================================

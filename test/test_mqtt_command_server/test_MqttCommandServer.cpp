@@ -444,7 +444,7 @@ void test_help_command_success() {
 void test_set_speed_command_success() {
   Harness h;
   h.send(makeSetPayload("cmd-set-speed",
-                        [](ArduinoJson::JsonObject& obj) { obj["speed_sps"] = 1500; }));
+                        [](ArduinoJson::JsonObject& obj) { obj["SPEED"] = 1500; }));
 
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
   auto completion = h.parse(0);

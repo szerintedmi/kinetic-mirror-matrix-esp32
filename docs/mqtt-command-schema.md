@@ -317,7 +317,7 @@ STATUS command streams a snapshot in the ACK and does not emit a DONE.
   "cmd_id": "0f...",
   "action": "SET",
   "params": {
-    "speed_sps": 5000
+    "SPEED": 5000
   }
 }
 ```

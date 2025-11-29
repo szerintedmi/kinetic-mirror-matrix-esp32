@@ -769,16 +769,16 @@ bool MqttCommandServer::buildMoveCommand(ArduinoJson::JsonVariantConst params,
   out = "MOVE:" + target_token + "," + std::to_string(position);
 
   long speed = 0;
-  if (!obj["speed_sps"].isNull()) {
-    if (!parseIntegerField(obj["speed_sps"], "speed_sps", false, speed, error)) {
+  if (!obj["speed"].isNull()) {
+    if (!parseIntegerField(obj["speed"], "speed", false, speed, error)) {
       return false;
     }
     out.append(",");
     out.append(std::to_string(speed));
 
     long accel = 0;
-    if (!obj["accel_sps2"].isNull()) {
-      if (!parseIntegerField(obj["accel_sps2"], "accel_sps2", false, accel, error)) {
+    if (!obj["accel"].isNull()) {
+      if (!parseIntegerField(obj["accel"], "accel", false, accel, error)) {
         return false;
       }
       out.append(",");
@@ -807,7 +807,7 @@ bool MqttCommandServer::buildHomeCommand(ArduinoJson::JsonVariantConst params,
   std::array<std::string, 5> optionals;
   std::array<bool, 5> present{};
   const std::array<const char*, 5> keys = {
-      "overshoot_steps", "backoff_steps", "speed_sps", "accel_sps2", "full_range_steps"};
+      "overshoot_steps", "backoff_steps", "speed", "accel", "full_range_steps"};
 
   for (size_t idx = 0; idx < keys.size(); ++idx) {
     auto field = obj[keys[idx]];
@@ -1140,23 +1140,17 @@ bool MqttCommandServer::buildSetCommand(ArduinoJson::JsonVariantConst params,
       key = "THERMAL_LIMITING";
       value = val;
       recognized = true;
-    } else if (name == "SPEED_SPS" || name == "ACCEL_SPS2" || name == "DECEL_SPS2") {
+    } else if (name == "SPEED" || name == "ACCEL" || name == "DECEL") {
       if (!(kv.value().is<long>() || kv.value().is<int>())) {
         error = name + " must be integer";
         return false;
       }
       long val = kv.value().as<long>();
-      if ((name == "DECEL_SPS2" && val < 0) || (name != "DECEL_SPS2" && val <= 0)) {
+      if ((name == "DECEL" && val < 0) || (name != "DECEL" && val <= 0)) {
         error = name + " out of range";
         return false;
       }
-      if (name == "SPEED_SPS") {
-        key = "SPEED";
-      } else if (name == "ACCEL_SPS2") {
-        key = "ACCEL";
-      } else {
-        key = "DECEL";
-      }
+      key = name;
       value = std::to_string(val);
       recognized = true;
     } else if (name == "MICROSTEP") {

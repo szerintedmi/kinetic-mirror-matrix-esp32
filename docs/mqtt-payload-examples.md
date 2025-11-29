@@ -393,7 +393,7 @@ When `THERMAL_LIMITING == "OFF"` and the command execution will exceed thermal l
 ```json
 {
   "action": "SET",
-  "params": { "speed_sps": 300 },
+  "params": { "SPEED": 300 },
   "cmd_id": "0f1e2d3c-4b5a-6978-8796-a5b4c3d2e1f0"
 }
 ```
