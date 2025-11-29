@@ -36,6 +36,8 @@ Firmware publishes real-time telemetry on `devices/<node_id>/status` where `<nod
 | `ip`         | string | Current IPv4 address reported by `NetOnboarding`. Defaults to `"0.0.0.0"` if not available. |
 | `motors`     | object | Map of motor ids to per-motor telemetry objects. Keys are stringified motor indices (`"0"`-`"7"`). |
 
+**Note:** Device configuration (microstep mode, thermal limiting, speed/accel defaults) is published on the separate `devices/<node_id>/config` topic. See [`mqtt-config-schema.md`](./mqtt-config-schema.md) for details.
+
 ### Motor Object Fields
 
 | Field               | Type    | Description |

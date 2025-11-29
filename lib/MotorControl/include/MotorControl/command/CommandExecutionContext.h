@@ -15,6 +15,7 @@ public:
                           int& default_speed_sps,
                           int& default_accel_sps2,
                           int& default_decel_sps2,
+                          uint8_t& microstep_multiplier,
                           bool& in_batch,
                           bool& batch_initially_idle);
 
@@ -27,6 +28,8 @@ public:
   int& defaultSpeed();
   int& defaultAccel();
   int& defaultDecel();
+  uint8_t microstepMultiplier() const;
+  uint8_t& microstepMultiplierRef();
 
   std::string nextMsgId() const;
   void setActiveMsgId(const std::string& msg_id) const;
@@ -45,6 +48,7 @@ private:
   int& default_speed_sps_;
   int& default_accel_sps2_;
   int& default_decel_sps2_;
+  uint8_t& microstep_multiplier_;
   bool& in_batch_;
   bool& batch_initially_idle_;
 };

@@ -2,6 +2,7 @@
 #if defined(ARDUINO)
 #include "MotorControl/MotorCommandProcessor.h"
 #include "mqtt/MqttCommandServer.h"
+#include "mqtt/MqttConfigPublisher.h"
 #include "mqtt/MqttPresenceClient.h"
 #include "mqtt/MqttStatusPublisher.h"
 #include "net_onboarding/NetSingleton.h"
@@ -27,6 +28,7 @@ struct SerialConsoleState {
   uint32_t ignore_until_ms = 0;  // grace period to ignore deploy-time noise
   mqtt::AsyncMqttPresenceClient* presence_client = nullptr;
   mqtt::MqttStatusPublisher* status_publisher = nullptr;
+  mqtt::MqttConfigPublisher* config_publisher = nullptr;
   mqtt::MqttCommandServer* command_server = nullptr;
   bool command_server_bound = false;
   transport::response::ResponseDispatcher::SinkToken serial_sink_token = 0;
@@ -160,7 +162,12 @@ void TickBackends(SerialConsoleState& state, uint32_t now_ms) {
 
   if (state.status_publisher != nullptr) {
     state.status_publisher->setTopic(state.presence_client->statusTopic());
-    state.status_publisher->loop(controller, now_ms);
+    state.status_publisher->loop(controller, now_ms, state.command_processor->microstepMultiplier());
+  }
+
+  if (state.config_publisher != nullptr) {
+    state.config_publisher->setTopic(state.presence_client->configTopic());
+    state.config_publisher->loop(now_ms);
   }
 }
 
@@ -193,6 +200,20 @@ void serial_console_setup() {
     state.status_publisher->setTopic(
         state.presence_client != nullptr ? state.presence_client->statusTopic() : std::string());
     state.status_publisher->forceImmediate();
+  }
+
+  if (state.config_publisher == nullptr && state.command_processor != nullptr) {
+    auto publish_fn = [&state](const mqtt::PublishMessage& msg) {
+      if (state.presence_client == nullptr) {
+        return false;
+      }
+      return state.presence_client->enqueuePublish(msg);
+    };
+    state.config_publisher =
+        new mqtt::MqttConfigPublisher(publish_fn, *state.command_processor);
+    state.config_publisher->setTopic(
+        state.presence_client != nullptr ? state.presence_client->configTopic() : std::string());
+    state.config_publisher->forceImmediate();
   }
 
   if (state.serial_sink_token == 0) {

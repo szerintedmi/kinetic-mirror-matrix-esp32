@@ -30,12 +30,20 @@ public:
     return *controller_;
   }
 
+  // Config accessors (read-only) for MQTT config publisher
+  bool thermalLimitsEnabled() const { return thermal_limits_enabled_; }
+  int defaultSpeedSps() const { return default_speed_sps_; }
+  int defaultAccelSps2() const { return default_accel_sps2_; }
+  int defaultDecelSps2() const { return default_decel_sps2_; }
+  uint8_t microstepMultiplier() const { return microstep_multiplier_; }
+
 private:
   std::unique_ptr<MotorController> controller_;
   bool thermal_limits_enabled_ = true;
   int default_speed_sps_;
   int default_accel_sps2_;
   int default_decel_sps2_;
+  uint8_t microstep_multiplier_ = 1;  // 1, 2, 4, 8, 16, or 32
   bool in_batch_ = false;
   bool batch_initially_idle_ = false;
 

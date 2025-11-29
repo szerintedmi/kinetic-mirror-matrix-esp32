@@ -26,7 +26,7 @@ public:
   void setTopic(const std::string& topic);
   void forceImmediate();
 
-  void loop(const MotorController& controller, uint32_t now_ms);
+  void loop(const MotorController& controller, uint32_t now_ms, uint8_t microstep_multiplier = 1);
 
   const std::string& lastPayload() const {
     return last_payload_;
@@ -36,12 +36,13 @@ public:
   }
 
 private:
-  bool buildSnapshot(const MotorController& controller, bool& out_motion_active);
+  bool buildSnapshot(const MotorController& controller, bool& out_motion_active, uint8_t microstep_multiplier);
   bool publish();
   void appendMotorJson(const MotorState& state,
                        int32_t budget_tenths,
                        int32_t ttfc_tenths,
                        bool include_actual_ms,
+                       uint8_t microstep_multiplier,
                        std::string& out);
   static void appendFixedTenths(int32_t tenths, std::string& out);
 

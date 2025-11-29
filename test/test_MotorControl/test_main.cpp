@@ -124,6 +124,17 @@ void test_mqtt_get_config_defaults();
 void test_mqtt_set_config_persist();
 void test_mqtt_reset_to_defaults();
 
+// Microstep
+void test_get_microstep_default_full();
+void test_set_microstep_valid_modes();
+void test_set_microstep_requires_all_asleep();
+void test_move_scales_by_multiplier();
+void test_timing_estimate_scales_with_microstep();
+void test_position_rescaled_on_mode_change();
+void test_status_shows_microstep();
+void test_get_all_includes_microstep();
+void test_status_reports_user_space_position();
+
 extern void setUp();
 extern void tearDown();
 
@@ -351,6 +362,26 @@ int main(int, char**) {
   RUN_TEST(test_multi_cmd_sequence_responses);
   setUp();
   RUN_TEST(test_multi_cmd_whitespace_and_case);
+
+  // Microstep
+  setUp();
+  RUN_TEST(test_get_microstep_default_full);
+  setUp();
+  RUN_TEST(test_set_microstep_valid_modes);
+  setUp();
+  RUN_TEST(test_set_microstep_requires_all_asleep);
+  setUp();
+  RUN_TEST(test_move_scales_by_multiplier);
+  setUp();
+  RUN_TEST(test_timing_estimate_scales_with_microstep);
+  setUp();
+  RUN_TEST(test_position_rescaled_on_mode_change);
+  setUp();
+  RUN_TEST(test_status_shows_microstep);
+  setUp();
+  RUN_TEST(test_get_all_includes_microstep);
+  setUp();
+  RUN_TEST(test_status_reports_user_space_position);
 
   return UNITY_END();
 }

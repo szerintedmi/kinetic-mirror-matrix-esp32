@@ -27,6 +27,7 @@ namespace {
 
 constexpr const char* kTopicPrefix = "devices/";
 constexpr const char* kTopicSuffix = "/status";
+constexpr const char* kTopicConfigSuffix = "/config";
 constexpr uint16_t kMqttKeepAliveSeconds = 30;
 constexpr const char* kOfflinePayloadJson = "{\"node_state\":\"offline\",\"motors\":{}}";
 constexpr uint32_t kInitialReconnectDelayMs = 1000;
@@ -155,6 +156,13 @@ std::string MqttPresenceClient::BuildReadyPayload(const std::string& ip) {
 
 std::string MqttPresenceClient::BuildOfflinePayload() {
   return kOfflinePayloadJson;
+}
+
+std::string MqttPresenceClient::configTopic() const {
+  if (mac_topic_.empty()) {
+    return std::string();
+  }
+  return std::string(kTopicPrefix) + mac_topic_ + kTopicConfigSuffix;
 }
 
 bool MqttPresenceClient::publishReady(uint32_t now_ms) {
@@ -354,6 +362,10 @@ public:
 
   const std::string& topic() const {
     return logic_.topic();
+  }
+
+  std::string configTopic() const {
+    return logic_.configTopic();
   }
 
   const std::string& offlinePayload() const {
@@ -675,6 +687,13 @@ const std::string& AsyncMqttPresenceClient::statusTopic() const {
     return kEmpty;
   }
   return impl_->topic();
+}
+
+std::string AsyncMqttPresenceClient::configTopic() const {
+  if (!impl_) {
+    return std::string();
+  }
+  return impl_->configTopic();
 }
 
 const std::string& AsyncMqttPresenceClient::offlinePayload() const {

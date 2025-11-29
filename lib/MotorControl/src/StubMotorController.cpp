@@ -204,3 +204,21 @@ void StubMotorController::tick(uint32_t now_ms) {
     }
   }
 }
+
+void StubMotorController::setMicrostepMode(MicrostepMode mode) {
+  uint8_t old_mult = microstep_multiplier_;
+  uint8_t new_mult = MicrostepModeToMultiplier(mode);
+
+  // Rescale all motor positions when mode changes
+  if (old_mult != new_mult) {
+    for (uint8_t i = 0; i < count_; ++i) {
+      // Rescale with rounding: new_hw_pos = round(hw_pos * new_mult / old_mult)
+      // Use integer math with half-up rounding: (a * new + old/2) / old
+      long hw_pos = motors_[i].position;
+      long new_hw_pos =
+          (hw_pos * static_cast<long>(new_mult) + old_mult / 2) / static_cast<long>(old_mult);
+      motors_[i].position = new_hw_pos;
+    }
+    microstep_multiplier_ = new_mult;
+  }
+}

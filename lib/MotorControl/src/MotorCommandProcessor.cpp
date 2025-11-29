@@ -72,6 +72,7 @@ CommandExecutionContext MotorCommandProcessor::makeContext() {
                                  default_speed_sps_,
                                  default_accel_sps2_,
                                  default_decel_sps2_,
+                                 microstep_multiplier_,
                                  in_batch_,
                                  batch_initially_idle_);
 }

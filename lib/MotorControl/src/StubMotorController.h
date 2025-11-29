@@ -1,5 +1,6 @@
 #pragma once
 #include "MotorControl/MotorController.h"
+#include "drivers/Esp32/MicrostepGpio.h"
 
 class StubMotorController : public MotorController {
 public:
@@ -27,6 +28,7 @@ public:
     thermal_limits_enabled_ = enabled;
   }
   void setDeceleration(int) override {}
+  void setMicrostepMode(MicrostepMode mode) override;
 
 private:
   struct MovePlan {
@@ -40,4 +42,5 @@ private:
   MotorState motors_[8];
   MovePlan plans_[8];
   bool thermal_limits_enabled_ = true;
+  uint8_t microstep_multiplier_ = 1;
 };

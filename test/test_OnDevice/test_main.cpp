@@ -16,6 +16,13 @@ void test_device_home_estimate_vs_actual();
 void test_net_ap_after_reset_no_creds();
 void test_net_connect_timeout_to_ap();
 void test_net_happy_path_if_seeded();
+// MicrostepGpio tests
+void test_microstep_full_step_pins();
+void test_microstep_half_step_pins();
+void test_microstep_quarter_step_pins();
+void test_microstep_eighth_step_pins();
+void test_microstep_sixteenth_step_pins();
+void test_microstep_thirtysecond_step_pins();
 
 void setup() {
   delay(300);
@@ -33,6 +40,13 @@ void setup() {
   RUN_TEST(test_net_ap_after_reset_no_creds);
   RUN_TEST(test_net_connect_timeout_to_ap);
   RUN_TEST(test_net_happy_path_if_seeded);
+  // MicrostepGpio tests
+  RUN_TEST(test_microstep_full_step_pins);
+  RUN_TEST(test_microstep_half_step_pins);
+  RUN_TEST(test_microstep_quarter_step_pins);
+  RUN_TEST(test_microstep_eighth_step_pins);
+  RUN_TEST(test_microstep_sixteenth_step_pins);
+  RUN_TEST(test_microstep_thirtysecond_step_pins);
   UNITY_END();
   vTaskDelay(portMAX_DELAY);
 }

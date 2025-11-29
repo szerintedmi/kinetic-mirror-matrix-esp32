@@ -24,3 +24,9 @@ constexpr bool STATUS_LED_ACTIVE_LOW = true;
 // BOOT button (GPIO0) used for long-press reset; active-low when pressed
 constexpr int RESET_BUTTON_PIN = 0;
 constexpr bool RESET_BUTTON_ACTIVE_LOW = true;
+
+// DRV8825 microstepping control pins (shared across all drivers)
+// M0=GPIO33, M1=GPIO26, M2=GPIO16
+constexpr int MICROSTEP_M0_PIN = 33;
+constexpr int MICROSTEP_M1_PIN = 26;
+constexpr int MICROSTEP_M2_PIN = 16;

@@ -44,6 +44,7 @@ public:
   const std::string& topic() const {
     return topic_;
   }
+  std::string configTopic() const;
   const std::string& offlinePayload() const {
     return offline_payload_;
   }
@@ -99,6 +100,7 @@ public:
   void updatePowerState(bool active);
   bool enqueuePublish(const PublishMessage& msg);
   const std::string& statusTopic() const;
+  std::string configTopic() const;
   const std::string& offlinePayload() const;
   bool subscribe(const std::string& topic, uint8_t qos, MessageCallback cb);
 

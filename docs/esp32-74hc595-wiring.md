@@ -15,6 +15,28 @@ This project drives eight DRV8825 stepper drivers using FastAccelStepper for STE
     - `SHIFT595_OE   = 22` (OE, active‑low, shared by both 595s)
   - STEP pins for motors `0..7`
     - `STEP_PINS[8] = {32, 25, 27, 13, 4, 17, 19, 21}`
+  - Microstepping mode pins (shared across all motors)
+    - `MICROSTEP_M0 = 33`
+    - `MICROSTEP_M1 = 26`
+    - `MICROSTEP_M2 = 16`
+
+## Microstepping (M0/M1/M2)
+
+DRV8825 microstepping mode is controlled by three GPIO pins connected to all drivers in parallel. The firmware sets these pins via `SET MICROSTEP=<mode>`.
+
+| M2 | M1 | M0 | Mode | Multiplier |
+|----|----|----|------|------------|
+| L  | L  | L  | FULL | 1x |
+| L  | L  | H  | HALF | 2x |
+| L  | H  | L  | 1/4  | 4x |
+| L  | H  | H  | 1/8  | 8x |
+| H  | L  | L  | 1/16 | 16x |
+| H  | L  | H  | 1/32 | 32x |
+
+- Driver: `src/drivers/Esp32/MicrostepGpio.cpp` / `include/drivers/Esp32/MicrostepGpio.h`
+- All eight motors share the same microstepping mode (single set of M0/M1/M2 pins)
+- Mode changes require all motors to be stopped and asleep
+- Position values are automatically rescaled when mode changes
 
 ## 74HC595 Integration (SPI + Latch)
 

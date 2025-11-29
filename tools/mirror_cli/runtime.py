@@ -24,6 +24,12 @@ from .response_events import (
 # if device sends malformed data without newlines)
 _MAX_BUFFER_SIZE = 64 * 1024  # 64KB
 
+
+def _normalize_mac(mac: str) -> str:
+    """Normalize MAC address to lowercase without separators (e.g., 'aabbccddeeff')."""
+    return mac.replace(":", "").replace("-", "").lower()
+
+
 ParseStatusFn = Callable[[str], List[Dict[str, str]]]
 ParseKvFn = Callable[[str], Dict[str, str]]
 ParseThermalFn = Callable[[str], Optional[tuple]]
@@ -81,7 +87,7 @@ class SerialWorker(threading.Thread):
         self._net_info: Dict[str, str] = {}
         self._device_id: Optional[str] = None
         self._thermal_state: Optional[tuple] = None
-        self._need_thermal_refresh: bool = True
+        self._microstep_state: Optional[str] = None
         self._need_net_status_refresh: bool = False
         self._initial_net_status_requested: bool = False
         self._next_poll_ts: float = time.monotonic()
@@ -143,6 +149,10 @@ class SerialWorker(threading.Thread):
         if isinstance(max_budget, int):
             return f"{prefix} (max={max_budget}s)"
         return prefix
+
+    def get_microstep_state(self) -> Optional[str]:
+        with self._lock:
+            return self._microstep_state
 
     # ------------------------------------------------------------------
     # Thread run loop
@@ -230,10 +240,6 @@ class SerialWorker(threading.Thread):
             self._initial_net_status_requested = True
             self._need_net_status_refresh = False
             self._last_net_status_poll = now
-            return
-        if self._need_thermal_refresh:
-            self._send_poll("GET THERMAL_LIMITING\n")
-            self._need_thermal_refresh = False
             return
         if self._need_net_status_refresh:
             if now - self._last_net_status_poll >= self._net_status_interval:
@@ -425,8 +431,6 @@ class SerialWorker(threading.Thread):
             if parsed:
                 with self._lock:
                     self._thermal_state = parsed
-        elif name.startswith("SET THERMAL"):
-            self._need_thermal_refresh = True
 
         if name.startswith("STATUS"):
             # Queue NET:STATUS on the next idle loop to keep pace
@@ -452,6 +456,12 @@ class SerialWorker(threading.Thread):
                     metadata.setdefault("ip", strip_quotes(tok.split("=", 1)[1]))
                 elif low.startswith("node_state="):
                     metadata.setdefault("node_state", strip_quotes(tok.split("=", 1)[1]))
+                elif low.startswith("microstep="):
+                    metadata.setdefault("microstep", strip_quotes(tok.split("=", 1)[1]))
+                elif low.startswith("thermal_limiting="):
+                    metadata.setdefault("thermal_limiting", strip_quotes(tok.split("=", 1)[1]))
+                elif low.startswith("max_budget_s="):
+                    metadata.setdefault("max_budget_s", strip_quotes(tok.split("=", 1)[1]))
         with self._lock:
             self._last_status_rows = rows
             self._last_status_text = payload
@@ -459,7 +469,7 @@ class SerialWorker(threading.Thread):
             for row in rows:
                 dev = row.get("device")
                 if dev:
-                    self._device_id = dev
+                    self._device_id = _normalize_mac(dev)
                     break
             ssid = None
             ip = None
@@ -468,7 +478,7 @@ class SerialWorker(threading.Thread):
                 ip = row.get("ip") or ip
             device_meta = metadata.get("device")
             if device_meta:
-                self._device_id = device_meta
+                self._device_id = _normalize_mac(device_meta)
             ssid = metadata.get("ssid", ssid)
             ip = metadata.get("ip", ip)
             if ssid or ip:
@@ -481,6 +491,17 @@ class SerialWorker(threading.Thread):
                 if node_state:
                     net.setdefault("node_state", node_state)
                 self._net_info = net
+            microstep = metadata.get("microstep")
+            if microstep:
+                self._microstep_state = microstep
+            thermal = metadata.get("thermal_limiting")
+            if thermal:
+                enabled = thermal.upper() != "OFF"
+                try:
+                    max_budget = int(metadata.get("max_budget_s", ""))
+                except (ValueError, TypeError):
+                    max_budget = None
+                self._thermal_state = (enabled, max_budget)
 
     def _update_net_cache(self, text: str) -> None:
         raw_lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
@@ -491,10 +512,16 @@ class SerialWorker(threading.Thread):
             merged = dict(self._net_info)
             for key, value in net.items():
                 merged[key] = strip_quotes(value)
+            # Derive node_state from wifi state: CONNECTED or AP_ACTIVE means ready
+            wifi_state = merged.get("state", "").upper()
+            if wifi_state in ("CONNECTED", "AP_ACTIVE"):
+                merged["node_state"] = "ready"
+            elif wifi_state:
+                merged["node_state"] = wifi_state.lower()
             self._net_info = merged
             device = merged.get("device")
             if device:
-                self._device_id = device
+                self._device_id = _normalize_mac(device)
 
     # ------------------------------------------------------------------
     # Logging helpers
@@ -531,6 +558,8 @@ class SerialWorker(threading.Thread):
             if event.event_type == EventType.DATA:
                 return
             if event.event_type in (EventType.ACK, EventType.DONE) and not event.code:
+                return
+            if event.event_type == EventType.INFO:
                 return
             if event.event_type == EventType.ACK:
                 pending.ack_latency_ms = None

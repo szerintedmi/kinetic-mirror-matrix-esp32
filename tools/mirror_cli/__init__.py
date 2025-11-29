@@ -338,6 +338,7 @@ def run_interactive(ns) -> int:
 
 # Re-export for backwards compatibility
 __all__ = [
+    "SerialWorker",
     "build_command",
     "extract_est_ms_from_ctrl_ok",
     "main",
@@ -349,5 +350,4 @@ __all__ = [
     "render_table",
     "run_command_mqtt",
     "run_interactive",
-    "SerialWorker",
 ]

@@ -6,6 +6,7 @@
 #include <memory>
 #if defined(ARDUINO)
 #include "drivers/Esp32/AdapterFactory.h"
+#include "drivers/Esp32/MicrostepGpio.h"
 #endif
 
 // Hardware-backed motor controller integrating FastAccelStepper and
@@ -44,6 +45,7 @@ public:
     thermal_limits_enabled_ = enabled;
   }
   void setDeceleration(int decel_sps2) override;
+  void setMicrostepMode(MicrostepMode mode) override;
 
 private:
   void latch_();
@@ -76,6 +78,9 @@ private:
   IFasAdapter* fas_ = nullptr;
   std::unique_ptr<IShift595> owned_shift_;
   std::unique_ptr<IFasAdapter> owned_fas_;
+#if defined(ARDUINO)
+  std::unique_ptr<MicrostepGpio> microstep_gpio_;
+#endif
 
   bool thermal_limits_enabled_ = true;
   int decel_sps2_ = 0;  // global deceleration hint for shared-STEP estimates

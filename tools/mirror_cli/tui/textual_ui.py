@@ -100,12 +100,10 @@ class TextualUI(BaseUI):
             if transport_mode == "mqtt":
                 host = net.get("host") or "-"
                 port = net.get("port") or "-"
-                parts.append("transport=mqtt")
-                parts.append(f"host={host}:{port}")
+                parts.append(f"mqtt://{host}:{port}")
             else:
-                parts.append("transport=serial")
                 port_val = getattr(worker, "port", "-")
-                parts.append(f"port={port_val}")
+                parts.append(f"serial:{port_val}")
 
             summaries: Dict[str, Dict[str, object]] = {}
             if hasattr(worker, "get_device_summaries"):
@@ -195,15 +193,24 @@ class TextualUI(BaseUI):
                 except Exception:
                     thermal = None
             if isinstance(thermal, tuple) and len(thermal) == 2:
-                enabled, max_budget = thermal
+                enabled, _ = thermal
                 color = "green" if enabled else "red"
                 text = "ON" if enabled else "OFF"
-                if isinstance(max_budget, int):
-                    parts.append(f"thermal limiting={_color(text, color)} (max={max_budget}s)")
-                else:
-                    parts.append(f"thermal limiting={_color(text, color)}")
+                parts.append(f"thermal={_color(text, color)}")
             else:
-                parts.append("thermal limiting=-")
+                parts.append("thermal=-")
+
+            # Microstep state
+            microstep = None
+            if hasattr(worker, "get_microstep_state"):
+                try:
+                    microstep = worker.get_microstep_state()
+                except Exception:
+                    microstep = None
+            if microstep:
+                parts.append(f"step={microstep}")
+            else:
+                parts.append("step=-")
 
             if transport_mode == "mqtt" and summaries:
                 ages = [

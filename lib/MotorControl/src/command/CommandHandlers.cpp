@@ -6,6 +6,7 @@
 #include "MotorControl/command/CommandResult.h"
 #include "MotorControl/command/CommandUtils.h"
 #include "MotorControl/command/HelpText.h"
+#include "drivers/Esp32/MicrostepGpio.h"
 #include "mqtt/MqttConfigStore.h"
 #include "transport/CommandSchema.h"
 #include "transport/CompletionTracker.h"
@@ -77,6 +78,61 @@ std::string FormatTenths(int32_t tenths) {
 
 inline const char* BoolToFlag(bool value) {
   return value ? "1" : "0";
+}
+
+// Convert multiplier (1,2,4,8,16,32) to human-readable string
+const char* MultiplierToMicrostepString(uint8_t mult) {
+  switch (mult) {
+  case 1:
+    return "FULL";
+  case 2:
+    return "HALF";
+  case 4:
+    return "1/4";
+  case 8:
+    return "1/8";
+  case 16:
+    return "1/16";
+  case 32:
+    return "1/32";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+// Parse microstep mode string; returns true on success
+bool ParseMicrostepMode(const std::string& val, MicrostepMode& out_mode, uint8_t& out_multiplier) {
+  if (val == "FULL" || val == "1") {
+    out_mode = MicrostepMode::FULL;
+    out_multiplier = 1;
+    return true;
+  }
+  if (val == "HALF" || val == "1/2" || val == "2") {
+    out_mode = MicrostepMode::HALF;
+    out_multiplier = 2;
+    return true;
+  }
+  if (val == "QUARTER" || val == "1/4" || val == "4") {
+    out_mode = MicrostepMode::QUARTER;
+    out_multiplier = 4;
+    return true;
+  }
+  if (val == "EIGHTH" || val == "1/8" || val == "8") {
+    out_mode = MicrostepMode::EIGHTH;
+    out_multiplier = 8;
+    return true;
+  }
+  if (val == "SIXTEENTH" || val == "1/16" || val == "16") {
+    out_mode = MicrostepMode::SIXTEENTH;
+    out_multiplier = 16;
+    return true;
+  }
+  if (val == "THIRTY_SECOND" || val == "1/32" || val == "32") {
+    out_mode = MicrostepMode::THIRTY_SECOND;
+    out_multiplier = 32;
+    return true;
+  }
+  return false;
 }
 
 long GetFreeHeapBytes() {
@@ -344,9 +400,13 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
   if (!ParseInt(Trim(parts[1]), target)) {
     return emitError("E03", "BAD_PARAM");
   }
+  // Validate against user-space limits first
   if (target < kMinPos || target > kMaxPos) {
     return emitError("E07", "POS_OUT_OF_RANGE");
   }
+  // Apply microstep multiplier to convert user steps to hardware steps
+  uint8_t ms_mult = context.microstepMultiplier();
+  long hw_target = target * static_cast<long>(ms_mult);
   int speed = context.defaultSpeed();
   int accel = context.defaultAccel();
 #if (USE_SHARED_STEP)
@@ -382,6 +442,9 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
     }
   }
 #endif
+  // Scale speed and accel for microstep mode (same physical velocity/acceleration)
+  int hw_speed = speed * static_cast<int>(ms_mult);
+  int hw_accel = accel * static_cast<int>(ms_mult);
   context.controller().tick(now_ms);
   uint32_t tmp = mask;
   uint32_t max_req_ms = 0;
@@ -389,13 +452,14 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
     if ((tmp & (1u << id)) == 0)
       continue;
     const MotorState& s = context.controller().state(id);
-    long dist = std::labs(target - s.position);
+    // s.position is in hardware steps; use hw_target for distance calculation
+    long dist = std::labs(hw_target - s.position);
     uint32_t req_ms = 0;
 #if (USE_SHARED_STEP)
-    req_ms =
-        MotionKinematics::estimateMoveTimeMsSharedStep(dist, speed, accel, context.defaultDecel());
+    req_ms = MotionKinematics::estimateMoveTimeMsSharedStep(
+        dist, hw_speed, hw_accel, context.defaultDecel() * static_cast<int>(ms_mult));
 #else
-    req_ms = MotionKinematics::estimateMoveTimeMs(dist, speed, accel);
+    req_ms = MotionKinematics::estimateMoveTimeMs(dist, hw_speed, hw_accel);
 #endif
     if (req_ms > max_req_ms)
       max_req_ms = req_ms;
@@ -410,7 +474,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
              {"max_budget_s",
               std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
       } else {
-        if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
+        if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
         transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -460,7 +524,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
                           {"budget_s", std::to_string(avail_s)},
                           {"ttfc_s", std::to_string(ttfc_s)}});
       } else {
-        if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
+        if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
         transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -480,7 +544,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
       }
     }
   }
-  if (!context.controller().moveAbsMask(mask, target, speed, accel, now_ms)) {
+  if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
     return emitError("E04", "BUSY");
   }
   transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -585,13 +649,21 @@ CommandResult MotorCommandHandler::handleHome(const std::string& args,
     full_range = MotorControlConstants::MAX_POS_STEPS - MotorControlConstants::MIN_POS_STEPS;
   }
 
+  // Apply microstep multiplier to convert user steps to hardware steps
+  uint8_t ms_mult = context.microstepMultiplier();
+  long hw_overshoot = overshoot * static_cast<long>(ms_mult);
+  long hw_backoff = backoff * static_cast<long>(ms_mult);
+  long hw_full_range = full_range * static_cast<long>(ms_mult);
+  int hw_speed = speed * static_cast<int>(ms_mult);
+  int hw_accel = accel * static_cast<int>(ms_mult);
+
   uint32_t req_ms_total = 0;
 #if (USE_SHARED_STEP)
   req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRangeSharedStep(
-      overshoot, backoff, full_range, speed, accel, context.defaultDecel());
+      hw_overshoot, hw_backoff, hw_full_range, hw_speed, hw_accel, context.defaultDecel());
 #else
   req_ms_total = MotionKinematics::estimateHomeTimeMsWithFullRange(
-      overshoot, backoff, full_range, speed, accel);
+      hw_overshoot, hw_backoff, hw_full_range, hw_speed, hw_accel);
 #endif
 
   int req_s = static_cast<int>((req_ms_total + 999) / 1000);
@@ -612,7 +684,7 @@ CommandResult MotorCommandHandler::handleHome(const std::string& args,
             std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
     } else {
       if (!context.controller().homeMask(
-              mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
+              mask, hw_overshoot, hw_backoff, hw_speed, hw_accel, hw_full_range, now_ms)) {
         return emitError("E04", "BUSY");
       }
       transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -662,7 +734,7 @@ CommandResult MotorCommandHandler::handleHome(const std::string& args,
                           {"ttfc_s", std::to_string(ttfc_s)}});
       } else {
         if (!context.controller().homeMask(
-                mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
+                mask, hw_overshoot, hw_backoff, hw_speed, hw_accel, hw_full_range, now_ms)) {
           return emitError("E04", "BUSY");
         }
         transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -684,7 +756,8 @@ CommandResult MotorCommandHandler::handleHome(const std::string& args,
     }
   }
 
-  if (!context.controller().homeMask(mask, overshoot, backoff, speed, accel, full_range, now_ms)) {
+  if (!context.controller().homeMask(
+          mask, hw_overshoot, hw_backoff, hw_speed, hw_accel, hw_full_range, now_ms)) {
     return emitError("E04", "BUSY");
   }
   transport::response::CompletionTracker::Instance().RegisterOperation(
@@ -772,11 +845,15 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext& context
     transport::command::ResponseLine data_line;
     data_line.type = transport::command::ResponseLineType::kData;
     data_line.fields.push_back({"id", std::to_string(static_cast<int>(s.id))});
-    data_line.fields.push_back({"pos", std::to_string(s.position)});
+    // Convert hardware position to user-space (full steps)
+    long user_pos = s.position / static_cast<long>(context.microstepMultiplier());
+    data_line.fields.push_back({"pos", std::to_string(user_pos)});
     data_line.fields.push_back({"moving", BoolToFlag(s.moving)});
     data_line.fields.push_back({"awake", BoolToFlag(s.awake)});
     data_line.fields.push_back({"homed", BoolToFlag(s.homed)});
-    data_line.fields.push_back({"steps_since_home", std::to_string(s.steps_since_home)});
+    // Convert steps_since_home to user-space as well
+    long user_steps_since_home = s.steps_since_home / static_cast<long>(context.microstepMultiplier());
+    data_line.fields.push_back({"steps_since_home", std::to_string(user_steps_since_home)});
     data_line.fields.push_back({"budget_s", FormatSignedTenths(s.budget_tenths)});
     data_line.fields.push_back({"ttfc_s", FormatTenths(ttfc_tenths)});
     data_line.fields.push_back({"speed", std::to_string(s.speed)});
@@ -790,6 +867,16 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext& context
     EmitResponseEvent(kAction, data_line);
     res.append(data_line);
   }
+  // Add global config info (microstep and thermal limiting)
+  transport::command::ResponseLine cfg_line;
+  cfg_line.type = transport::command::ResponseLineType::kInfo;
+  cfg_line.fields.push_back({"microstep", MultiplierToMicrostepString(context.microstepMultiplier())});
+  cfg_line.fields.push_back({"microstep_mult", std::to_string(context.microstepMultiplier())});
+  cfg_line.fields.push_back({"thermal_limiting", context.thermalLimitsEnabled() ? "ON" : "OFF"});
+  cfg_line.fields.push_back({"max_budget_s",
+      std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))});
+  EmitResponseEvent(kAction, cfg_line);
+  res.append(cfg_line);
   return res;
 }
 
@@ -804,6 +891,7 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
         {"SPEED", std::to_string(context.defaultSpeed())},
         {"ACCEL", std::to_string(context.defaultAccel())},
         {"DECEL", std::to_string(context.defaultDecel())},
+        {"MICROSTEP", MultiplierToMicrostepString(context.microstepMultiplier())},
         {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
         {"max_budget_s",
          std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))},
@@ -831,6 +919,13 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
         {{"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
          {"max_budget_s",
           std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
+  }
+  if (key == "MICROSTEP") {
+    return MakeDoneResult(
+        kAction,
+        msg_id,
+        {{"MICROSTEP", MultiplierToMicrostepString(context.microstepMultiplier())},
+         {"multiplier", std::to_string(context.microstepMultiplier())}});
   }
   if (key.rfind("LAST_OP_TIMING", 0) == 0) {
     std::string rest;
@@ -969,6 +1064,36 @@ CommandResult QueryCommandHandler::handleSet(const std::string& args,
     context.controller().setDeceleration(context.defaultDecel());
     return MakeDoneResult(kAction, msg_id);
   }
+  if (key == "MICROSTEP") {
+    MicrostepMode mode;
+    uint8_t multiplier;
+    if (!ParseMicrostepMode(val, mode, multiplier)) {
+      auto err_line = transport::command::MakeErrorLine(
+          msg_id,
+          "E03",
+          "BAD_PARAM",
+          {{"valid", "FULL|HALF|1/4|1/8|1/16|1/32"}});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    // Require ALL motors to be stopped AND asleep
+    for (uint8_t id = 0; id < context.controller().motorCount(); ++id) {
+      const MotorState& s = context.controller().state(id);
+      if (s.moving || s.awake) {
+        auto err_line = transport::command::MakeErrorLine(
+            msg_id, "E04", "BUSY", {{"reason", "all_motors_must_be_stopped_and_asleep"}});
+        return MakeResultWithLine(kAction, err_line);
+      }
+    }
+    // Apply to hardware GPIO
+    context.controller().setMicrostepMode(mode);
+    // Update session variable
+    context.microstepMultiplierRef() = multiplier;
+    return MakeDoneResult(
+        kAction,
+        msg_id,
+        {{"MICROSTEP", MultiplierToMicrostepString(multiplier)},
+         {"multiplier", std::to_string(multiplier)}});
+  }
   auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
   return MakeResultWithLine(kAction, err_line);
 }
@@ -1041,6 +1166,7 @@ CommandResult NetCommandHandler::execute(const ParsedCommand& command,
     std::vector<transport::command::Field> fields = {
         sub_field("STATUS"),
         {"state", NetStateToString(s.state)},
+        {"device", s.mac.data()},
         {"rssi", (s.state == State::CONNECTED) ? std::to_string(s.rssi_dbm) : "NA"},
         {"ip", s.ip.data()},
         {"ssid", QuoteString(std::string(s.ssid.data()))}};

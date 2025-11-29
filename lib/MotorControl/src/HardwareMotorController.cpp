@@ -97,6 +97,9 @@ HardwareMotorController::HardwareMotorController() {
   for (uint8_t i = 0; i < count_; ++i) {
     fas_->configureStepPin(i, STEP_PINS[i]);
   }
+  // Initialize microstepping GPIO driver (shared across all DRV8825 drivers)
+  microstep_gpio_.reset(new MicrostepGpio(MICROSTEP_M0_PIN, MICROSTEP_M1_PIN, MICROSTEP_M2_PIN));
+  microstep_gpio_->begin();  // Sets full-step mode by default
   // Initial sleeping state handled by Shift595Esp32 begin() + controller setup
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i].awake = false;
@@ -480,4 +483,29 @@ void HardwareMotorController::setDeceleration(int decel_sps2) {
   decel_sps2_ = decel_sps2;
 }
 
-// Debug adapter hooks removed (cleanup after RMT ISR stabilization)
+void HardwareMotorController::setMicrostepMode(MicrostepMode mode) {
+#if defined(ARDUINO)
+  if (microstep_gpio_) {
+    uint8_t old_mult = microstep_gpio_->multiplier();
+    microstep_gpio_->setMode(mode);
+    uint8_t new_mult = microstep_gpio_->multiplier();
+
+    // Rescale all motor positions when mode changes
+    if (old_mult != new_mult) {
+      for (uint8_t i = 0; i < count_; ++i) {
+        // Rescale with rounding: new_hw_pos = round(hw_pos * new_mult / old_mult)
+        // Use integer math with half-up rounding: (a * new + old/2) / old
+        long hw_pos = motors_[i].position;
+        long new_hw_pos =
+            (hw_pos * static_cast<long>(new_mult) + old_mult / 2) / static_cast<long>(old_mult);
+        motors_[i].position = new_hw_pos;
+        if (fas_) {
+          fas_->setCurrentPosition(i, new_hw_pos);
+        }
+      }
+    }
+  }
+#else
+  (void)mode;
+#endif
+}

@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import shlex
 import time
-from typing import Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Tuple
 
 if TYPE_CHECKING:
     from typing import Any
 
 
-def read_response(ser: "Any", timeout: float, idle_grace: float = 0.10) -> str:
+def read_response(ser: Any, timeout: float, idle_grace: float = 0.10) -> str:
     """Read until a quiet period (idle_grace) or timeout.
 
     This avoids truncating multi-line responses where lines arrive in bursts

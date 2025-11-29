@@ -69,12 +69,12 @@ void MqttStatusPublisher::forceImmediate() {
   force_immediate_ = true;
 }
 
-void MqttStatusPublisher::loop(const MotorController& controller, uint32_t now_ms) {
+void MqttStatusPublisher::loop(const MotorController& controller, uint32_t now_ms, uint8_t microstep_multiplier) {
   if (topic_.empty()) {
     return;
   }
   bool motion_active = false;
-  if (!buildSnapshot(controller, motion_active)) {
+  if (!buildSnapshot(controller, motion_active, microstep_multiplier)) {
     return;
   }
 
@@ -104,7 +104,8 @@ void MqttStatusPublisher::loop(const MotorController& controller, uint32_t now_m
 }
 
 bool MqttStatusPublisher::buildSnapshot(const MotorController& controller,
-                                        bool& out_motion_active) {
+                                        bool& out_motion_active,
+                                        uint8_t microstep_multiplier) {
   const auto status = net_.status();
   const char* ip = status.ip[0] ? status.ip.data() : kDefaultIp;
 
@@ -142,7 +143,7 @@ bool MqttStatusPublisher::buildSnapshot(const MotorController& controller,
     scratch_.push_back('\"');
     AppendUnsignedDigits(scratch_, static_cast<unsigned long long>(state.id));
     scratch_.append("\":{");
-    appendMotorJson(state, budget_t, ttfc_tenths, !state.last_op_ongoing, scratch_);
+    appendMotorJson(state, budget_t, ttfc_tenths, !state.last_op_ongoing, microstep_multiplier, scratch_);
     scratch_.push_back('}');
 
     out_motion_active = out_motion_active || state.moving;
@@ -169,6 +170,7 @@ void MqttStatusPublisher::appendMotorJson(const MotorState& state,
                                           int32_t budget_tenths,
                                           int32_t ttfc_tenths,
                                           bool include_actual_ms,
+                                          uint8_t microstep_multiplier,
                                           std::string& out) {
   auto appendBool = [&out](const char* key, bool value) {
     out.push_back('\"');
@@ -186,11 +188,15 @@ void MqttStatusPublisher::appendMotorJson(const MotorState& state,
   };
 
   appendInt("id", state.id);
-  appendInt("position", state.position);
+  // Convert hardware position to user-space (full steps)
+  long user_pos = state.position / static_cast<long>(microstep_multiplier);
+  appendInt("position", user_pos);
   appendBool("moving", state.moving);
   appendBool("awake", state.awake);
   appendBool("homed", state.homed);
-  appendInt("steps_since_home", state.steps_since_home);
+  // Convert steps_since_home to user-space as well
+  long user_steps_since_home = state.steps_since_home / static_cast<long>(microstep_multiplier);
+  appendInt("steps_since_home", user_steps_since_home);
 
   out.push_back('\"');
   out.append("budget_s");

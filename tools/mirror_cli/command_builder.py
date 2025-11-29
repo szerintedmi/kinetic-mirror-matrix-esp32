@@ -95,21 +95,8 @@ def _parse_set_assignments(tokens: Sequence[str]) -> Dict[str, object]:
     key, value = token.split("=", 1)
     name = key.strip().upper()
     value = value.strip()
-    if name == "THERMAL_LIMITING":
-        upper = value.upper()
-        if upper not in {"ON", "OFF"}:
-            raise CommandParseError("THERMAL_LIMITING must be ON or OFF")
-        return {"THERMAL_LIMITING": upper}
-    if name == "SPEED":
-        return {"speed_sps": _parse_int(value, "SPEED")}
-    if name == "ACCEL":
-        return {"accel_sps2": _parse_int(value, "ACCEL")}
-    if name == "DECEL":
-        parsed = _parse_int(value, "DECEL")
-        if parsed < 0:
-            raise CommandParseError("DECEL must be >= 0")
-        return {"decel_sps2": parsed}
-    raise UnsupportedCommandError(f"unsupported SET field '{name}'")
+    # Passthrough all SET fields to firmware for validation
+    return {name: value}
 
 
 def parse_serial_command(command: str) -> CommandRequest:
@@ -270,6 +257,10 @@ def parse_serial_command(command: str) -> CommandRequest:
                 raise CommandParseError(f"{action} requires target selector")
             target = _parse_target(args[0])
             return CommandRequest(action=action, params={"target_ids": target}, raw=raw)
+        if action == "SET":
+            # Handle SET:KEY=VALUE as SET KEY=VALUE (colon syntax variant)
+            assignments = _parse_set_assignments([arg_string.strip()])
+            return CommandRequest(action="SET", params=assignments, raw=raw)
         raise UnsupportedCommandError(f"unsupported command '{action}'")
 
     tokens = raw.split()

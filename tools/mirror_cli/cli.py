@@ -85,9 +85,7 @@ def _add_common(sub: argparse.ArgumentParser) -> argparse.ArgumentParser:
 
 def make_parser() -> argparse.ArgumentParser:
     """Create the main argument parser for mirror_cli."""
-    p = argparse.ArgumentParser(
-        prog="mirror_cli", description="CLI for Mirror Array protocol v1"
-    )
+    p = argparse.ArgumentParser(prog="mirror_cli", description="CLI for Mirror Array protocol v1")
     sp = p.add_subparsers(dest="command", required=True)
 
     _add_common(sp.add_parser("help", help="Print device HELP"))

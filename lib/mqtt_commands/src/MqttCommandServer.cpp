@@ -944,7 +944,7 @@ bool MqttCommandServer::buildGetCommand(ArduinoJson::JsonVariantConst params,
   }
 
   if (resource == "ALL" || resource == "SPEED" || resource == "ACCEL" || resource == "DECEL" ||
-      resource == "THERMAL_LIMITING") {
+      resource == "THERMAL_LIMITING" || resource == "MICROSTEP") {
     out = "GET " + resource;
     return true;
   }
@@ -1158,6 +1158,21 @@ bool MqttCommandServer::buildSetCommand(ArduinoJson::JsonVariantConst params,
         key = "DECEL";
       }
       value = std::to_string(val);
+      recognized = true;
+    } else if (name == "MICROSTEP") {
+      if (!kv.value().is<const char*>()) {
+        error = "MICROSTEP must be string";
+        return false;
+      }
+      std::string val = Trim(ToUpper(std::string(kv.value().as<const char*>())));
+      // Valid values: FULL, HALF, 1/4, 1/8, 1/16, 1/32
+      if (val != "FULL" && val != "HALF" && val != "1/4" && val != "1/8" && val != "1/16" &&
+          val != "1/32") {
+        error = "MICROSTEP must be FULL|HALF|1/4|1/8|1/16|1/32";
+        return false;
+      }
+      key = "MICROSTEP";
+      value = val;
       recognized = true;
     } else {
       unsupported = true;

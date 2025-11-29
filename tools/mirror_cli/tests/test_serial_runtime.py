@@ -4,9 +4,8 @@ import threading
 import time
 import unittest
 from typing import Dict, List, Optional, Tuple
-from unittest.mock import MagicMock, patch
 
-from tools.mirror_cli.runtime import SerialWorker, _MAX_BUFFER_SIZE
+from tools.mirror_cli.runtime import _MAX_BUFFER_SIZE, SerialWorker
 
 
 class MockSerial:
@@ -316,6 +315,49 @@ class TestSerialWorkerThermalState(unittest.TestCase):
         with worker._lock:
             worker._thermal_state = (False, None)
         self.assertEqual(worker.get_thermal_status_text(), "thermal limiting=OFF")
+
+    def test_status_extracts_thermal_limiting(self):
+        """Verify thermal_limiting is extracted from STATUS responses."""
+        mock_module = MockSerialModule()
+        worker = SerialWorker(
+            port="/dev/test",
+            baud=115200,
+            timeout=2.0,
+            poll_rate_hz=2.0,
+            serial_module=mock_module,
+            parse_status=_parse_status,
+            parse_kv=_parse_kv,
+            parse_thermal=_parse_thermal,
+        )
+        # Simulate STATUS response with thermal_limiting and max_budget_s
+        status_response = (
+            "CTRL:ACK msg_id=1\n"
+            "id=0 pos=0 moving=0 awake=0 homed=0 steps_since_home=0 "
+            "budget_s=90.0 ttfc_s=0.0 speed=4000 accel=16000 est_ms=0 started_ms=0\n"
+            "thermal_limiting=ON max_budget_s=90 microstep=FULL microstep_mult=1\n"
+        )
+        worker._update_status_cache(status_response)
+
+        thermal_state = worker.get_thermal_state()
+        self.assertIsNotNone(thermal_state)
+        enabled, max_budget = thermal_state
+        self.assertTrue(enabled)
+        self.assertEqual(max_budget, 90)
+
+        # Test with thermal_limiting=OFF
+        status_off = (
+            "CTRL:ACK msg_id=2\n"
+            "id=0 pos=0 moving=0 awake=0 homed=0 steps_since_home=0 "
+            "budget_s=90.0 ttfc_s=0.0 speed=4000 accel=16000 est_ms=0 started_ms=0\n"
+            "thermal_limiting=OFF max_budget_s=90 microstep=FULL microstep_mult=1\n"
+        )
+        worker._update_status_cache(status_off)
+
+        thermal_state = worker.get_thermal_state()
+        self.assertIsNotNone(thermal_state)
+        enabled, max_budget = thermal_state
+        self.assertFalse(enabled)
+        self.assertEqual(max_budget, 90)
 
 
 class TestSerialWorkerNetInfo(unittest.TestCase):

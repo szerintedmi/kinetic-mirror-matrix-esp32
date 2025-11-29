@@ -340,42 +340,52 @@ class MqttRuntimeTests(unittest.TestCase):
         finally:
             worker.stop()
 
-    def test_thermal_state_updates_from_get_response(self) -> None:
+    def test_thermal_state_updates_from_config_topic(self) -> None:
+        """Config topic messages update thermal state."""
         payload = json.dumps(
             {
-                "cmd_id": "cmd-therm",
-                "action": "GET",
-                "status": "done",
-                "result": {
-                    "THERMAL_LIMITING": "ON",
-                    "max_budget_s": 120,
-                },
+                "thermal_limiting": "ON",
+                "max_budget_s": 120,
+                "microstep": "FULL",
+                "microstep_mult": 1,
+                "speed": 4000,
+                "accel": 16000,
+                "decel": 16000,
             }
         )
-        self.worker.ingest_response("devices/node123/cmd/resp", payload)
+        self.worker.ingest_config("devices/node123/config", payload)
 
         state = self.worker.get_thermal_state()
         self.assertEqual(state, (True, 120))
         self.assertEqual(self.worker.get_thermal_status_text(), "thermal limiting=ON (max=120s)")
 
-    def test_thermal_state_updates_from_set_response(self) -> None:
+    def test_microstep_state_updates_from_config_topic(self) -> None:
+        """Config topic messages update microstep state."""
         payload = json.dumps(
             {
-                "cmd_id": "cmd-therm-set",
-                "action": "SET",
-                "status": "done",
-                "result": {
-                    "THERMAL_LIMITING": "OFF",
-                },
+                "thermal_limiting": "OFF",
+                "max_budget_s": 90,
+                "microstep": "1/16",
+                "microstep_mult": 16,
+                "speed": 4000,
+                "accel": 16000,
+                "decel": 16000,
             }
         )
-        self.worker.ingest_response("devices/node123/cmd/resp", payload)
+        self.worker.ingest_config("devices/node123/config", payload)
 
         state = self.worker.get_thermal_state()
-        self.assertEqual(state, (False, None))
-        self.assertEqual(self.worker.get_thermal_status_text(), "thermal limiting=OFF")
+        self.assertEqual(state, (False, 90))
 
-    def test_ingest_message_requests_thermal_status_when_connected(self) -> None:
+        microstep = self.worker.get_microstep_state()
+        self.assertEqual(microstep, "1/16")
+
+    def test_ingest_message_does_not_poll_thermal_status(self) -> None:
+        """Status messages should NOT trigger GET THERMAL_LIMITING polling.
+
+        Thermal/microstep state comes from config topic, not polling.
+        """
+
         class StubClient:
             def __init__(self) -> None:
                 self.published = []
@@ -412,36 +422,21 @@ class MqttRuntimeTests(unittest.TestCase):
         worker.ingest_message("devices/02123456789a/status", payload, timestamp=10.0)
         worker.ingest_message("devices/02123456789a/status", payload, timestamp=12.0)
 
-        get_cmds = [
+        # No GET THERMAL_LIMITING or GET MICROSTEP commands should be issued
+        get_thermal_cmds = [
             message
             for _, message, _ in stub.published
             if message.get("action") == "GET"
             and message.get("params", {}).get("resource") == "THERMAL_LIMITING"
         ]
-        self.assertEqual(len(get_cmds), 1)
-
-        response = json.dumps(
-            {
-                "cmd_id": get_cmds[0]["cmd_id"],
-                "action": "GET",
-                "status": "done",
-                "result": {
-                    "THERMAL_LIMITING": "ON",
-                    "max_budget_s": 90,
-                },
-            }
-        )
-        worker.ingest_response("devices/02123456789a/cmd/resp", response)
-        worker.ingest_message("devices/02123456789a/status", payload, timestamp=15.0)
-
-        refreshed_cmds = [
+        get_microstep_cmds = [
             message
             for _, message, _ in stub.published
             if message.get("action") == "GET"
-            and message.get("params", {}).get("resource") == "THERMAL_LIMITING"
+            and message.get("params", {}).get("resource") == "MICROSTEP"
         ]
-        self.assertEqual(len(refreshed_cmds), 1)
-        self.assertEqual(worker.get_thermal_state(), (True, 90))
+        self.assertEqual(len(get_thermal_cmds), 0, "Should not poll for thermal status")
+        self.assertEqual(len(get_microstep_cmds), 0, "Should not poll for microstep")
 
 
 if __name__ == "__main__":  # pragma: no cover

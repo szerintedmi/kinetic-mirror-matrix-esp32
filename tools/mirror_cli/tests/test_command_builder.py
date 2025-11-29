@@ -253,29 +253,29 @@ class TestGetCommand(unittest.TestCase):
 # SET Command Tests
 # =============================================================================
 class TestSetCommand(unittest.TestCase):
-    """Tests for SET command parsing."""
+    """Tests for SET command parsing - passthrough to firmware."""
 
     def test_set_speed(self):
         req = parse_serial_command("SET SPEED=4000")
         self.assertEqual(req.action, "SET")
-        self.assertEqual(req.params["speed_sps"], 4000)
+        self.assertEqual(req.params["SPEED"], "4000")
 
     def test_set_accel(self):
         req = parse_serial_command("SET ACCEL=10000")
-        self.assertEqual(req.params["accel_sps2"], 10000)
+        self.assertEqual(req.params["ACCEL"], "10000")
 
     def test_set_decel(self):
         req = parse_serial_command("SET DECEL=8000")
-        self.assertEqual(req.params["decel_sps2"], 8000)
+        self.assertEqual(req.params["DECEL"], "8000")
 
     def test_set_decel_zero(self):
         req = parse_serial_command("SET DECEL=0")
-        self.assertEqual(req.params["decel_sps2"], 0)
+        self.assertEqual(req.params["DECEL"], "0")
 
-    def test_set_decel_negative_raises(self):
-        with self.assertRaises(CommandParseError) as ctx:
-            parse_serial_command("SET DECEL=-100")
-        self.assertIn("must be >= 0", str(ctx.exception))
+    def test_set_decel_negative_passthrough(self):
+        # Negative values passthrough to firmware for validation
+        req = parse_serial_command("SET DECEL=-100")
+        self.assertEqual(req.params["DECEL"], "-100")
 
     def test_set_thermal_limiting_on(self):
         req = parse_serial_command("SET THERMAL_LIMITING=ON")
@@ -285,19 +285,25 @@ class TestSetCommand(unittest.TestCase):
         req = parse_serial_command("SET THERMAL_LIMITING=OFF")
         self.assertEqual(req.params["THERMAL_LIMITING"], "OFF")
 
-    def test_set_thermal_limiting_case_insensitive(self):
+    def test_set_key_case_normalized(self):
+        # Key is uppercased, value is passed as-is
         req = parse_serial_command("SET thermal_limiting=on")
-        self.assertEqual(req.params["THERMAL_LIMITING"], "ON")
+        self.assertEqual(req.params["THERMAL_LIMITING"], "on")
 
-    def test_set_thermal_limiting_invalid_value(self):
-        with self.assertRaises(CommandParseError) as ctx:
-            parse_serial_command("SET THERMAL_LIMITING=MAYBE")
-        self.assertIn("ON or OFF", str(ctx.exception))
+    def test_set_any_value_passthrough(self):
+        # Invalid values passthrough to firmware for validation
+        req = parse_serial_command("SET THERMAL_LIMITING=MAYBE")
+        self.assertEqual(req.params["THERMAL_LIMITING"], "MAYBE")
 
-    def test_set_unknown_field_raises(self):
-        with self.assertRaises(UnsupportedCommandError) as ctx:
-            parse_serial_command("SET FOOBAR=123")
-        self.assertIn("unsupported SET field", str(ctx.exception))
+    def test_set_unknown_field_passthrough(self):
+        # Unknown fields passthrough to firmware for validation
+        req = parse_serial_command("SET FOOBAR=123")
+        self.assertEqual(req.params["FOOBAR"], "123")
+
+    def test_set_microstep(self):
+        # MICROSTEP passthrough to firmware
+        req = parse_serial_command("SET MICROSTEP=1/32")
+        self.assertEqual(req.params["MICROSTEP"], "1/32")
 
     def test_set_missing_equals_raises(self):
         # "SET SPEED 4000" is parsed as two tokens, failing "single assignment" check
@@ -310,9 +316,21 @@ class TestSetCommand(unittest.TestCase):
             parse_serial_command("SET SPEED")
         self.assertIn("missing '='", str(ctx.exception))
 
-    def test_set_non_integer_value_raises(self):
-        with self.assertRaises(CommandParseError):
-            parse_serial_command("SET SPEED=fast")
+    def test_set_non_integer_value_passthrough(self):
+        # Non-integer values passthrough to firmware for validation
+        req = parse_serial_command("SET SPEED=fast")
+        self.assertEqual(req.params["SPEED"], "fast")
+
+    def test_set_colon_syntax(self):
+        # SET:KEY=VALUE works like SET KEY=VALUE
+        req = parse_serial_command("SET:MICROSTEP=1/32")
+        self.assertEqual(req.action, "SET")
+        self.assertEqual(req.params["MICROSTEP"], "1/32")
+
+    def test_set_colon_syntax_lowercase(self):
+        req = parse_serial_command("set:speed=4000")
+        self.assertEqual(req.action, "SET")
+        self.assertEqual(req.params["SPEED"], "4000")
 
 
 # =============================================================================

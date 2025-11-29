@@ -36,6 +36,8 @@ const std::string& HelpText() {
     os << "SET SPEED=<steps_per_second>\n";
     os << "SET ACCEL=<steps_per_second^2>\n";
     os << "SET DECEL=<steps_per_second^2>\n";
+    os << "GET MICROSTEP\n";
+    os << "SET MICROSTEP=FULL|HALF|1/4|1/8|1/16|1/32 (all motors must be asleep)\n";
     os << "WAKE:<id|ALL>\n";
     os << "SLEEP:<id|ALL>\n";
     os << "Shortcuts: M=MOVE, H=HOME, ST=STATUS\n";

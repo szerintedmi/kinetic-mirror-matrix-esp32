@@ -2,17 +2,18 @@
 
 Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP32 using FastAccelStepper for motion and two 74HC595 shift registers for per-motor DIR and SLEEP. A simple human-readable serial protocol provides immediate control from any laptop; diagnostics and thermal run-time limits keep demos stable and safe.
 
-**Quick Links:** [Roadmap](./agent-os/product/roadmap.md) · [Tech Stack](./agent-os/product/tech-stack.md) · [Wiring Guide](./docs/esp32-74hc595-wiring.md) · [Control UI](https://github.com/szerintedmi/mirror-matrix-control-ui)
+**Quick Links:** [Tech Stack](./agent-os/product/tech-stack.md) · [Wiring Guide](./docs/esp32-74hc595-wiring.md) · [Control UI](https://github.com/szerintedmi/mirror-matrix-control-ui)
 
 ## What It Does
 
-- USB serial protocol (v1): `HELP`, `STATUS`, `MOVE`, `HOME`, `WAKE`, `SLEEP`
-- Drives 8 DRV8825 steppers concurrently (full-step). DIR/SLEEP via 74HC595 shift registers
-- Auto-sleeps motors to avoid overheating and reduce power consumption
-- Bump-stop homing, zeroing at midpoint
-- Reports per-motor status: homed, steps since home, thermal budget metrics
-- Enforces runtime/cooldown budgets (toggleable at runtime)
-- Python CLI for quick tests and interactive TUI
+- **Multi-controller support via MQTT**: Control multiple ESP32 nodes from a single CLI/TUI session
+- **Wi-Fi connectivity**: SoftAP mode for easy setup, STA mode for production use
+- **Real-time telemetry**: MQTT-based status publishing (1-5 Hz) with per-motor state
+- **Serial and MQTT command interface**: Human-readable protocol (`MOVE`, `HOME`, `STATUS`, etc.)
+- Drives 8 DRV8825 steppers concurrently (configurable microstepping: full to 1/32)
+- Auto-sleeps motors to avoid overheating; runtime/cooldown thermal budgets
+- Bump-stop homing with configurable overshoot and backoff
+- Python CLI with interactive TUI for quick testing and live control
 
 ## Architecture
 
@@ -66,21 +67,22 @@ pio device monitor -b 115200               # Monitor (expect: CTRL:READY Serial 
 
 ```bash
 poetry install                             # Install dependencies
-poetry shell                               # Activate venv
 
-# Interactive TUI
-python -m mirror_cli interactive --port /dev/ttyUSB0
-python -m mirror_cli interactive --transport mqtt
+# Interactive TUI (serial)
+poetry run python -m mirror_cli interactive --port /dev/ttyUSB0
 
-# Single commands
-python -m mirror_cli help --port /dev/ttyUSB0
-python -m mirror_cli status --port /dev/ttyUSB0
-python -m mirror_cli move --port /dev/ttyUSB0 0 800
-python -m mirror_cli home --port /dev/ttyUSB0 0 --overshoot 800
+# Interactive TUI (MQTT - control multiple nodes)
+poetry run python -m mirror_cli interactive --transport mqtt
 
-# MQTT transport
-python -m mirror_cli status --transport mqtt --timeout 1.5
-python -m mirror_cli move --transport mqtt --node <mac> 0 800
+# Single commands (serial)
+poetry run python -m mirror_cli help --port /dev/ttyUSB0
+poetry run python -m mirror_cli status --port /dev/ttyUSB0
+poetry run python -m mirror_cli move --port /dev/ttyUSB0 0 800
+poetry run python -m mirror_cli home --port /dev/ttyUSB0 0 --overshoot 800
+
+# Single commands (MQTT)
+poetry run python -m mirror_cli status --transport mqtt --timeout 1.5
+poetry run python -m mirror_cli move --transport mqtt --node <mac> 0 800
 ```
 
 CLI source: [tools/mirror_cli](./tools/mirror_cli/)
@@ -98,7 +100,7 @@ pio test -e esp32DedicatedStep             # On-device tests
 ### Python Tests
 
 ```bash
-poetry run pytest tools/mirror_cli/tests/  # Direct pytest (228 tests)
+poetry run pytest tools/mirror_cli/tests/  # Direct pytest
 pio run -t test_python                     # Via PlatformIO target
 pio test -e native                         # Also runs Python tests via shim
 ```
@@ -126,10 +128,27 @@ VS Code picks up the same configuration via `.vscode/settings.json` for format-o
 
 ## MQTT Telemetry
 
-- Publishes aggregate snapshots on `devices/<mac>/status` (QoS0, non-retained)
+### Status Topic (`devices/<mac>/status`)
+
+Real-time motor telemetry published at 1-5 Hz:
+
+- Publishes aggregate snapshots (QoS0, non-retained)
 - Payload: `{"node_state":"ready","ip":"<ipv4>","motors":{"0":{...}}}`
 - Offline LWT: `{"node_state":"offline","motors":{}}`
 - Cadence: 1 Hz idle, 5 Hz while motors moving, change-driven bursts between ticks
+- Includes per-motor: position, moving state, thermal budget, speed, timing
+
+### Config Topic (`devices/<mac>/config`)
+
+Device configuration published on change with `retain=true`:
+
+- Publishes only when config changes (not every status update)
+- Retained so new subscribers get current config immediately
+- Payload: `{"thermal_limiting":"ON","max_budget_s":90,"microstep":"FULL","microstep_mult":1,"speed":4000,"accel":16000,"decel":16000}`
+- Auto-publishes after `SET THERMAL_LIMITING`, `SET MICROSTEP`, or speed/accel changes
+
+### Connection Management
+
 - Auto-reconnects with exponential backoff on broker loss
 
 ### Runtime MQTT Configuration
@@ -140,7 +159,7 @@ MQTT:SET_CONFIG host=<fqdn> port=<port>    # Update specific fields
 MQTT:SET_CONFIG RESET                      # Reset to compile-time defaults
 ```
 
-Schema: [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md), [`docs/mqtt-command-schema.md`](./docs/mqtt-command-schema.md)
+Schema: [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md), [`docs/mqtt-config-schema.md`](./docs/mqtt-config-schema.md), [`docs/mqtt-command-schema.md`](./docs/mqtt-command-schema.md)
 
 ## Wi-Fi Onboarding
 
@@ -185,7 +204,9 @@ SLEEP:<id|ALL>
 GET [ALL]
 GET LAST_OP_TIMING[:<id|ALL>]
 GET THERMAL_LIMITING
+GET MICROSTEP
 SET THERMAL_LIMITING=OFF|ON
+SET MICROSTEP=FULL|HALF|1/4|1/8|1/16|1/32
 ```
 
 Responses: `CTRL:ACK` (MOVE/HOME include `est_ms`), `CTRL:ERR E..`, `CTRL:WARN ...`

@@ -12,12 +12,13 @@ CommandExecutionContext::CommandExecutionContext(MotorController& controller,
                                                  int& default_speed_sps,
                                                  int& default_accel_sps2,
                                                  int& default_decel_sps2,
+                                                 uint8_t& microstep_multiplier,
                                                  bool& in_batch,
                                                  bool& batch_initially_idle)
     : controller_(controller), thermal_limits_enabled_(thermal_limits_enabled),
       default_speed_sps_(default_speed_sps), default_accel_sps2_(default_accel_sps2),
-      default_decel_sps2_(default_decel_sps2), in_batch_(in_batch),
-      batch_initially_idle_(batch_initially_idle) {}
+      default_decel_sps2_(default_decel_sps2), microstep_multiplier_(microstep_multiplier),
+      in_batch_(in_batch), batch_initially_idle_(batch_initially_idle) {}
 
 MotorController& CommandExecutionContext::controller() {
   return controller_;
@@ -43,6 +44,14 @@ int& CommandExecutionContext::defaultAccel() {
 }
 int& CommandExecutionContext::defaultDecel() {
   return default_decel_sps2_;
+}
+
+uint8_t CommandExecutionContext::microstepMultiplier() const {
+  return microstep_multiplier_;
+}
+
+uint8_t& CommandExecutionContext::microstepMultiplierRef() {
+  return microstep_multiplier_;
 }
 
 std::string CommandExecutionContext::nextMsgId() const {

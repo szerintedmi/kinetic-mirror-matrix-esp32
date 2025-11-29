@@ -2,6 +2,9 @@
 #include <cstddef>
 #include <stdint.h>
 
+// Forward declare MicrostepMode to avoid full header include
+enum class MicrostepMode : uint8_t;
+
 struct MotorState {
   uint8_t id;
   long position;  // absolute steps
@@ -47,4 +50,7 @@ public:
 
   // Optional global deceleration hint for underlying adapter
   virtual void setDeceleration(int /*decel_sps2*/) {}
+
+  // Microstepping mode control (no-op for stub/native builds)
+  virtual void setMicrostepMode(MicrostepMode /*mode*/) {}
 };

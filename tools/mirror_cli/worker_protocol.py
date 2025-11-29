@@ -106,6 +106,16 @@ class WorkerProtocol(ABC):
         ...
 
     @abstractmethod
+    def get_microstep_state(self) -> Optional[str]:
+        """
+        Get current microstep mode.
+
+        Returns:
+            None if unknown, or mode string like "FULL", "1/16", etc.
+        """
+        ...
+
+    @abstractmethod
     def append_log(self, line: str) -> None:
         """
         Append a line to the log.

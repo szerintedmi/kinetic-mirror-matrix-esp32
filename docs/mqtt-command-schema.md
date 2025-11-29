@@ -333,6 +333,75 @@ STATUS command streams a snapshot in the ACK and does not emit a DONE.
 }
 ```
 
+### SET MICROSTEP
+
+| Aspect | Serial |
+|--------|--------|
+| Request | `SET MICROSTEP=1/16` |
+| Completion | `CTRL:DONE cmd_id=5a... action=SET status=done MICROSTEP=1/16 multiplier=16` |
+
+#### MQTT request
+
+```json
+{
+  "cmd_id": "5a...",
+  "action": "SET",
+  "params": {
+    "MICROSTEP": "1/16"
+  }
+}
+```
+
+#### MQTT completion
+
+```json
+{
+  "cmd_id": "5a...",
+  "action": "SET",
+  "status": "done",
+  "result": {
+    "MICROSTEP": "1/16",
+    "multiplier": 16
+  }
+}
+```
+
+Valid MICROSTEP values: `FULL`, `HALF`, `1/4`, `1/8`, `1/16`, `1/32`
+
+Note: SET MICROSTEP requires all motors to be stopped and asleep. If any motor is moving or awake, the command returns `E04 BUSY`.
+
+### GET MICROSTEP
+
+| Aspect | Serial |
+|--------|--------|
+| Request | `GET MICROSTEP` |
+| Completion | `CTRL:DONE cmd_id=7b... action=GET status=done MICROSTEP=1/16` |
+
+#### MQTT request
+
+```json
+{
+  "cmd_id": "7b...",
+  "action": "GET",
+  "params": {
+    "resource": "MICROSTEP"
+  }
+}
+```
+
+#### MQTT completion
+
+```json
+{
+  "cmd_id": "7b...",
+  "action": "GET",
+  "status": "done",
+  "result": {
+    "MICROSTEP": "1/16"
+  }
+}
+```
+
 ### NET:STATUS
 
 | Aspect | Serial |

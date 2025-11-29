@@ -3,8 +3,6 @@
 import unittest
 from typing import Dict, List, Optional, Tuple
 
-from tools.mirror_cli.worker_protocol import WorkerProtocol
-
 
 class MockSerialModule:
     """Mock serial module for testing."""
