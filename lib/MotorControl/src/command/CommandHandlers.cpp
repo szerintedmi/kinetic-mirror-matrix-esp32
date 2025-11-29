@@ -26,6 +26,7 @@ extern "C" {
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <iomanip>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -144,6 +145,26 @@ long GetFreeHeapBytes() {
 #else
   return -1;
 #endif
+}
+
+unsigned long GetUptimeMs() {
+#if defined(ARDUINO)
+  return millis();
+#else
+  return 0;
+#endif
+}
+
+std::string FormatUptime(unsigned long ms) {
+  unsigned long total_sec = ms / 1000;
+  unsigned long hours = total_sec / 3600;
+  unsigned long minutes = (total_sec % 3600) / 60;
+  unsigned long seconds = total_sec % 60;
+  std::ostringstream oss;
+  oss << hours << ':'
+      << std::setfill('0') << std::setw(2) << minutes << ':'
+      << std::setfill('0') << std::setw(2) << seconds;
+  return oss.str();
 }
 
 void EmitResponseEvent(const char* action, const transport::command::ResponseLine& line) {
@@ -911,6 +932,9 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
 #ifdef GIT_COMMIT_DATE
     fields.push_back({"firmware_date", GIT_COMMIT_DATE});
 #endif
+    unsigned long uptime_ms = GetUptimeMs();
+    fields.push_back({"uptime_ms", std::to_string(uptime_ms)});
+    fields.push_back({"uptime", FormatUptime(uptime_ms)});
     return MakeDoneResult(kAction, msg_id, fields);
   }
   if (key == "SPEED") {

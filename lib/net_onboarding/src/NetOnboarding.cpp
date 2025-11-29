@@ -77,6 +77,13 @@ static void handleApiStatus_(AsyncWebServerRequest* request) {
 #ifdef GIT_COMMIT_DATE
   root["firmwareDate"] = GIT_COMMIT_DATE;
 #endif
+  unsigned long uptime_ms = millis();
+  root["uptimeMs"] = uptime_ms;
+  unsigned long total_sec = uptime_ms / 1000;
+  char uptime_str[16];
+  snprintf(uptime_str, sizeof(uptime_str), "%lu:%02lu:%02lu",
+           total_sec / 3600, (total_sec % 3600) / 60, total_sec % 60);
+  root["uptime"] = uptime_str;
   std::string out;
   serializeJson(doc, out);
   request->send(200, "application/json", out.c_str());
