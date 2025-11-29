@@ -1,18 +1,12 @@
-# Unified Serial & MQTT Command Schema
+# MQTT Command Schema
 
-The serial console and MQTT transport now emit the same dispatcher-backed responses. This playbook shows the lifecycle, error catalog, and per-command payloads side by side so you can translate between transports quickly.
+This document describes the MQTT command protocol for controlling the kinetic mirror firmware. For real-world payload examples, see [mqtt-payload-examples.md](./mqtt-payload-examples.md).
 
-## Response Lifecycle
+## Overview
 
-1. **Validation** – payload parsed and validated. Failures produce a single completion with `status="error"`; no ACK is sent.
-2. **ACK (optional)** – long-running commands send an `ack` event once execution starts. Short commands skip this.
-3. **Completion** – every command ends with either `status="done"` or `status="error"` plus result fields (`actual_ms`, NET state, etc.).
+Commands are published to `devices/<node_id>/cmd` and responses are published to `devices/<node_id>/cmd/resp`. The `<node_id>` is the device MAC address in lowercase without separators (e.g., `8857212316bc`).
 
-Serial sinks render dispatcher events as `CTRL:*` lines. MQTT publishes JSON on `devices/<node_id>/cmd/resp` with matching content. `<node_id>` is the device MAC address rendered in lowercase without separators.
-
-### MQTT Request Envelope
-
-Commands are published to `devices/<node_id>/cmd` with this JSON structure:
+### Request Envelope
 
 ```json
 {
@@ -23,166 +17,175 @@ Commands are published to `devices/<node_id>/cmd` with this JSON structure:
 }
 ```
 
-- `cmd_id` – if omitted, firmware allocates a UUID and echoes it in responses.
-- `action` – case-insensitive; normalized to upper-case.
-- `params` – per-command arguments identical in meaning to the serial interface.
-- `meta` – currently ignored (reserved for clients).
+| Field    | Required | Description                                                               |
+| -------- | -------- | ------------------------------------------------------------------------- |
+| `cmd_id` | No       | Client-provided UUID for correlation. If omitted, firmware generates one. |
+| `action` | Yes      | Command action (case-insensitive, normalized to uppercase).               |
+| `params` | Varies   | Command-specific parameters object.                                       |
+| `meta`   | No       | Reserved for client use; ignored by firmware.                             |
 
-Responses are published to `devices/<node_id>/cmd/resp` with QoS1. Duplicate requests (ie. same `cmd_id`) replay the cached responses without re-executing the command.
+### Response Lifecycle
+
+1. **Validation** - Payload parsed and validated. Failures produce `status="error"` immediately.
+2. **ACK** - Long-running commands (MOVE, HOME, NET:RESET, NET:LIST) send `status="ack"` when execution starts.
+3. **Completion** - Every command ends with `status="done"` or `status="error"`.
 
 ### Status Values
 
-| Status | Meaning | Notes |
-|--------|---------|-------|
-| `ack`  | Command accepted; more output expected. | Only emitted for async commands (MOVE, HOME, STATUS, NET:RESET, NET:LIST). |
-| `done` | Command finished successfully. | Completion payload. |
-| `error`| Command rejected or failed. | Completion payload with `errors[]`. |
+| Status  | Meaning                                                    |
+| ------- | ---------------------------------------------------------- |
+| `ack`   | Command accepted; execution started. More output expected. |
+| `done`  | Command completed successfully.                            |
+| `error` | Command rejected or failed. Includes `errors[]` array.     |
 
-### Error / Warning Codes
+### Error Codes
 
-| Code | Description |
-|------|-------------|
-| `E01` | BAD_CMD – Unknown/unsupported action |
-| `E02` | BAD_ID – Invalid target motor |
-| `E03` | BAD_PARAM – Validation failure |
-| `E04` | BUSY – Controller already executing |
-| `E07` | POS_OUT_OF_RANGE – Position outside limits |
-| `E10` | THERMAL_REQ_GT_MAX – Requested move exceeds thermal cap |
-| `E11` | THERMAL_NO_BUDGET – Insufficient runtime budget |
-| `E12` | THERMAL_NO_BUDGET_WAKE – WAKE blocked by thermal limits |
-| `NET_BAD_PARAM` | Wi‑Fi credential payload invalid |
-| `NET_SAVE_FAILED` | Failed to persist Wi‑Fi credentials |
-| `NET_SCAN_AP_ONLY` | Network scan allowed only in AP mode |
-| `NET_BUSY_CONNECTING` | Wi‑Fi subsystem busy connecting |
-| `NET_CONNECT_FAILED` | Wi‑Fi connection attempt failed |
-| `MQTT_BAD_PAYLOAD` | MQTT payload schema invalid |
-| `MQTT_UNSUPPORTED_ACTION` | Action not available via MQTT transport |
-| `MQTT_BAD_PARAM` | MQTT command parameters failed validation |
-| `MQTT_CONFIG_SAVE_FAILED` | Persisting MQTT configuration failed |
+| Code                      | Reason                 | Description                               |
+| ------------------------- | ---------------------- | ----------------------------------------- |
+| `E01`                     | BAD_CMD                | Unknown or unsupported action             |
+| `E02`                     | BAD_ID                 | Invalid motor ID or target mask           |
+| `E03`                     | BAD_PARAM              | Parameter validation failure              |
+| `E04`                     | BUSY                   | Controller is executing another command   |
+| `E07`                     | POS_OUT_OF_RANGE       | Position outside allowed travel range     |
+| `E10`                     | THERMAL_REQ_GT_MAX     | Requested move exceeds max thermal budget |
+| `E11`                     | THERMAL_NO_BUDGET      | Insufficient thermal budget available     |
+| `E12`                     | THERMAL_NO_BUDGET_WAKE | WAKE blocked by thermal limits            |
+| `NET_BAD_PARAM`           | -                      | Wi-Fi credential payload invalid          |
+| `NET_SAVE_FAILED`         | -                      | Failed to persist Wi-Fi credentials       |
+| `NET_SCAN_AP_ONLY`        | -                      | Network scan only allowed in AP mode      |
+| `NET_BUSY_CONNECTING`     | -                      | Wi-Fi subsystem busy connecting           |
+| `NET_CONNECT_FAILED`      | -                      | Wi-Fi connection attempt failed           |
+| `MQTT_BAD_PAYLOAD`        | -                      | MQTT payload schema invalid               |
+| `MQTT_UNSUPPORTED_ACTION` | -                      | Action not available via MQTT             |
+| `MQTT_BAD_PARAM`          | -                      | MQTT parameters failed validation         |
+| `MQTT_CONFIG_SAVE_FAILED` | -                      | Failed to persist MQTT configuration      |
 
-Warnings reuse the same codes and appear alongside `ack`/`done` without changing the overall status.
+Warnings use the same codes and appear in a `warnings[]` array alongside successful responses.
 
-## Command Reference (Serial vs MQTT)
+---
+
+## Motor Commands
 
 ### MOVE
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `MOVE:0,1200` |
-| ACK | `CTRL:ACK msg_id=aa... est_ms=1778` |
-| Completion | `CTRL:DONE cmd_id=6c... action=MOVE status=done actual_ms=1760` |
+Move motor(s) to an absolute position.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "6c...",
   "action": "MOVE",
   "params": {
     "target_ids": 0,
-    "position_steps": 1200
+    "position_steps": 1200,
+    "speed": 4000,
+    "accel": 16000
   }
 }
 ```
 
-#### MQTT ACK
+| Parameter        | Type         | Required | Default      | Description                      |
+| ---------------- | ------------ | -------- | ------------ | -------------------------------- |
+| `target_ids`     | int \| "ALL" | No       | 0            | Motor ID or "ALL" for all motors |
+| `position_steps` | int          | Yes      | -            | Target position in steps         |
+| `speed`          | int          | No       | Global SPEED | Steps per second                 |
+| `accel`          | int          | No       | Global ACCEL | Acceleration in steps/s²         |
+
+**ACK Response:**
 
 ```json
 {
-  "cmd_id": "6c...",
+  "cmd_id": "...",
   "action": "MOVE",
   "status": "ack",
-  "result": {
-    "est_ms": 1778
-  }
+  "result": { "est_ms": 1778 }
 }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "6c...",
+  "cmd_id": "...",
   "action": "MOVE",
   "status": "done",
-  "result": {
-    "actual_ms": 1760
-  }
+  "result": { "actual_ms": 1760, "started_ms": 311978 }
 }
 ```
 
 ### HOME
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `HOME:ALL,600,150` |
-| ACK | `CTRL:ACK msg_id=bb... est_ms=1820` |
-| Completion | `CTRL:DONE cmd_id=48... action=HOME status=done actual_ms=1805` |
+Home motor(s) by moving until the limit switch triggers.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "48...",
   "action": "HOME",
   "params": {
     "target_ids": "ALL",
     "overshoot_steps": 600,
-    "backoff_steps": 150
+    "backoff_steps": 150,
+    "speed": 4000,
+    "accel": 16000,
+    "full_range_steps": 1200
   }
 }
 ```
 
-#### MQTT ACK
+| Parameter          | Type         | Required | Default           | Description                      |
+| ------------------ | ------------ | -------- | ----------------- | -------------------------------- |
+| `target_ids`       | int \| "ALL" | Yes      | -                 | Motor ID or "ALL"                |
+| `overshoot_steps`  | int          | No       | 600               | Steps to overshoot past home     |
+| `backoff_steps`    | int          | No       | 150               | Steps to back off after homing   |
+| `speed`            | int          | No       | Global SPEED      | Steps per second                 |
+| `accel`            | int          | No       | Global ACCEL      | Acceleration in steps/s²         |
+| `full_range_steps` | int          | No       | MAX_POS - MIN_POS | Full travel range for estimation |
+
+**ACK Response:**
 
 ```json
 {
-  "cmd_id": "48...",
+  "cmd_id": "...",
   "action": "HOME",
   "status": "ack",
-  "result": {
-    "est_ms": 1820
-  }
+  "result": { "est_ms": 1820 }
 }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "48...",
+  "cmd_id": "...",
   "action": "HOME",
   "status": "done",
-  "result": {
-    "actual_ms": 1805
-  }
+  "result": { "actual_ms": 1805, "started_ms": 90800 }
 }
 ```
 
 ### WAKE
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `WAKE:ALL` |
-| Completion | `CTRL:DONE cmd_id=a5... action=WAKE status=done` |
+Wake motor driver(s) from sleep mode.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "a5...",
   "action": "WAKE",
-  "params": {
-    "target_ids": "ALL"
-  }
+  "params": { "target_ids": "ALL" }
 }
 ```
 
-#### MQTT completion
+| Parameter    | Type         | Required | Description       |
+| ------------ | ------------ | -------- | ----------------- |
+| `target_ids` | int \| "ALL" | Yes      | Motor ID or "ALL" |
+
+**Completion:**
 
 ```json
 {
-  "cmd_id": "a5...",
+  "cmd_id": "...",
   "action": "WAKE",
   "status": "done"
 }
@@ -190,78 +193,79 @@ Warnings reuse the same codes and appear alongside `ack`/`done` without changing
 
 ### SLEEP
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `SLEEP:0` |
-| Completion | `CTRL:DONE cmd_id=44... action=SLEEP status=done` |
+Put motor driver(s) into sleep mode.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "44...",
   "action": "SLEEP",
-  "params": {
-    "target_ids": 0
-  }
+  "params": { "target_ids": 0 }
 }
 ```
 
-#### MQTT completion
+| Parameter    | Type         | Required | Description       |
+| ------------ | ------------ | -------- | ----------------- |
+| `target_ids` | int \| "ALL" | Yes      | Motor ID or "ALL" |
+
+**Completion:**
 
 ```json
 {
-  "cmd_id": "44...",
+  "cmd_id": "...",
   "action": "SLEEP",
   "status": "done"
 }
 ```
 
-### STATUS
+---
 
-See [mqtt-status-schema.md](mqtt-status-schema).
+## Configuration Commands
 
-STATUS command streams a snapshot in the ACK and does not emit a DONE.
+### GET
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `STATUS` |
-| ACK (snapshot) | `CTRL:ACK msg_id=92... id=0 pos=0 moving=0 ...` |
+Retrieve configuration values.
 
-#### MQTT request
-
- STATUS command is not supported via MQTT, but telemetry is emitted on `devices/<node_id>/status`.
-
-### GET ALL
-
-| Aspect | Serial |
-|--------|--------|
-| Request | `GET ALL` |
-| Completion | `CTRL:DONE cmd_id=d8... action=GET ACCEL=16000 DECEL=0 SPEED=4000 THERMAL_LIMITING=ON max_budget_s=90 free_heap_bytes=51264 firmware_version=41a147e firmware_date=2025-11-29T04:20:26Z status=done` |
-
-#### MQTT request
+**Request (all values):**
 
 ```json
 {
-  "cmd_id": "03...",
   "action": "GET",
-  "params": {
-    "resource": "ALL"
-  }
+  "params": { "resource": "ALL" }
 }
 ```
 
-#### MQTT completion
+**Request (specific resource):**
 
 ```json
 {
-  "cmd_id": "03...",
+  "action": "GET",
+  "params": { "resource": "SPEED" }
+}
+```
+
+| Resource           | Description                     |
+| ------------------ | ------------------------------- |
+| `ALL`              | All configuration values        |
+| `SPEED`            | Default speed (steps/s)         |
+| `ACCEL`            | Default acceleration (steps/s²) |
+| `DECEL`            | Default deceleration (steps/s²) |
+| `THERMAL_LIMITING` | Thermal limiting state (ON/OFF) |
+| `MICROSTEP`        | Microstepping mode              |
+| `LAST_OP_TIMING`   | Last operation timing info      |
+
+**Completion (ALL):**
+
+```json
+{
+  "cmd_id": "...",
   "action": "GET",
   "status": "done",
   "result": {
-    "ACCEL": 16000,
-    "DECEL": 0,
     "SPEED": 4000,
+    "ACCEL": 16000,
+    "DECEL": 16000,
+    "MICROSTEP": "1/32",
     "THERMAL_LIMITING": "ON",
     "max_budget_s": 90,
     "free_heap_bytes": 51264,
@@ -271,208 +275,135 @@ STATUS command streams a snapshot in the ACK and does not emit a DONE.
 }
 ```
 
-### `GET <resource>`
-
-| Aspect | Serial |
-|--------|--------|
-| Request | `GET SPEED` |
-| Completion | `CTRL:DONE cmd_id=03... action=GET status=done SPEED=4000` |
-
-#### MQTT request
-
-```json
-{
-  "cmd_id": "03...",
-  "action": "GET",
-  "params": {
-    "resource": "speed"
-  }
-}
-```
-
-#### MQTT completion
-
-```json
-{
-  "cmd_id": "03...",
-  "action": "GET",
-  "status": "done",
-  "result": {
-    "SPEED": 4000
-  }
-}
-```
-
 ### SET
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `SET SPEED=5000` |
-| Completion | `CTRL:DONE cmd_id=0f... action=SET status=done SPEED=5000` |
+Update configuration values. Only one field per request.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "0f...",
   "action": "SET",
-  "params": {
-    "SPEED": 5000
-  }
+  "params": { "SPEED": 5000 }
 }
 ```
 
-#### MQTT completion
+| Parameter          | Type   | Valid Values                                 | Description                      |
+| ------------------ | ------ | -------------------------------------------- | -------------------------------- |
+| `SPEED`            | int    | > 0                                          | Default speed in steps/s         |
+| `ACCEL`            | int    | > 0                                          | Default acceleration in steps/s² |
+| `DECEL`            | int    | >= 0                                         | Default deceleration in steps/s² |
+| `THERMAL_LIMITING` | string | "ON", "OFF"                                  | Enable/disable thermal limiting  |
+| `MICROSTEP`        | string | "FULL", "HALF", "1/4", "1/8", "1/16", "1/32" | Microstepping mode               |
+
+**Note:** SET MICROSTEP requires all motors to be stopped and asleep. Returns `E04 BUSY` otherwise.
+
+**Completion:**
 
 ```json
 {
-  "cmd_id": "0f...",
-  "action": "SET",
-  "status": "done",
-  "result": {
-    "SPEED": 5000
-  }
-}
-```
-
-### SET MICROSTEP
-
-| Aspect | Serial |
-|--------|--------|
-| Request | `SET MICROSTEP=1/16` |
-| Completion | `CTRL:DONE cmd_id=5a... action=SET status=done MICROSTEP=1/16 multiplier=16` |
-
-#### MQTT request
-
-```json
-{
-  "cmd_id": "5a...",
-  "action": "SET",
-  "params": {
-    "MICROSTEP": "1/16"
-  }
-}
-```
-
-#### MQTT completion
-
-```json
-{
-  "cmd_id": "5a...",
+  "cmd_id": "...",
   "action": "SET",
   "status": "done",
-  "result": {
-    "MICROSTEP": "1/16",
-    "multiplier": 16
-  }
+  "result": { "SPEED": 5000 }
 }
 ```
 
-Valid MICROSTEP values: `FULL`, `HALF`, `1/4`, `1/8`, `1/16`, `1/32`
-
-Note: SET MICROSTEP requires all motors to be stopped and asleep. If any motor is moving or awake, the command returns `E04 BUSY`.
-
-### GET MICROSTEP
-
-| Aspect | Serial |
-|--------|--------|
-| Request | `GET MICROSTEP` |
-| Completion | `CTRL:DONE cmd_id=7b... action=GET status=done MICROSTEP=1/16` |
-
-#### MQTT request
+**SET MICROSTEP Completion:**
 
 ```json
 {
-  "cmd_id": "7b...",
-  "action": "GET",
-  "params": {
-    "resource": "MICROSTEP"
-  }
-}
-```
-
-#### MQTT completion
-
-```json
-{
-  "cmd_id": "7b...",
-  "action": "GET",
+  "cmd_id": "...",
+  "action": "SET",
   "status": "done",
-  "result": {
-    "MICROSTEP": "1/16"
-  }
+  "result": { "MICROSTEP": "1/16", "multiplier": 16 }
 }
 ```
+
+---
+
+## Network Commands
 
 ### NET:STATUS
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `NET:STATUS` |
-| Completion | `CTRL:DONE cmd_id=7e... action=NET status=done sub_action=STATUS state=CONNECTED rssi=-55 ...` |
+Get current network status.
 
-#### MQTT request
+**Request:**
 
 ```json
-{
-  "cmd_id": "7e...",
-  "action": "NET:STATUS"
-}
+{ "action": "NET:STATUS" }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "7e...",
+  "cmd_id": "...",
   "action": "NET:STATUS",
   "status": "done",
   "result": {
     "sub_action": "STATUS",
     "state": "CONNECTED",
     "rssi": -55,
-    "ssid": "\"TestNet\"",
-    "ip": "192.168.4.1"
+    "ssid": "\"HomeNetwork\"",
+    "ip": "192.168.1.8"
   }
+}
+```
+
+### NET:SET
+
+Set Wi-Fi credentials and connect.
+
+**Request:**
+
+```json
+{
+  "action": "NET:SET",
+  "params": {
+    "ssid": "MyNetwork",
+    "pass": "password123"
+  }
+}
+```
+
+**Completion:**
+
+```json
+{
+  "cmd_id": "...",
+  "action": "NET:SET",
+  "status": "done",
+  "result": { "sub_action": "SET" }
 }
 ```
 
 ### NET:RESET
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `NET:RESET` |
-| ACK | `CTRL:ACK msg_id=51... state=CONNECTING` |
-| Completion | `CTRL: NET:AP_ACTIVE msg_id=51... ssid="DeviceAP" ip=192.168.4.1`<br>`CTRL:DONE cmd_id=51... action=NET status=done sub_action=RESET state=AP_ACTIVE` |
+Clear stored credentials and start AP mode.
 
-#### MQTT request
+**Request:**
 
 ```json
-{
-  "cmd_id": "51...",
-  "action": "NET:RESET"
-}
+{ "action": "NET:RESET" }
 ```
 
-#### MQTT ACK
+**ACK:**
 
 ```json
 {
-  "cmd_id": "51...",
+  "cmd_id": "...",
   "action": "NET:RESET",
   "status": "ack",
-  "result": {
-    "sub_action": "RESET",
-    "state": "CONNECTING"
-  }
+  "result": { "sub_action": "RESET", "state": "CONNECTING" }
 }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "51...",
+  "cmd_id": "...",
   "action": "NET:RESET",
   "status": "done",
   "result": {
@@ -486,116 +417,43 @@ Note: SET MICROSTEP requires all motors to be stopped and asleep. If any motor i
 
 ### NET:LIST
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `NET:LIST` |
-| ACK (results streamed) | `CTRL:ACK msg_id=29... scanning=1`<br>`NET:LIST msg_id=29...`<br>`SSID="Lab" rssi=-42 secure=1 channel=6` |
-| Completion | — (scan data already delivered) | — |
+Scan for nearby networks. Only available in AP mode.
 
-#### MQTT request
+**Request:**
 
 ```json
-{
-  "cmd_id": "29...",
-  "action": "NET:LIST"
-}
+{ "action": "NET:LIST" }
 ```
 
-#### MQTT ACK
+**ACK:**
 
 ```json
 {
-  "cmd_id": "29...",
+  "cmd_id": "...",
   "action": "NET:LIST",
   "status": "ack"
 }
 ```
 
-### NET:SET
+---
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `NET:SET,"MyNet","password123"` |
-| Completion | `CTRL:DONE cmd_id=b4... action=NET status=done sub_action=SET` |
-
-#### MQTT request
-
-```json
-{
-  "cmd_id": "b4...",
-  "action": "NET:SET",
-  "params": {
-    "ssid": "MyNet",
-    "pass": "password123"
-  }
-}
-```
-
-#### MQTT completion
-
-```json
-{
-  "cmd_id": "b4...",
-  "action": "NET:SET",
-  "status": "done",
-  "result": {
-    "sub_action": "SET"
-  }
-}
-```
-
-### NET:LIST (error example)
-
-| Aspect | Serial |
-|--------|--------|
-| Request | `NET:LIST` |
-| Completion | `CTRL:ERR msg_id=63... NET_SCAN_AP_ONLY` |
-
-#### MQTT request
-
-```json
-{
-  "cmd_id": "63...",
-  "action": "NET:LIST"
-}
-```
-
-**MQTT completion (error)**
-
-```json
-{
-  "cmd_id": "63...",
-  "action": "NET:LIST",
-  "status": "error",
-  "errors": [
-    {
-      "code": "NET_SCAN_AP_ONLY"
-    }
-  ]
-}
-```
+## MQTT Configuration Commands
 
 ### MQTT:GET_CONFIG
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `MQTT:GET_CONFIG` |
-| Completion | `CTRL:DONE cmd_id=d3... action=MQTT status=done host="192.168.1.25" port=1883 user="mirror" pass="steelthread"` |
+Get current MQTT broker configuration.
 
-#### MQTT request
+**Request:**
 
 ```json
-{
-  "cmd_id": "d3...",
-  "action": "MQTT:GET_CONFIG"
-}
+{ "action": "MQTT:GET_CONFIG" }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "d3...",
+  "cmd_id": "...",
   "action": "MQTT:GET_CONFIG",
   "status": "done",
   "result": {
@@ -609,133 +467,167 @@ Note: SET MICROSTEP requires all motors to be stopped and asleep. If any motor i
 
 ### MQTT:SET_CONFIG
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `MQTT:SET_CONFIG host=lab-broker.local port=1884 user=lab pass="newsecret"` |
-| Completion | `CTRL:DONE cmd_id=c8... action=MQTT status=done host="lab-broker.local" port=1884 user="lab" pass="newsecret"` |
+Update MQTT broker configuration.
 
-#### MQTT request
+**Request:**
 
 ```json
 {
-  "cmd_id": "c8...",
   "action": "MQTT:SET_CONFIG",
   "params": {
-    "host": "lab-broker.local",
+    "host": "broker.local",
     "port": 1884,
-    "user": "lab",
-    "pass": "newsecret"
+    "user": "newuser",
+    "pass": "newpass"
   }
 }
 ```
 
-#### MQTT completion
+**Reset to defaults:**
 
 ```json
 {
-  "cmd_id": "c8...",
+  "action": "MQTT:SET_CONFIG",
+  "params": { "reset": true }
+}
+```
+
+**Completion:**
+
+```json
+{
+  "cmd_id": "...",
   "action": "MQTT:SET_CONFIG",
   "status": "done",
   "result": {
-    "host": "\"lab-broker.local\"",
+    "host": "\"broker.local\"",
     "port": "1884",
-    "user": "\"lab\"",
-    "pass": "\"newsecret\""
+    "user": "\"newuser\"",
+    "pass": "\"newpass\""
   }
 }
 ```
 
-#### Resetting to defaults
+---
 
-- Serial: `MQTT:SET_CONFIG RESET`
-- MQTT JSON:
-
-```json
-{
-  "cmd_id": "e1...",
-  "action": "MQTT:SET_CONFIG",
-  "params": {
-    "reset": true
-  }
-}
-```
-
- To return to compile-time defaults, use RESET.
-
-## Duplicate Handling
-
-1. Firmware logs `CTRL:INFO MQTT_DUPLICATE cmd_id=<...>` (rate limited).
-2. Previously published ACK/Completion payloads are replayed verbatim.
-3. The underlying command is not executed again.
-
-## Client Guidance
-
-- Prefer the MQTT JSON payload for machine consumption; serial output remains useful for diagnostics or manual control.
-- Commands that emit only a completion (`HELP`, `WAKE`, `SLEEP`, `GET`, `SET`, `NET:STATUS`, `NET:SET`) can be considered complete after the first `status:"done"` payload.
-- STATUS and NET:LIST stream their payload in the ACK and do not send DONE.
-- Warnings provide additional context (e.g., thermal budget) without affecting success/failure state.
-- Serial supports multi-command batches (`MOVE:0,100;MOVE:1,200`); MQTT clients should submit individual JSON commands.
-- Firmware normalises action/resource casing; clients may send lower-case tokens if desired.
-- Broker overrides persist in Preferences; use `MQTT:GET_CONFIG` to inspect active settings and `MQTT:SET_CONFIG` with either specific fields or `reset:true` to update or revert them.
-- Host CLI/TUI tooling accepts traditional serial command syntax (`MOVE:0,1200`, `NET:RESET`) even when connected over MQTT. The client maps those lines into the JSON envelope described here, publishes to `devices/<node_id>/cmd`, and logs `[ACK]` / `[DONE]` entries derived from dispatcher events (including `cmd_id`, warnings, and timing metadata). The CLI never synthesises `cmd_id` values; if omitted in the request the firmware allocates one and echoes it in subsequent responses.
+## Utility Commands
 
 ### HELP
 
-| Aspect | Serial |
-|--------|--------|
-| Request | `HELP` |
-| Completion | multiple human‑readable lines, followed by `CTRL:DONE action=HELP status=done` |
+Get list of available commands.
 
-#### MQTT request
+**Request:**
 
 ```json
-{
-  "cmd_id": "aa...",
-  "action": "HELP"
-}
+{ "action": "HELP" }
 ```
 
-#### MQTT completion
+**Completion:**
 
 ```json
 {
-  "cmd_id": "aa...",
+  "cmd_id": "...",
   "action": "HELP",
   "status": "done",
   "result": {
     "lines": [
       "HELP",
-      "MOVE:<id|ALL>,<abs_steps>",
-      "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]",
-      "NET:RESET",
-      "NET:STATUS",
-      "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)",
-      "NET:LIST (scan nearby SSIDs; AP mode only)",
-      "MQTT:GET_CONFIG",
-      "MQTT:SET_CONFIG host=<host> port=<port> user=<user> pass=\"<pass>\"",
-      "MQTT:SET_CONFIG RESET",
-      "STATUS",
-      "GET",
-      "GET ALL",
-      "GET LAST_OP_TIMING[:<id|ALL>]",
-      "GET SPEED",
-      "GET ACCEL",
-      "GET DECEL",
-      "GET THERMAL_LIMITING",
-      "SET THERMAL_LIMITING=OFF|ON",
-      "SET SPEED=<steps_per_second>",
-      "SET ACCEL=<steps_per_second^2>",
-      "SET DECEL=<steps_per_second^2>",
-      "WAKE:<id|ALL>",
-      "SLEEP:<id|ALL>",
-      "Shortcuts: M=MOVE, H=HOME, ST=STATUS",
-      "Multicommand: <cmd1>;<cmd2> note: no cmd queuing; only distinct motors allowed"
+      "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]",
+      "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]",
+      "..."
     ]
   }
 }
 ```
 
-Notes:
+### STATUS
 
-- The `result.lines` array is exactly the same content and ordering printed over serial; no separate MQTT help text exists.
-- HELP emits no ACK; a single completion payload with `status:"done"` is published immediately.
+**Note:** STATUS command is not supported via MQTT. Motor telemetry is published automatically to `devices/<node_id>/status`. See [mqtt-status-schema.md](./mqtt-status-schema.md).
+
+---
+
+## Duplicate Handling
+
+When the firmware receives a command with a previously-seen `cmd_id`:
+
+1. Logs `CTRL:INFO MQTT_DUPLICATE cmd_id=<...>` (rate limited)
+2. Replays cached ACK and completion payloads
+3. Does not re-execute the command
+
+---
+
+## Client Guidance
+
+- Commands that emit only completion (`HELP`, `WAKE`, `SLEEP`, `GET`, `SET`, `NET:STATUS`, `NET:SET`) complete after the first `status:"done"`.
+- Long-running commands (`MOVE`, `HOME`, `NET:RESET`, `NET:LIST`) emit `ack` then `done`.
+- Warnings appear in `warnings[]` without affecting success/failure status.
+- Action and resource names are case-insensitive.
+- MQTT clients should submit individual JSON commands (no batching like serial).
+
+---
+
+## Appendix: Serial Protocol Quick Reference
+
+The firmware also accepts commands via serial console. Serial uses a text-based protocol that maps to the same internal dispatcher.
+
+### Serial Command Format
+
+```
+<ACTION>:<args>
+```
+
+Examples:
+
+- `MOVE:0,1200` - Move motor 0 to position 1200
+- `MOVE:0,1200,2000,8000` - Move with speed=2000, accel=8000
+- `HOME:ALL,600,150` - Home all motors with overshoot=600, backoff=150
+- `HOME:0,600,150,2000,8000,1500` - Home with all parameters
+- `SET SPEED=5000` - Set default speed
+- `GET ALL` - Get all configuration
+- `NET:STATUS` - Get network status
+
+### Serial Response Format
+
+```
+CTRL:ACK msg_id=<id> <fields...>
+CTRL:DONE cmd_id=<id> action=<ACTION> status=done <fields...>
+CTRL:ERR msg_id=<id> <code> <reason>
+CTRL:WARN msg_id=<id> <code> <fields...>
+```
+
+### Serial Command Mapping
+
+| Serial                                              | MQTT Action     | Notes                                  |
+| --------------------------------------------------- | --------------- | -------------------------------------- |
+| `MOVE:<id>,<pos>[,<speed>,<accel>]`                 | MOVE            | Position and optional overrides        |
+| `HOME:<id>[,<over>,<back>,<speed>,<accel>,<range>]` | HOME            | All params optional except target      |
+| `WAKE:<id>`                                         | WAKE            |                                        |
+| `SLEEP:<id>`                                        | SLEEP           |                                        |
+| `STATUS`                                            | -               | Serial only; MQTT uses telemetry topic |
+| `GET [resource]`                                    | GET             |                                        |
+| `SET <key>=<value>`                                 | SET             |                                        |
+| `NET:STATUS`                                        | NET:STATUS      |                                        |
+| `NET:SET,"<ssid>","<pass>"`                         | NET:SET         | Quoted strings                         |
+| `NET:RESET`                                         | NET:RESET       |                                        |
+| `NET:LIST`                                          | NET:LIST        |                                        |
+| `MQTT:GET_CONFIG`                                   | MQTT:GET_CONFIG |                                        |
+| `MQTT:SET_CONFIG <key>=<val>...`                    | MQTT:SET_CONFIG |                                        |
+| `HELP`                                              | HELP            |                                        |
+
+### Serial Shortcuts
+
+| Shortcut | Full Command |
+| -------- | ------------ |
+| `M`      | `MOVE`       |
+| `H`      | `HOME`       |
+| `ST`     | `STATUS`     |
+
+### Serial Multi-Command
+
+Serial supports batching multiple commands with semicolons:
+
+```
+MOVE:0,100;MOVE:1,200
+```
+
+Note: No command queuing; only distinct motors allowed per batch.
