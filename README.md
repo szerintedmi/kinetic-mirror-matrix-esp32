@@ -201,6 +201,7 @@ Firmware can be updated over the network using ArduinoOTA. The device must be co
 ### Firmware Version
 
 Version is tracked via git commit hash and displayed in:
+
 - Serial output at boot: `Firmware: 41a147e`
 - `GET ALL` command: includes `firmware_version` and `firmware_date`
 - Web portal: shows version in status card
@@ -214,21 +215,21 @@ Version is tracked via git commit hash and displayed in:
 # Upload firmware via OTA
 pio run -e esp32DedicatedStep -t upload --upload-port <DEVICE_IP>
 
-# Upload filesystem via OTA (using espota.py)
+# Upload filesystem via OTA
 pio run -e esp32DedicatedStep -t buildfs
-python ~/.platformio/packages/framework-arduinoespressif32/tools/espota.py \
-  -i <DEVICE_IP> -p 3232 -a <OTA_PASSWORD> \
-  -f .pio/build/esp32DedicatedStep/littlefs.bin
+pio run -e esp32DedicatedStep -t uploadfs --upload-port <DEVICE_IP>
 ```
 
 ### OTA Password
 
 Configure in `include/secrets.h`:
+
 ```cpp
 #define OTA_PASSWORD "your-secure-password"
 ```
 
 Must also match `upload_flags` in `platformio.ini`:
+
 ```ini
 upload_flags =
     --auth=your-secure-password

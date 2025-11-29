@@ -406,6 +406,25 @@ function wifiPortal() {
         }
       }
     },
+
+    formatFirmwareDate(isoDate) {
+      if (!isoDate) return "";
+      try {
+        const d = new Date(isoDate);
+        const date = d.toLocaleDateString(undefined, {
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        });
+        const time = d.toLocaleTimeString(undefined, {
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+        return `${date} ${time}`;
+      } catch {
+        return isoDate.split("T")[0];
+      }
+    },
   };
 }
 

@@ -19,38 +19,37 @@
       </header>
 
       <section class="status-card">
-        <div
-          class="status-pill"
-          :class="statusClass()"
-          x-text="status.stateLabel"
-        ></div>
+        <div class="status-header">
+          <div
+            class="status-pill"
+            :class="statusClass()"
+            x-text="status.stateLabel"
+          ></div>
+          <div class="firmware-info" x-cloak x-show="status.firmwareVersion">
+            <code x-text="status.firmwareVersion"></code>
+            <span class="firmware-date" x-show="status.firmwareDate" x-text="formatFirmwareDate(status.firmwareDate)"></span>
+          </div>
+        </div>
         <dl>
-          <div>
-            <dt>Device MAC</dt>
-            <dd x-text="status.mac || '—'"></dd>
-          </div>
-          <div>
-            <dt>Current SSID</dt>
-            <dd x-text="status.ssid || '—'"></dd>
-          </div>
           <div>
             <dt>IP Address</dt>
             <dd x-text="status.ip || '—'"></dd>
           </div>
           <div>
+            <dt>SSID</dt>
+            <dd x-text="status.ssid || '—'"></dd>
+          </div>
+          <div>
             <dt>RSSI</dt>
             <dd x-text="status.rssiLabel"></dd>
+          </div>
+          <div>
+            <dt>MAC</dt>
+            <dd><code x-text="status.mac || '—'"></code></dd>
           </div>
           <div x-cloak x-show="isApMode()">
             <dt>SoftAP Password</dt>
             <dd><code x-text="status.apPassword || 'unknown'"></code></dd>
-          </div>
-          <div x-cloak x-show="status.firmwareVersion">
-            <dt>Firmware</dt>
-            <dd>
-              <code x-text="status.firmwareVersion"></code>
-              <small x-show="status.firmwareDate" x-text="' (' + status.firmwareDate.split('T')[0] + ')'"></small>
-            </dd>
           </div>
         </dl>
       </section>
