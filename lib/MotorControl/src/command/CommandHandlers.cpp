@@ -1,6 +1,7 @@
 #include "MotorControl/command/CommandHandlers.h"
 
 #include "MotorControl/BuildConfig.h"
+#include "version.h"
 #include "MotorControl/MotionKinematics.h"
 #include "MotorControl/MotorControlConstants.h"
 #include "MotorControl/command/CommandResult.h"
@@ -904,6 +905,12 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
     } else {
       fields.push_back({"free_heap_bytes", "unknown"});
     }
+#ifdef GIT_COMMIT_HASH
+    fields.push_back({"firmware_version", GIT_COMMIT_HASH});
+#endif
+#ifdef GIT_COMMIT_DATE
+    fields.push_back({"firmware_date", GIT_COMMIT_DATE});
+#endif
     return MakeDoneResult(kAction, msg_id, fields);
   }
   if (key == "SPEED") {

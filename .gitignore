@@ -2,6 +2,7 @@
 .tmp
 .cache
 include/secrets.h
+include/version.h
 
 # data is generated from data_src at build by tools/gzip_fs.py
 data/

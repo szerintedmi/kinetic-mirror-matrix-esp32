@@ -45,6 +45,13 @@
             <dt>SoftAP Password</dt>
             <dd><code x-text="status.apPassword || 'unknown'"></code></dd>
           </div>
+          <div x-cloak x-show="status.firmwareVersion">
+            <dt>Firmware</dt>
+            <dd>
+              <code x-text="status.firmwareVersion"></code>
+              <small x-show="status.firmwareDate" x-text="' (' + status.firmwareDate.split('T')[0] + ')'"></small>
+            </dd>
+          </div>
         </dl>
       </section>
 

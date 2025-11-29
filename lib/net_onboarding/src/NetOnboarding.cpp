@@ -16,6 +16,8 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+
+#include "version.h"
 #endif
 
 namespace net_onboarding {
@@ -69,6 +71,12 @@ static void handleApiStatus_(AsyncWebServerRequest* request) {
   std::array<char, 65> ap_pass{};
   g_portal_net->apPassword(ap_pass);
   root["apPassword"] = ap_pass.data();
+#ifdef GIT_COMMIT_HASH
+  root["firmwareVersion"] = GIT_COMMIT_HASH;
+#endif
+#ifdef GIT_COMMIT_DATE
+  root["firmwareDate"] = GIT_COMMIT_DATE;
+#endif
   std::string out;
   serializeJson(doc, out);
   request->send(200, "application/json", out.c_str());

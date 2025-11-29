@@ -4,6 +4,8 @@
 #include "console/SerialConsole.h"
 #include "net_onboarding/NetOnboarding.h"
 #include "net_onboarding/NetSingleton.h"
+#include "ota/OtaManager.h"
+#include "secrets.h"
 #include "transport/MessageId.h"
 #include "transport/ResponseDispatcher.h"
 #include "transport/ResponseModel.h"
@@ -25,6 +27,11 @@ namespace {
 State& LastKnownNetState() {
   static State last_state = State::AP_ACTIVE;
   return last_state;
+}
+
+ota::OtaManager& Ota() {
+  static ota::OtaManager instance;
+  return instance;
 }
 }  // namespace
 constexpr uint32_t kResetHoldMs = 5000;
@@ -138,6 +145,14 @@ void setup() {
   last_state = Net().status().state;
   ResetButtonSetup();
 
+  // Initialize OTA (works in both AP and STA modes)
+  String hostname = "mirror-" + WiFi.macAddress().substring(12, 14) +
+                    WiFi.macAddress().substring(15, 17);
+  hostname.replace(":", "");
+  hostname.toLowerCase();
+  Ota().begin(hostname.c_str(), OTA_PASSWORD);
+  Ota().markFirmwareValid();  // Prevent rollback after successful boot
+
   // Emit initial state as control event
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
   if (last_state == State::AP_ACTIVE) {
@@ -175,6 +190,7 @@ void setup() {
 void loop() {
   serial_console_tick();
   Net().loop();
+  Ota().loop();
   ResetButtonTick(millis());
   State& last_state = LastKnownNetState();
 

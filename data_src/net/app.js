@@ -9,6 +9,8 @@ function wifiPortal() {
       apPassword: "",
       apSsid: "",
       mac: "",
+      firmwareVersion: "",
+      firmwareDate: "",
     },
     networks: [],
     hasScanned: false,
@@ -49,6 +51,8 @@ function wifiPortal() {
         this.status.ip = payload.ip || "";
         this.status.apSsid = payload.apSsid || "";
         this.status.mac = payload.mac || "";
+        this.status.firmwareVersion = payload.firmwareVersion || "";
+        this.status.firmwareDate = payload.firmwareDate || "";
         const apPassValue =
           typeof payload.apPassword === "string"
             ? payload.apPassword

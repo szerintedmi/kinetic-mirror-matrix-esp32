@@ -8,6 +8,7 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 
 - **Multi-controller support via MQTT**: Control multiple ESP32 nodes from a single CLI/TUI session
 - **Wi-Fi connectivity**: SoftAP mode for easy setup, STA mode for production use
+- **OTA firmware updates**: Update firmware and filesystem over the network via PlatformIO
 - **Real-time telemetry**: MQTT-based status publishing (1-5 Hz) with per-motor state
 - **Serial and MQTT command interface**: Human-readable protocol (`MOVE`, `HOME`, `STATUS`, etc.)
 - Drives 8 DRV8825 steppers concurrently (configurable microstepping: full to 1/32, default 1/32)
@@ -189,9 +190,53 @@ NET:RESET                                  # Clear credentials, enter SoftAP mod
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/status` | GET | Onboarding state, SSID, IP, RSSI |
+| `/api/status` | GET | Onboarding state, SSID, IP, RSSI, firmware version |
 | `/api/scan` | GET | Nearby networks (ssid, rssi, secure, channel) |
 | `/api/wifi` | POST | `{"ssid":"...","pass":"..."}` to connect |
+
+## OTA Updates
+
+Firmware can be updated over the network using ArduinoOTA. The device must be connected to WiFi (STA mode) or you must be connected to its SoftAP.
+
+### Firmware Version
+
+Version is tracked via git commit hash and displayed in:
+- Serial output at boot: `Firmware: 41a147e`
+- `GET ALL` command: includes `firmware_version` and `firmware_date`
+- Web portal: shows version in status card
+- `/api/status`: includes `firmwareVersion` and `firmwareDate`
+
+### OTA Upload
+
+```bash
+# Get device IP from serial monitor, MQTT, or web portal
+
+# Upload firmware via OTA
+pio run -e esp32DedicatedStep -t upload --upload-port <DEVICE_IP>
+
+# Upload filesystem via OTA (using espota.py)
+pio run -e esp32DedicatedStep -t buildfs
+python ~/.platformio/packages/framework-arduinoespressif32/tools/espota.py \
+  -i <DEVICE_IP> -p 3232 -a <OTA_PASSWORD> \
+  -f .pio/build/esp32DedicatedStep/littlefs.bin
+```
+
+### OTA Password
+
+Configure in `include/secrets.h`:
+```cpp
+#define OTA_PASSWORD "your-secure-password"
+```
+
+Must also match `upload_flags` in `platformio.ini`:
+```ini
+upload_flags =
+    --auth=your-secure-password
+```
+
+### Auto-Rollback
+
+If new firmware fails to boot properly, the ESP32 bootloader automatically reverts to the previous working firmware after a few failed boot attempts.
 
 ## Protocol Reference
 
@@ -226,6 +271,7 @@ Full spec: [Serial command protocol v1](./agent-os/specs/2025-10-15-serial-comma
 | Constants | [lib/MotorControl/include/MotorControl/MotorControlConstants.h](./lib/MotorControl/include/MotorControl/MotorControlConstants.h) |
 | Board pins | [include/boards/Esp32Dev.hpp](./include/boards/Esp32Dev.hpp) |
 | Wi-Fi onboarding | [lib/net_onboarding/src/NetOnboarding.cpp](./lib/net_onboarding/src/NetOnboarding.cpp) |
+| OTA manager | [lib/ota_manager/src/OtaManager.cpp](./lib/ota_manager/src/OtaManager.cpp) |
 | Host CLI | [tools/mirror_cli/](./tools/mirror_cli/) |
 | C++ tests | [test/test_MotorControl/](./test/test_MotorControl/), [test/test_Drivers/](./test/test_Drivers/) |
 

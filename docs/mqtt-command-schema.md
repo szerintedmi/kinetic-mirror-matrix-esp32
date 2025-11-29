@@ -237,7 +237,7 @@ STATUS command streams a snapshot in the ACK and does not emit a DONE.
 | Aspect | Serial |
 |--------|--------|
 | Request | `GET ALL` |
-| Completion | `CTRL:DONE cmd_id=d8... action=GET ACCEL=16000 DECEL=0 SPEED=4000 THERMAL_LIMITING=ON max_budget_s=90 free_heap_bytes=51264 status=done` |
+| Completion | `CTRL:DONE cmd_id=d8... action=GET ACCEL=16000 DECEL=0 SPEED=4000 THERMAL_LIMITING=ON max_budget_s=90 free_heap_bytes=51264 firmware_version=41a147e firmware_date=2025-11-29T04:20:26Z status=done` |
 
 #### MQTT request
 
@@ -264,7 +264,9 @@ STATUS command streams a snapshot in the ACK and does not emit a DONE.
     "SPEED": 4000,
     "THERMAL_LIMITING": "ON",
     "max_budget_s": 90,
-    "free_heap_bytes": 51264
+    "free_heap_bytes": 51264,
+    "firmware_version": "41a147e",
+    "firmware_date": "2025-11-29T04:20:26Z"
   }
 }
 ```
