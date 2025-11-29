@@ -210,8 +210,11 @@ void MqttStatusPublisher::appendMotorJson(const MotorState& state,
   appendFixedTenths(ttfc_tenths, out);
   out.push_back(',');
 
-  appendInt("speed", state.speed);
-  appendInt("accel", state.accel);
+  // Convert hardware speed/accel to user-space
+  int user_speed = state.speed / static_cast<int>(microstep_multiplier);
+  int user_accel = state.accel / static_cast<int>(microstep_multiplier);
+  appendInt("speed", user_speed);
+  appendInt("accel", user_accel);
   appendInt("est_ms", state.last_op_est_ms);
   appendInt("started_ms", state.last_op_started_ms);
   if (include_actual_ms) {

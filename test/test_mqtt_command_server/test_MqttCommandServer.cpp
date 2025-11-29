@@ -657,7 +657,7 @@ void test_status_parity_matches_status_publisher() {
       net);
   publisher.setTopic("devices/test/status");
   publisher.forceImmediate();
-  publisher.loop(h.processor.controller(), h.now_ms);
+  publisher.loop(h.processor.controller(), h.now_ms, h.processor.microstepMultiplier());
   TEST_ASSERT_FALSE_MESSAGE(payload.empty(), "status publisher did not emit payload");
 
   ArduinoJson::JsonDocument doc;

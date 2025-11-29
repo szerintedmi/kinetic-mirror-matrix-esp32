@@ -8,11 +8,11 @@
 
 using test_helpers::ParseEstMs;
 
-void test_get_microstep_default_full() {
+void test_get_microstep_default_1_32() {
   MotorCommandProcessor proto;
   auto r = proto.processLine("GET MICROSTEP", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:DONE", 0) == 0);
-  TEST_ASSERT_TRUE(r.find("MICROSTEP=FULL") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("MICROSTEP=1/32") != std::string::npos);
 }
 
 void test_set_microstep_valid_modes() {
@@ -114,9 +114,9 @@ void test_position_rescaled_on_mode_change() {
 void test_status_shows_microstep() {
   MotorCommandProcessor proto;
   auto status = proto.processLine("STATUS", 0);
-  // STATUS outputs lowercase field names: microstep=FULL microstep_mult=1
-  TEST_ASSERT_TRUE(status.find("microstep=FULL") != std::string::npos);
-  TEST_ASSERT_TRUE(status.find("microstep_mult=1") != std::string::npos);
+  // STATUS outputs lowercase field names: microstep=1/32 microstep_mult=32 (default)
+  TEST_ASSERT_TRUE(status.find("microstep=1/32") != std::string::npos);
+  TEST_ASSERT_TRUE(status.find("microstep_mult=32") != std::string::npos);
   // STATUS also includes thermal_limiting and max_budget_s
   TEST_ASSERT_TRUE(status.find("thermal_limiting=ON") != std::string::npos);
   TEST_ASSERT_TRUE(status.find("max_budget_s=") != std::string::npos);
@@ -136,7 +136,7 @@ void test_get_all_includes_microstep() {
   MotorCommandProcessor proto;
   auto r = proto.processLine("GET ALL", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:DONE", 0) == 0);
-  TEST_ASSERT_TRUE(r.find("MICROSTEP=FULL") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("MICROSTEP=1/32") != std::string::npos);
 
   proto.processLine("SET MICROSTEP=HALF", 0);
   r = proto.processLine("GET ALL", 1);

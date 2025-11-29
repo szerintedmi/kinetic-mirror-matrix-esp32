@@ -42,5 +42,5 @@ private:
   MotorState motors_[8];
   MovePlan plans_[8];
   bool thermal_limits_enabled_ = true;
-  uint8_t microstep_multiplier_ = 1;
+  uint8_t microstep_multiplier_ = 32;  // default: 1/32
 };

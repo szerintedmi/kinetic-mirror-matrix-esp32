@@ -99,7 +99,7 @@ HardwareMotorController::HardwareMotorController() {
   }
   // Initialize microstepping GPIO driver (shared across all DRV8825 drivers)
   microstep_gpio_.reset(new MicrostepGpio(MICROSTEP_M0_PIN, MICROSTEP_M1_PIN, MICROSTEP_M2_PIN));
-  microstep_gpio_->begin();  // Sets full-step mode by default
+  microstep_gpio_->begin();  // Sets 1/32 microstepping mode by default
   // Initial sleeping state handled by Shift595Esp32 begin() + controller setup
   for (uint8_t i = 0; i < count_; ++i) {
     motors_[i].awake = false;

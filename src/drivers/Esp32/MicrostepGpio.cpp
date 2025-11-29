@@ -9,8 +9,8 @@ void MicrostepGpio::begin() {
   pinMode(m0_pin_, OUTPUT);
   pinMode(m1_pin_, OUTPUT);
   pinMode(m2_pin_, OUTPUT);
-  // Initialize to full-step mode (all LOW)
-  current_mode_ = MicrostepMode::FULL;
+  // Initialize to 1/32 microstepping mode (M0=HIGH, M1=LOW, M2=HIGH)
+  current_mode_ = MicrostepMode::THIRTY_SECOND;
   applyPinStates();
 }
 

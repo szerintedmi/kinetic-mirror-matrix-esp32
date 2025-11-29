@@ -10,7 +10,7 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 - **Wi-Fi connectivity**: SoftAP mode for easy setup, STA mode for production use
 - **Real-time telemetry**: MQTT-based status publishing (1-5 Hz) with per-motor state
 - **Serial and MQTT command interface**: Human-readable protocol (`MOVE`, `HOME`, `STATUS`, etc.)
-- Drives 8 DRV8825 steppers concurrently (configurable microstepping: full to 1/32)
+- Drives 8 DRV8825 steppers concurrently (configurable microstepping: full to 1/32, default 1/32)
 - Auto-sleeps motors to avoid overheating; runtime/cooldown thermal budgets
 - Bump-stop homing with configurable overshoot and backoff
 - Python CLI with interactive TUI for quick testing and live control
@@ -144,7 +144,7 @@ Device configuration published on change with `retain=true`:
 
 - Publishes only when config changes (not every status update)
 - Retained so new subscribers get current config immediately
-- Payload: `{"thermal_limiting":"ON","max_budget_s":90,"microstep":"FULL","microstep_mult":1,"speed":4000,"accel":16000,"decel":16000}`
+- Payload: `{"thermal_limiting":"ON","max_budget_s":90,"microstep":"1/32","microstep_mult":32,"speed":4000,"accel":16000,"decel":16000}`
 - Auto-publishes after `SET THERMAL_LIMITING`, `SET MICROSTEP`, or speed/accel changes
 
 ### Connection Management

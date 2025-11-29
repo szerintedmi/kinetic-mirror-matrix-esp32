@@ -43,7 +43,7 @@ private:
   int default_speed_sps_;
   int default_accel_sps2_;
   int default_decel_sps2_;
-  uint8_t microstep_multiplier_ = 1;  // 1, 2, 4, 8, 16, or 32
+  uint8_t microstep_multiplier_ = 32;  // 1, 2, 4, 8, 16, or 32 (default: 1/32)
   bool in_batch_ = false;
   bool batch_initially_idle_ = false;
 

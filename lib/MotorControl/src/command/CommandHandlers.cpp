@@ -856,8 +856,11 @@ CommandResult QueryCommandHandler::handleStatus(CommandExecutionContext& context
     data_line.fields.push_back({"steps_since_home", std::to_string(user_steps_since_home)});
     data_line.fields.push_back({"budget_s", FormatSignedTenths(s.budget_tenths)});
     data_line.fields.push_back({"ttfc_s", FormatTenths(ttfc_tenths)});
-    data_line.fields.push_back({"speed", std::to_string(s.speed)});
-    data_line.fields.push_back({"accel", std::to_string(s.accel)});
+    // Convert hardware speed/accel to user-space (divide by microstep multiplier)
+    int user_speed = s.speed / static_cast<int>(context.microstepMultiplier());
+    int user_accel = s.accel / static_cast<int>(context.microstepMultiplier());
+    data_line.fields.push_back({"speed", std::to_string(user_speed)});
+    data_line.fields.push_back({"accel", std::to_string(user_accel)});
     data_line.fields.push_back({"est_ms", std::to_string(s.last_op_est_ms)});
     data_line.fields.push_back({"started_ms", std::to_string(s.last_op_started_ms)});
     if (!s.last_op_ongoing) {

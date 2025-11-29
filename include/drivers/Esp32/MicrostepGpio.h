@@ -51,7 +51,7 @@ private:
   int m0_pin_;
   int m1_pin_;
   int m2_pin_;
-  MicrostepMode current_mode_ = MicrostepMode::FULL;
+  MicrostepMode current_mode_ = MicrostepMode::THIRTY_SECOND;
 
   void applyPinStates();
 };

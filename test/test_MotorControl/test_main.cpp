@@ -125,7 +125,7 @@ void test_mqtt_set_config_persist();
 void test_mqtt_reset_to_defaults();
 
 // Microstep
-void test_get_microstep_default_full();
+void test_get_microstep_default_1_32();
 void test_set_microstep_valid_modes();
 void test_set_microstep_requires_all_asleep();
 void test_move_scales_by_multiplier();
@@ -365,7 +365,7 @@ int main(int, char**) {
 
   // Microstep
   setUp();
-  RUN_TEST(test_get_microstep_default_full);
+  RUN_TEST(test_get_microstep_default_1_32);
   setUp();
   RUN_TEST(test_set_microstep_valid_modes);
   setUp();
