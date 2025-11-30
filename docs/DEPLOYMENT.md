@@ -1,0 +1,265 @@
+# Build & Deployment Guide
+
+This guide covers building firmware, uploading to devices, and managing deployments.
+
+## Quick Reference
+
+```bash
+# Build
+pio run -e esp32DedicatedStep              # Build firmware
+pio run -e esp32DedicatedStep -t buildfs   # Build filesystem
+
+# Upload via USB
+pio run -e esp32DedicatedStep -t upload    # Upload firmware
+pio run -e esp32DedicatedStep -t uploadfs  # Upload filesystem
+
+# Upload via OTA (single device)
+pio run -e esp32DedicatedStep -t upload --upload-port <IP>
+
+# Multi-device OTA deployment (recommended)
+poetry run python -m tools.deploy.ota_deploy  # Build and deploy to all devices
+```
+
+## Build Environments
+
+| Environment | Description | Use Case |
+|-------------|-------------|----------|
+| `esp32DedicatedStep` | FastAccelStepper, 8 motors | Production hardware |
+| `esp32SharedStep` | Shared-step RMT, 16+ motors | High motor count |
+| `native` | StubMotorController, no hardware | Host-side testing |
+
+### Build Commands
+
+```bash
+# Full build
+pio run -e esp32DedicatedStep
+
+# Build filesystem (Wi-Fi portal assets)
+pio run -e esp32DedicatedStep -t buildfs
+
+# Clean and rebuild
+pio run -e esp32DedicatedStep -t clean && pio run -e esp32DedicatedStep
+
+# Generate compile_commands.json for IDE
+pio run -t compiledb -e esp32DedicatedStep
+```
+
+### Firmware Versioning
+
+Version is automatically injected from git at build time:
+
+- `GIT_COMMIT_HASH`: Short commit hash (e.g., `3837274` or `3837274-dirty`)
+- `GIT_COMMIT_DATE`: ISO 8601 timestamp
+
+Dirty builds (uncommitted changes) use the build timestamp instead of commit timestamp.
+
+Check version:
+- Serial at boot: `Firmware: 3837274`
+- Command: `GET ALL` returns `firmware_version` and `firmware_date`
+- API: `GET /api/status` returns `firmwareVersion` and `firmwareDate`
+- Web portal: Shows version in status card
+
+## USB Upload
+
+Connect via USB and upload:
+
+```bash
+pio run -e esp32DedicatedStep -t upload
+pio device monitor -b 115200  # Verify: CTRL:READY Serial v1
+```
+
+## OTA Updates
+
+Update firmware over the network using ArduinoOTA. Device must be on WiFi.
+
+### OTA Password
+
+Configure in `include/secrets.h`:
+
+```cpp
+#define OTA_PASSWORD "your-secure-password"
+```
+
+Must match `upload_flags` in `platformio.ini`:
+
+```ini
+upload_flags =
+    --auth=your-secure-password
+```
+
+### Single Device OTA
+
+Get device IP from serial monitor, MQTT, or web portal, then:
+
+```bash
+# Upload firmware
+pio run -e esp32DedicatedStep -t upload --upload-port <IP>
+
+# Upload filesystem
+pio run -e esp32DedicatedStep -t buildfs
+pio run -e esp32DedicatedStep -t uploadfs --upload-port <IP>
+```
+
+### Multi-Device OTA Deployment
+
+Deploy to multiple devices in parallel with progress tracking and verification.
+
+#### Setup
+
+1. Copy the example config:
+   ```bash
+   cp tools/deploy/ota_devices.toml.example tools/deploy/ota_devices.toml
+   ```
+
+2. Edit `tools/deploy/ota_devices.toml` with your device IPs:
+   ```toml
+   [devices]
+   ips = [
+       "192.168.1.100",
+       "192.168.1.101",
+   ]
+   ```
+
+#### Usage
+
+```bash
+# Build and deploy to all devices (default)
+poetry run python -m tools.deploy.ota_deploy
+
+# Build only, no deploy
+poetry run python -m tools.deploy.ota_deploy --build-only
+
+# Deploy existing build (skip build step)
+poetry run python -m tools.deploy.ota_deploy --skip-build
+
+# Skip POST-deploy verification
+poetry run python -m tools.deploy.ota_deploy --no-verify
+
+# Retry failed devices from previous run
+poetry run python -m tools.deploy.ota_deploy --retry tools/deploy/logs/<timestamp>_summary.json
+```
+
+#### What It Does
+
+1. **Build**: Runs `pio run -e esp32DedicatedStep` (unless `--skip-build`)
+2. **Upload**: Uses `espota.py` directly to upload to all devices in parallel (no rebuild per device)
+3. **Verify**: Checks `/api/status` on each device to confirm firmware version
+4. **Report**: Shows summary table with success/failure status
+
+#### Output Example
+
+```
+Building firmware...
+Build complete: 3837274 (2025-11-30T14:23:45+0000)
+Log: tools/deploy/logs/2025-11-30_14-23-45_build.log
+
+Deploying to 2 device(s)...
+
+⠋ 192.168.1.100     ████████████████████████████████ Uploading 100%
+⠋ 192.168.1.101     ████████████████████████████████ Verifying...
+
+┏━━━━━━━━━━━━━━━━┳━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━┓
+┃ IP             ┃ Status ┃ Version  ┃ Date                  ┃ Error ┃
+┡━━━━━━━━━━━━━━━━╇━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━┩
+│ 192.168.1.100  │   ✔    │ 3837274  │ 2025-11-30T14:23:45+0 │       │
+│ 192.168.1.101  │   ✔    │ 3837274  │ 2025-11-30T14:23:45+0 │       │
+└────────────────┴────────┴──────────┴───────────────────────┴───────┘
+
+All 2 device(s) deployed successfully!
+
+Logs saved to: tools/deploy/logs
+```
+
+#### Logs
+
+All output is logged to `tools/deploy/logs/`:
+- `<timestamp>_build.log` - Build output (includes command executed)
+- `<timestamp>_<ip>.log` - Per-device upload output (includes espota.py command)
+- `<timestamp>_summary.json` - Deployment results (for retry)
+
+### Auto-Rollback
+
+ESP32 bootloader automatically reverts to previous firmware if new firmware fails to boot after a few attempts.
+
+## Wi-Fi Onboarding
+
+### SoftAP Portal
+
+1. Power device with no credentials (hold BOOT 5s to clear existing)
+2. Join `SOFT_AP_SSID_PREFIX + MAC` using password from `include/secrets.h`
+3. Browse to `http://192.168.4.1/`
+4. Select network and enter credentials
+
+### Serial Commands
+
+```
+NET:STATUS                                 # Current state, IP, RSSI
+NET:LIST                                   # Scan nearby SSIDs (SoftAP only)
+NET:SET,"ssid","pass"                      # Set credentials
+NET:RESET                                  # Clear credentials, enter SoftAP
+```
+
+### Status LED (GPIO2, active-low)
+
+- Fast blink ~125ms: SoftAP active, waiting for credentials
+- Slow blink ~400ms: Connecting to configured network
+- Solid on: STA connected
+
+### HTTP API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/status` | GET | Onboarding state, SSID, IP, RSSI, firmware version |
+| `/api/scan` | GET | Nearby networks (ssid, rssi, secure, channel) |
+| `/api/wifi` | POST | `{"ssid":"...","pass":"..."}` to connect |
+
+## Testing
+
+### C++ Tests (PlatformIO)
+
+```bash
+pio test -e native                         # All native tests (fast, no hardware)
+pio test -e native -f test_MotorControl/test_CommandPipeline  # Single test
+pio test -e esp32DedicatedStep             # On-device tests
+```
+
+### Python Tests
+
+```bash
+poetry run pytest tools/mirror_cli/tests/  # Direct pytest
+pio run -t test_python                     # Via PlatformIO target
+pio test -e native                         # Also runs Python tests via shim
+```
+
+## Linting & Formatting
+
+### C++ (clang-tidy + cppcheck)
+
+```bash
+pio check -e esp32DedicatedStep -e native  # Lint all environments
+CLANG_FORMAT_FIX=1 pio check ...           # Auto-fix formatting
+```
+
+### Python (Ruff)
+
+```bash
+pio run -t lint_python                     # Lint
+pio run -t format_python                   # Format
+./scripts/python_lint.sh                   # Direct Ruff lint
+./scripts/python_format.sh                 # Direct Ruff format
+```
+
+## Configuration
+
+### Build Flags
+
+- `-DUSE_STUB_BACKEND`: Use StubMotorController (no hardware), default for `native`
+- `-DUSE_SHARED_STEP=1`: Shared-step RMT pulse generation for 16+ motors
+
+### Motion Constants
+
+See [MotorControlConstants.h](../lib/MotorControl/include/MotorControl/MotorControlConstants.h):
+
+- `DEFAULT_SPEED_SPS`, `DEFAULT_ACCEL_SPS2`: Motion defaults
+- `MIN_POS_STEPS`, `MAX_POS_STEPS`: Position limits
+- `MAX_RUNNING_TIME_S`, `MAX_COOL_DOWN_TIME_S`: Thermal budget

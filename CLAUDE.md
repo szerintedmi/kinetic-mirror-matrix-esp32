@@ -10,8 +10,17 @@ pio run -e esp32DedicatedStep      # FastAccelStepper-based, 8 motors, dedicated
 pio run -e esp32SharedStep         # Shared-step (RMT) variant for 16+ motors
 pio run -e native                  # Native build for host-side tests (stub backend)
 
-# Upload to device
+# Upload to device (USB)
 pio run -e esp32DedicatedStep -t upload
+
+# Upload to device (OTA, single)
+pio run -e esp32DedicatedStep -t upload --upload-port <IP>
+
+# Multi-device OTA deployment (builds once, deploys in parallel)
+poetry run python -m tools.deploy.ota_deploy  # Build and deploy (default)
+poetry run python -m tools.deploy.ota_deploy --build-only  # Build only
+poetry run python -m tools.deploy.ota_deploy --skip-build  # Deploy existing build
+# Config: tools/deploy/ota_devices.toml
 
 # Build and upload LittleFS (Wi-Fi portal assets)
 pio run -e esp32DedicatedStep -t buildfs
@@ -86,6 +95,7 @@ MotorController interface (HardwareMotorController or StubMotorController)
 - `lib/net_onboarding/` - Wi-Fi provisioning (SoftAP portal + NVS storage)
 - `lib/transport/` - MQTT command/response envelope handling
 - `tools/mirror_cli/` - Python host CLI with interactive TUI
+- `tools/deploy/` - Multi-device OTA deployment tooling
 
 ### Build Configurations
 

@@ -1,0 +1,9 @@
+# OTA Deployment Device Configuration
+# Copy to ota_devices.toml and customize with your device IPs
+
+[devices]
+# List of device IP addresses for OTA deployment
+ips = [
+    "192.168.1.100",
+    "192.168.1.101",
+]

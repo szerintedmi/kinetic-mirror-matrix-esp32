@@ -76,8 +76,9 @@
     },
     "editor.formatOnSave": true,
     "[cpp]": {
-        "editor.defaultFormatter": "ms-vscode.cpptools"
+        "editor.defaultFormatter": "llvm-vs-code-extensions.vscode-clangd"
     },
+    "C_Cpp.intelliSenseEngine": "disabled",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.codeActionsOnSave": {
@@ -93,7 +94,7 @@
         "--background-index",
         "--clang-tidy",
         "--compile-commands-dir=${workspaceFolder}",
-        "--header-insertion=never"
-    ],
-    "clang-tidy.executable": "${workspaceFolder}/.platformio/packages/tool-clangtidy/bin/clang-tidy"
+        "--header-insertion=never",
+        "--query-driver=**/*xtensa-esp32-elf*"
+    ]
 }

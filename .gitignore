@@ -27,6 +27,10 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 
+# OTA deployment logs and config
+tools/deploy/logs/
+tools/deploy/ota_devices.toml
+
 # C++ objects and libs
 # Prerequisites
 *.d
