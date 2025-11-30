@@ -30,12 +30,12 @@ static constexpr uint16_t kAutoEnableDelayUs = 2000;
 // Concrete adapter using FastAccelStepper library, step pin only
 class FasAdapterEsp32Impl : public FasAdapterEsp32 {
 public:
-  FasAdapterEsp32Impl()  // NOLINT(modernize-use-equals-default)
-  {
-    this->steppers_.fill(nullptr);
-    this->step_pins_.fill(-1);
-    this->last_speed_.fill(-1);
-    this->last_accel_.fill(-1);
+  // NOLINTNEXTLINE(modernize-use-equals-default) - need to fill arrays with -1, not zero
+  FasAdapterEsp32Impl() {
+    steppers_.fill(nullptr);
+    step_pins_.fill(-1);
+    last_speed_.fill(-1);
+    last_accel_.fill(-1);
   }
 
   void begin() override {

@@ -23,7 +23,8 @@ namespace {
 constexpr uint32_t kSerialGracePeriodMs = 500;
 
 // Tiered loop timing: motor tick runs every iteration, network work is throttled
-constexpr uint32_t kSlowTickIntervalMs = 20;   // Network/MQTT work interval (50Hz)
+constexpr uint32_t kSlowTickIntervalMs = 20;           // Network/MQTT work interval (50Hz)
+constexpr uint32_t kMotionStatusIntervalMs = 500;      // MQTT status publish interval during motion
 constexpr size_t kMaxSerialBytesPerTick = 32;  // Limit serial processing per tick
 
 struct SerialConsoleState {
@@ -53,8 +54,8 @@ void TickBackendsNetwork(SerialConsoleState& state, uint32_t now_ms);
 bool StatusTopicHasDeviceId(const std::string& topic) {
   constexpr const char* kPrefix = "devices/";
   constexpr const char* kSuffix = "/status";
-  const size_t prefix_length = std::strlen(kPrefix);  // NOLINT(cppcoreguidelines-init-variables)
-  const size_t suffix_length = std::strlen(kSuffix);  // NOLINT(cppcoreguidelines-init-variables)
+  const size_t prefix_length = std::strlen(kPrefix);
+  const size_t suffix_length = std::strlen(kSuffix);
   if (topic.size() <= prefix_length + suffix_length) {
     return false;
   }
@@ -66,7 +67,7 @@ bool StatusTopicHasDeviceId(const std::string& topic) {
   }
   std::string node_segment = topic.substr(
       prefix_length,
-      topic.size() - prefix_length - suffix_length);  // NOLINT(cppcoreguidelines-init-variables)
+      topic.size() - prefix_length - suffix_length);
   return !node_segment.empty() && (node_segment.find('/') == std::string::npos);
 }
 
@@ -86,8 +87,7 @@ bool HandleGracePeriod(SerialConsoleState& state, uint32_t now_ms) {
 
 void ProcessSerialInput(SerialConsoleState& state) {
   while (Serial.available() > 0) {
-    const char input_char =
-        static_cast<char>(Serial.read());  // NOLINT(cppcoreguidelines-init-variables)
+    const char input_char = static_cast<char>(Serial.read());
 
     // Track previous length for echo handling
     const size_t prev_len = state.input_buffer.length();
@@ -130,8 +130,7 @@ void ProcessSerialInput(SerialConsoleState& state) {
 void ProcessSerialInputLimited(SerialConsoleState& state, size_t max_bytes) {
   size_t processed = 0;
   while (Serial.available() > 0 && processed < max_bytes) {
-    const char input_char =
-        static_cast<char>(Serial.read());  // NOLINT(cppcoreguidelines-init-variables)
+    const char input_char = static_cast<char>(Serial.read());
     ++processed;
 
     // Track previous length for echo handling
@@ -200,10 +199,8 @@ void TickBackendsNetwork(SerialConsoleState& state, uint32_t now_ms) {
   bool any_moving = false;
   bool any_awake = false;
   MotorController& controller = state.command_processor->controller();
-  size_t motor_count = controller.motorCount();  // NOLINT(cppcoreguidelines-init-variables)
-  for (size_t motor_index = 0; motor_index < motor_count;
-       ++motor_index)  // NOLINT(cppcoreguidelines-init-variables)
-  {
+  const size_t motor_count = controller.motorCount();
+  for (size_t motor_index = 0; motor_index < motor_count; ++motor_index) {
     const MotorState& motor_state = controller.state(motor_index);
     if (motor_state.moving) {
       any_moving = true;
@@ -256,7 +253,7 @@ void serial_console_setup() {
       return state.presence_client->enqueuePublish(msg);
     };
     mqtt::MqttStatusPublisher::Config status_cfg;
-    status_cfg.motion_interval_ms = 500;  // default 200ms
+    status_cfg.motion_interval_ms = kMotionStatusIntervalMs;
     state.status_publisher = new mqtt::MqttStatusPublisher(publish_fn, net_onboarding::Net(), status_cfg);
     state.status_publisher->setTopic(
         state.presence_client != nullptr ? state.presence_client->statusTopic() : std::string());
@@ -281,9 +278,9 @@ void serial_console_setup() {
     state.serial_sink_token = transport::response::ResponseDispatcher::Instance().RegisterSink(
         [](const transport::response::Event& evt) {
           auto line = transport::response::EventToLine(evt);
-          std::string text = line.raw.empty()
-                                 ? transport::command::SerializeLine(line)
-                                 : line.raw;  // NOLINT(cppcoreguidelines-init-variables)
+          const std::string& text = line.raw.empty()
+                                        ? transport::command::SerializeLine(line)
+                                        : line.raw;
           if (!text.empty()) {
             Serial.println(text.c_str());
           }
@@ -320,7 +317,7 @@ void serial_console_setup() {
 
 void serial_console_tick() {
   auto& state = ConsoleState();
-  const uint32_t now_ms = millis();  // NOLINT(cppcoreguidelines-init-variables)
+  const uint32_t now_ms = millis();
   if (HandleGracePeriod(state, now_ms)) {
     return;
   }

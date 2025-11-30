@@ -75,8 +75,10 @@ def generate_version_header() -> None:
 
 #pragma once
 
+// NOLINTBEGIN(cppcoreguidelines-macro-usage)
 #define GIT_COMMIT_HASH "{commit_hash}"
 #define GIT_COMMIT_DATE "{commit_date}"
+// NOLINTEND(cppcoreguidelines-macro-usage)
 '''
 
     # Only write if content changed (avoid unnecessary rebuilds)

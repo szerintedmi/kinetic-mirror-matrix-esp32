@@ -28,6 +28,7 @@ void MicrostepGpio::applyPinStates() {
   // High     High     Low      1/8 step
   // Low      Low      High     1/16 step
   // High     Low      High     1/32 step
+  // NOLINTBEGIN(bugprone-branch-clone)
   switch (current_mode_) {
   case MicrostepMode::FULL:
     digitalWrite(m0_pin_, LOW);
@@ -60,4 +61,5 @@ void MicrostepGpio::applyPinStates() {
     digitalWrite(m2_pin_, HIGH);
     break;
   }
+  // NOLINTEND(bugprone-branch-clone)
 }
