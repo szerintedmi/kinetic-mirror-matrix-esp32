@@ -11,6 +11,7 @@
 #include <deque>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -45,6 +46,7 @@ public:
 
 private:
   void handleIncoming(const std::string& topic, const std::string& payload);
+  void processMessage(const std::string& topic, const std::string& payload, uint32_t now_ms);
   bool isDuplicate(const std::string& cmd_id) const;
   void recordCompleted(const std::string& cmd_id,
                        const std::string& ack_payload,
@@ -218,6 +220,13 @@ private:
 
   void bindStreamToMessageId(DispatchStream& stream, const std::string& msg_id);
   void processStreamEvent(DispatchStream& stream, const transport::response::Event& event);
+
+  struct PendingMessage {
+    std::string topic;
+    std::string payload;
+  };
+  std::deque<PendingMessage> command_queue_;
+  mutable std::mutex queue_mutex_;
 };
 
 }  // namespace mqtt

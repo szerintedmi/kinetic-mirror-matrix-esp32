@@ -55,6 +55,7 @@ struct Harness {
   void send(const std::string& payload) {
     TEST_ASSERT_TRUE_MESSAGE(static_cast<bool>(callback), "Server not subscribed");
     callback("devices/test/cmd", payload);
+    server.loop(now_ms);
   }
 
   void advance(uint32_t delta) {
@@ -114,18 +115,17 @@ struct SaturatedQueueHarness {
   std::vector<std::string> logs;
 
   SaturatedQueueHarness(std::size_t capacity, const std::string& topic)
-      : queue(capacity),
-        server(
-            processor,
-            [this](const mqtt::PublishMessage& msg) { return queue.publish(msg); },
-            [this](const std::string& /*topic*/,
-                   uint8_t /*qos*/,
-                   mqtt::MqttCommandServer::SubscribeCallback cb) {
-              callback = std::move(cb);
-              return true;
-            },
-            [this](const std::string& line) { logs.push_back(line); },
-            [this]() -> uint32_t { return now_ms; }) {
+      : queue(capacity), server(
+                             processor,
+                             [this](const mqtt::PublishMessage& msg) { return queue.publish(msg); },
+                             [this](const std::string& /*topic*/,
+                                    uint8_t /*qos*/,
+                                    mqtt::MqttCommandServer::SubscribeCallback cb) {
+                               callback = std::move(cb);
+                               return true;
+                             },
+                             [this](const std::string& line) { logs.push_back(line); },
+                             [this]() -> uint32_t { return now_ms; }) {
     bool bound = server.begin(topic);
     (void)bound;
   }
@@ -133,6 +133,7 @@ struct SaturatedQueueHarness {
   void send(const std::string& payload) {
     TEST_ASSERT_TRUE_MESSAGE(static_cast<bool>(callback), "Server not subscribed");
     callback("devices/test/cmd", payload);
+    server.loop(now_ms);
   }
 
   void advance(uint32_t delta) {
@@ -443,8 +444,8 @@ void test_help_command_success() {
 
 void test_set_speed_command_success() {
   Harness h;
-  h.send(makeSetPayload("cmd-set-speed",
-                        [](ArduinoJson::JsonObject& obj) { obj["SPEED"] = 1500; }));
+  h.send(
+      makeSetPayload("cmd-set-speed", [](ArduinoJson::JsonObject& obj) { obj["SPEED"] = 1500; }));
 
   TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
   auto completion = h.parse(0);

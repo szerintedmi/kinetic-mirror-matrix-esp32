@@ -22,10 +22,15 @@ namespace {
 
 constexpr uint32_t kSerialGracePeriodMs = 500;
 
+// Tiered loop timing: motor tick runs every iteration, network work is throttled
+constexpr uint32_t kSlowTickIntervalMs = 20;   // Network/MQTT work interval (50Hz)
+constexpr size_t kMaxSerialBytesPerTick = 32;  // Limit serial processing per tick
+
 struct SerialConsoleState {
   MotorCommandProcessor* command_processor = nullptr;
   SerialInputBuffer input_buffer{};
   uint32_t ignore_until_ms = 0;  // grace period to ignore deploy-time noise
+  uint32_t last_slow_tick_ms = 0;  // track last network/MQTT tick for throttling
   mqtt::AsyncMqttPresenceClient* presence_client = nullptr;
   mqtt::MqttStatusPublisher* status_publisher = nullptr;
   mqtt::MqttConfigPublisher* config_publisher = nullptr;
@@ -41,7 +46,9 @@ SerialConsoleState& ConsoleState() {
 
 bool HandleGracePeriod(SerialConsoleState& state, uint32_t now_ms);
 void ProcessSerialInput(SerialConsoleState& state);
+void ProcessSerialInputLimited(SerialConsoleState& state, size_t max_bytes);
 void TickBackends(SerialConsoleState& state, uint32_t now_ms);
+void TickBackendsNetwork(SerialConsoleState& state, uint32_t now_ms);
 
 bool StatusTopicHasDeviceId(const std::string& topic) {
   constexpr const char* kPrefix = "devices/";
@@ -118,10 +125,62 @@ void ProcessSerialInput(SerialConsoleState& state) {
   }
 }
 
+// Limited version of ProcessSerialInput: process at most max_bytes per call
+// to prevent blocking the motor tick loop when large serial data arrives
+void ProcessSerialInputLimited(SerialConsoleState& state, size_t max_bytes) {
+  size_t processed = 0;
+  while (Serial.available() > 0 && processed < max_bytes) {
+    const char input_char =
+        static_cast<char>(Serial.read());  // NOLINT(cppcoreguidelines-init-variables)
+    ++processed;
+
+    // Track previous length for echo handling
+    const size_t prev_len = state.input_buffer.length();
+    const auto result = state.input_buffer.addChar(input_char);
+
+    switch (result) {
+      case SerialInputBuffer::AddResult::kContinue:
+        // Echo handling for normal characters
+        if (input_char == SerialInputBuffer::kBackspaceChar ||
+            input_char == SerialInputBuffer::kDeleteChar) {
+          if (prev_len > state.input_buffer.length()) {
+            Serial.write('\b');
+            Serial.write(' ');
+            Serial.write('\b');
+          }
+        } else if (input_char != '\r' && !state.input_buffer.isOverflowPending()) {
+          Serial.write(input_char);
+        }
+        break;
+
+      case SerialInputBuffer::AddResult::kLineReady:
+        Serial.println();
+        if (state.command_processor != nullptr) {
+          (void)state.command_processor->execute(
+              std::string(state.input_buffer.getLine()), millis());
+        }
+        state.input_buffer.reset();
+        break;
+
+      case SerialInputBuffer::AddResult::kOverflowError:
+        Serial.println();
+        Serial.println("CTRL:ERR E03 BAD_PARAM buffer_overflow");
+        break;
+    }
+  }
+}
+
+// Full tick including motor controller (used by original API)
 void TickBackends(SerialConsoleState& state, uint32_t now_ms) {
   if (state.command_processor != nullptr) {
     state.command_processor->tick(now_ms);
   }
+  TickBackendsNetwork(state, now_ms);
+}
+
+// Network/MQTT work only - excludes motor tick for use in tiered loop
+// Motor tick (including pollLatch) should be called separately at high frequency
+void TickBackendsNetwork(SerialConsoleState& state, uint32_t now_ms) {
   transport::response::CompletionTracker::Instance().Tick(now_ms);
 
   if (state.presence_client == nullptr || state.command_processor == nullptr) {
@@ -196,7 +255,9 @@ void serial_console_setup() {
       }
       return state.presence_client->enqueuePublish(msg);
     };
-    state.status_publisher = new mqtt::MqttStatusPublisher(publish_fn, net_onboarding::Net());
+    mqtt::MqttStatusPublisher::Config status_cfg;
+    status_cfg.motion_interval_ms = 500;  // default 200ms
+    state.status_publisher = new mqtt::MqttStatusPublisher(publish_fn, net_onboarding::Net(), status_cfg);
     state.status_publisher->setTopic(
         state.presence_client != nullptr ? state.presence_client->statusTopic() : std::string());
     state.status_publisher->forceImmediate();
@@ -263,8 +324,24 @@ void serial_console_tick() {
   if (HandleGracePeriod(state, now_ms)) {
     return;
   }
-  ProcessSerialInput(state);
-  TickBackends(state, now_ms);
+
+  // HIGH PRIORITY: Motor tick runs every call to ensure pollLatch() is called
+  // frequently enough (~100Hz minimum) to prevent step skipping from ISR-deferred
+  // SPI latch delays
+  if (state.command_processor != nullptr) {
+    state.command_processor->tick(now_ms);
+  }
+
+  // MEDIUM PRIORITY: Serial input processing (limited bytes per call to prevent
+  // blocking the motor tick loop when large data arrives)
+  ProcessSerialInputLimited(state, kMaxSerialBytesPerTick);
+
+  // LOW PRIORITY: Network/MQTT work (throttled to prevent main loop starvation
+  // that causes MQTT keepalive timeouts)
+  if (now_ms - state.last_slow_tick_ms >= kSlowTickIntervalMs) {
+    TickBackendsNetwork(state, now_ms);
+    state.last_slow_tick_ms = now_ms;
+  }
 }
 
 #endif  // ARDUINO

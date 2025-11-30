@@ -315,6 +315,7 @@ bool HardwareMotorController::homeMask(uint32_t mask,
   return true;
 }
 
+
 void HardwareMotorController::tick(uint32_t now_ms) {
   // Flush any ISR-deferred shift register updates (SPI not safe in ISR)
   fas_->pollLatch();

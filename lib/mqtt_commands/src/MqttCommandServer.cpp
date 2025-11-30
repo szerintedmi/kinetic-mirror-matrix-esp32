@@ -254,13 +254,35 @@ bool MqttCommandServer::begin(const std::string& device_topic) {
 void MqttCommandServer::loop(uint32_t now_ms) {
   finalizeCompleted(now_ms);
   transport::response::CompletionTracker::Instance().Tick(now_ms);
+
+  // Process queued commands on the main thread
+  std::deque<PendingMessage> processing_queue;
+  {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    if (!command_queue_.empty()) {
+      processing_queue = std::move(command_queue_);
+      command_queue_.clear();
+    }
+  }
+
+  while (!processing_queue.empty()) {
+    const auto& msg = processing_queue.front();
+    processMessage(msg.topic, msg.payload, now_ms);
+    processing_queue.pop_front();
+  }
 }
 
 void MqttCommandServer::handleIncoming(const std::string& topic, const std::string& payload) {
   if (topic != command_topic_) {
     return;
   }
-  uint32_t now_ms = clock_ ? clock_() : 0;
+  std::lock_guard<std::mutex> lock(queue_mutex_);
+  command_queue_.push_back({topic, payload});
+}
+
+void MqttCommandServer::processMessage(const std::string& topic,
+                                       const std::string& payload,
+                                       uint32_t now_ms) {
 
   ArduinoJson::JsonDocument doc;
   std::string parse_error;
@@ -547,6 +569,15 @@ bool MqttCommandServer::streamConsumesResponse(DispatchStream* stream_ptr,
     // even if the dispatcher only delivered a DONE event with msg_id.
     stream_ptr->response = response;
     publishAckFromStream(*stream_ptr);
+    // Also publish the DONE since we have it immediately in the contract
+    const transport::response::Event* done_event = nullptr;
+    for (const auto& evt : contract.events) {
+      if (evt.type == transport::response::EventType::kDone) {
+        done_event = &evt;
+        break;
+      }
+    }
+    publishCompletionFromStream(*stream_ptr, done_event);
     return true;
   }
   if (!saw_error && stream_ptr->saw_event) {
@@ -1278,7 +1309,9 @@ void MqttCommandServer::handleDispatcherEvent(const transport::response::Event& 
   if (event.cmd_id.empty()) {
     return;
   }
-  constexpr std::size_t kMaxOrphanCommands = 4;
+  // Increased from 4 to 16 to support 8 concurrent motor commands per controller
+  // plus some headroom for command sequences
+  constexpr std::size_t kMaxOrphanCommands = 16;
   std::shared_ptr<DispatchStream> stream;
   std::string key;
   auto direct = streams_.find(event.cmd_id);
