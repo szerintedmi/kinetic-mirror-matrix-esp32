@@ -1199,6 +1199,17 @@ bool MqttCommandServer::buildSetCommand(ArduinoJson::JsonVariantConst params,
       key = "MICROSTEP";
       value = val;
       recognized = true;
+    } else if (name.rfind("THERMAL_BUDGET:", 0) == 0) {
+      // Debug command: SET THERMAL_BUDGET:<id>=<tenths>
+      // Key format: "THERMAL_BUDGET:0", value: integer (can be negative)
+      if (!(kv.value().is<long>() || kv.value().is<int>())) {
+        error = "THERMAL_BUDGET value must be integer";
+        return false;
+      }
+      long val = kv.value().as<long>();
+      key = name;  // Preserve "THERMAL_BUDGET:X" format
+      value = std::to_string(val);
+      recognized = true;
     } else {
       unsupported = true;
       error = "unsupported field";

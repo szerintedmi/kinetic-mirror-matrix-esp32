@@ -91,12 +91,37 @@ public:
   const std::vector<StartCall>& starts() const {
     return starts_;
   }
+  void forceStop(uint8_t id) override {
+    if (id < 8) {
+      moving_[id] = false;
+      force_stop_calls_.push_back(id);
+      g_events.push_back({"FORCE_STOP", (int)id});
+    }
+  }
+  void disableOutputs(uint8_t id) override {
+    if (id < 8) {
+      disable_outputs_calls_.push_back(id);
+      g_events.push_back({"DISABLE_OUTPUTS", (int)id});
+    }
+  }
+  const std::vector<uint8_t>& forceStopCalls() const {
+    return force_stop_calls_;
+  }
+  const std::vector<uint8_t>& disableOutputsCalls() const {
+    return disable_outputs_calls_;
+  }
+  void clearCalls() {
+    force_stop_calls_.clear();
+    disable_outputs_calls_.clear();
+  }
 
 private:
   bool moving_[8] = {false, false, false, false, false, false, false, false};
   long position_[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   long targets_[8] = {0, 0, 0, 0, 0, 0, 0, 0};
   std::vector<StartCall> starts_;
+  std::vector<uint8_t> force_stop_calls_;
+  std::vector<uint8_t> disable_outputs_calls_;
 };
 
 static void clear_events() {
@@ -213,4 +238,64 @@ void test_backend_speed_accel_passed_to_adapter() {
   TEST_ASSERT_EQUAL_UINT8(6, s.id);
   TEST_ASSERT_EQUAL(5000, s.speed);
   TEST_ASSERT_EQUAL(12000, s.accel);
+}
+
+// Thermal safety: forceStop() should be called before disableOutputs() during thermal shutdown
+// This prevents auto-enable from fighting with the disable when motor is actively moving
+void test_backend_thermal_overrun_calls_forceStop_before_disable() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 8);
+  ctrl.setThermalLimitsEnabled(true);
+  shift.resetCounters();
+  clear_events();
+  fas.clearCalls();
+
+  // Start a move - motor will be "moving" and "awake"
+  bool ok = ctrl.moveAbsMask(1u << 0,
+                             1000,
+                             MotorControlConstants::DEFAULT_SPEED_SPS,
+                             MotorControlConstants::DEFAULT_ACCEL_SPS2,
+                             0);
+  TEST_ASSERT_TRUE(ok);
+
+  // Keep motor moving (simulate long move by not completing it)
+  fas.setMoving(0, true);
+
+  // First tick to establish awake state (budget drains based on awake flag from previous tick)
+  ctrl.tick(0);
+
+  // Advance time past budget + grace period to trigger thermal shutdown
+  // Budget is MAX_RUNNING_TIME_S (60s), grace is AUTO_SLEEP_IF_OVER_BUDGET_S (5s)
+  const uint32_t t_ms = (MotorControlConstants::MAX_RUNNING_TIME_S +
+                         MotorControlConstants::AUTO_SLEEP_IF_OVER_BUDGET_S + 1) *
+                        1000;
+  ctrl.tick(t_ms);
+
+  // forceStop should have been called for motor 0
+  TEST_ASSERT_EQUAL_UINT(1, fas.forceStopCalls().size());
+  TEST_ASSERT_EQUAL_UINT8(0, fas.forceStopCalls()[0]);
+
+  // disableOutputs should also have been called (at least once from thermal overrun)
+  TEST_ASSERT_TRUE(fas.disableOutputsCalls().size() >= 1);
+  TEST_ASSERT_EQUAL_UINT8(0, fas.disableOutputsCalls()[0]);
+
+  // Verify order: forceStop should come BEFORE disableOutputs in thermal handling
+  // Find positions in event log
+  int force_stop_pos = -1;
+  int disable_outputs_pos = -1;
+  for (size_t i = 0; i < g_events.size(); ++i) {
+    if (g_events[i].type == "FORCE_STOP" && g_events[i].id == 0) {
+      force_stop_pos = static_cast<int>(i);
+    }
+    if (g_events[i].type == "DISABLE_OUTPUTS" && g_events[i].id == 0 && force_stop_pos >= 0) {
+      // Only capture disableOutputs AFTER we've seen forceStop (the thermal one)
+      disable_outputs_pos = static_cast<int>(i);
+      break;  // Found the pair we care about
+    }
+  }
+  TEST_ASSERT_TRUE_MESSAGE(force_stop_pos >= 0, "forceStop should be called");
+  TEST_ASSERT_TRUE_MESSAGE(disable_outputs_pos >= 0, "disableOutputs should be called after forceStop");
+  TEST_ASSERT_TRUE_MESSAGE(force_stop_pos < disable_outputs_pos,
+                           "forceStop should be called BEFORE disableOutputs");
 }

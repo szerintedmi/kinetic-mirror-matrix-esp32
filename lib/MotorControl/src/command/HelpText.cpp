@@ -33,6 +33,7 @@ const std::string& HelpText() {
     os << "GET DECEL\n";
     os << "GET THERMAL_LIMITING\n";
     os << "SET THERMAL_LIMITING=OFF|ON\n";
+    os << "SET THERMAL_BUDGET:<id>=<tenths> (debug: set budget in 0.1s units, e.g. -60=-6s)\n";
     os << "SET SPEED=<steps_per_second>\n";
     os << "SET ACCEL=<steps_per_second^2>\n";
     os << "SET DECEL=<steps_per_second^2>\n";

@@ -42,6 +42,10 @@ public:
   virtual void enableOutputs(uint8_t /*motor_id*/) {}
   virtual void disableOutputs(uint8_t /*motor_id*/) {}
 
+  // Force stop motion immediately (used for thermal shutdown to prevent
+  // auto-enable from fighting with disableOutputs)
+  virtual void forceStop(uint8_t /*motor_id*/) {}
+
   // Optional: deceleration hint for adapters that implement asymmetric ramps.
   // Default is no-op; FastAccelStepper path uses symmetric acceleration.
   virtual void setDeceleration(int /*decel_sps2*/) {}

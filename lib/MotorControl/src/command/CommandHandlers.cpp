@@ -1098,6 +1098,27 @@ CommandResult QueryCommandHandler::handleSet(const std::string& args,
     context.controller().setDeceleration(context.defaultDecel());
     return MakeDoneResult(kAction, msg_id);
   }
+  // SET THERMAL_BUDGET:<id>=<tenths> - debug command to set motor budget
+  // Example: SET THERMAL_BUDGET:0=-60 sets motor 0 budget to -6 seconds (triggers overrun)
+  if (key.rfind("THERMAL_BUDGET:", 0) == 0) {
+    std::string id_str = key.substr(15);  // after "THERMAL_BUDGET:"
+    long motor_id = 0;
+    long budget_val = 0;
+    if (!ParseInt(id_str, motor_id) || motor_id < 0 ||
+        static_cast<size_t>(motor_id) >= context.controller().motorCount()) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E02", "BAD_ID", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    if (!ParseInt(val, budget_val)) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.controller().setBudget(static_cast<size_t>(motor_id), static_cast<int32_t>(budget_val));
+    return MakeDoneResult(
+        kAction,
+        msg_id,
+        {{"id", std::to_string(motor_id)}, {"budget_tenths", std::to_string(budget_val)}});
+  }
   if (key == "MICROSTEP") {
     MicrostepMode mode;
     uint8_t multiplier;

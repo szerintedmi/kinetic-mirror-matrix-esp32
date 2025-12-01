@@ -48,6 +48,9 @@ public:
   // Global thermal runtime limiting flag control
   virtual void setThermalLimitsEnabled(bool enabled) = 0;
 
+  // Debug: set thermal budget for a motor (tenths of seconds, can be negative)
+  virtual void setBudget(size_t idx, int32_t budget_tenths) = 0;
+
   // Optional global deceleration hint for underlying adapter
   virtual void setDeceleration(int /*decel_sps2*/) {}
 

@@ -44,6 +44,11 @@ public:
   void setThermalLimitsEnabled(bool enabled) override {
     thermal_limits_enabled_ = enabled;
   }
+  void setBudget(size_t idx, int32_t budget_tenths) override {
+    if (idx < count_) {
+      motors_[idx].budget_tenths = budget_tenths;
+    }
+  }
   void setDeceleration(int decel_sps2) override;
   void setMicrostepMode(MicrostepMode mode) override;
 

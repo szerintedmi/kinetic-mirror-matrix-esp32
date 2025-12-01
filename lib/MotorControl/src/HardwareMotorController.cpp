@@ -393,8 +393,10 @@ void HardwareMotorController::tick(uint32_t now_ms) {
       if (motors_[i].budget_tenths < overrun_tenths) {
         // Clear WAKE override and force outputs off
         forced_awake_mask_ &= (uint8_t)~(1u << i);
-#if defined(ARDUINO)
+        // Stop motion first to prevent auto-enable fighting with disable
+        fas_->forceStop(i);
         fas_->disableOutputs(i);
+#if defined(ARDUINO)
         fas_->setAutoEnable(i, true);
 #else
         if (sleep_bits_ & (1u << i)) {

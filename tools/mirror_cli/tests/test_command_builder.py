@@ -305,6 +305,16 @@ class TestSetCommand(unittest.TestCase):
         req = parse_serial_command("SET MICROSTEP=1/32")
         self.assertEqual(req.params["MICROSTEP"], "1/32")
 
+    def test_set_thermal_budget(self):
+        # THERMAL_BUDGET:<id> is a debug command that takes integer
+        req = parse_serial_command("SET THERMAL_BUDGET:0=-60")
+        self.assertEqual(req.params["THERMAL_BUDGET:0"], -60)
+        self.assertIsInstance(req.params["THERMAL_BUDGET:0"], int)
+
+    def test_set_thermal_budget_positive(self):
+        req = parse_serial_command("SET THERMAL_BUDGET:3=300")
+        self.assertEqual(req.params["THERMAL_BUDGET:3"], 300)
+
     def test_set_missing_equals_raises(self):
         # "SET SPEED 4000" is parsed as two tokens, failing "single assignment" check
         with self.assertRaises(CommandParseError):

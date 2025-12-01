@@ -166,6 +166,16 @@ public:
     }
     stepper->disableOutputs();
   }
+  void forceStop(uint8_t motor_id) override  // NOLINT(readability-convert-member-functions-to-static)
+  {
+    if (motor_id >= kMotorSlots) {
+      return;
+    }
+    auto* stepper = this->steppers_[motor_id];
+    if (stepper != nullptr) {
+      stepper->forceStopAndNewPosition(stepper->getCurrentPosition());
+    }
+  }
 
   void pollLatch() override { FasAdapterEsp32::pollLatchStatic(); }
 

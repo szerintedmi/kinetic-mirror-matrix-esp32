@@ -52,6 +52,7 @@ void test_last_op_timing_home();
 void test_wake_reject_enabled_no_budget();
 void test_wake_warn_disabled_no_budget_then_ok();
 void test_auto_sleep_overrun_cancels_move_and_awake();
+void test_set_thermal_budget_command();
 void test_preflight_e10_move_enabled_err();
 void test_preflight_e11_move_enabled_err();
 void test_preflight_warn_when_disabled_then_ok();
@@ -96,6 +97,7 @@ void test_backend_wake_sleep_overrides();
 void test_backend_busy_rule_overlapping_move();
 void test_backend_dir_latched_once_per_move();
 void test_backend_speed_accel_passed_to_adapter();
+void test_backend_thermal_overrun_calls_forceStop_before_disable();
 
 // Protocol speed/accel globals
 void test_get_set_speed_ok();
@@ -237,6 +239,8 @@ int main(int, char**) {
   setUp();
   RUN_TEST(test_auto_sleep_overrun_cancels_move_and_awake);
   setUp();
+  RUN_TEST(test_set_thermal_budget_command);
+  setUp();
   RUN_TEST(test_preflight_e10_move_enabled_err);
   setUp();
   RUN_TEST(test_preflight_e11_move_enabled_err);
@@ -278,6 +282,8 @@ int main(int, char**) {
   RUN_TEST(test_backend_dir_latched_once_per_move);
   setUp();
   RUN_TEST(test_backend_speed_accel_passed_to_adapter);
+  setUp();
+  RUN_TEST(test_backend_thermal_overrun_calls_forceStop_before_disable);
 
   // Shared STEP timing helpers (host-only)
   setUp();

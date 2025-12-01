@@ -100,6 +100,11 @@ def _parse_set_assignments(tokens: Sequence[str]) -> Dict[str, object]:
         if not _INTEGER_RE.fullmatch(value):
             raise CommandParseError(f"{name} must be integer")
         return {name: int(value)}
+    # THERMAL_BUDGET:<id> is a debug command that takes an integer (can be negative)
+    if name.startswith("THERMAL_BUDGET:"):
+        if not _INTEGER_RE.fullmatch(value):
+            raise CommandParseError(f"{name} must be integer")
+        return {name: int(value)}
     return {name: value}
 
 

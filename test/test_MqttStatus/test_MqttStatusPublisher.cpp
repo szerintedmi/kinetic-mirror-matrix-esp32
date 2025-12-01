@@ -54,6 +54,11 @@ public:
   }
   void tick(uint32_t) override {}
   void setThermalLimitsEnabled(bool) override {}
+  void setBudget(size_t idx, int32_t budget_tenths) override {
+    if (idx < motors_.size()) {
+      motors_[idx].budget_tenths = budget_tenths;
+    }
+  }
   void setDeceleration(int) override {}
 
   std::vector<MotorState>& data() {

@@ -295,8 +295,11 @@ Update configuration values. Only one field per request.
 | `DECEL`            | int    | >= 0                                         | Default deceleration in steps/s² |
 | `THERMAL_LIMITING` | string | "ON", "OFF"                                  | Enable/disable thermal limiting  |
 | `MICROSTEP`        | string | "FULL", "HALF", "1/4", "1/8", "1/16", "1/32" | Microstepping mode               |
+| `THERMAL_BUDGET:<id>` | int | any integer                                  | Debug: set motor budget (tenths of seconds) |
 
 **Note:** SET MICROSTEP requires all motors to be stopped and asleep. Returns `E04 BUSY` otherwise.
+
+**Note:** SET THERMAL_BUDGET is a debug command for testing thermal limits. Value is in tenths of seconds (e.g., -60 = -6s, which triggers thermal overrun after grace period).
 
 **Completion:**
 
@@ -317,6 +320,26 @@ Update configuration values. Only one field per request.
   "action": "SET",
   "status": "done",
   "result": { "MICROSTEP": "1/16", "multiplier": 16 }
+}
+```
+
+**SET THERMAL_BUDGET Request (debug):**
+
+```json
+{
+  "action": "SET",
+  "params": { "THERMAL_BUDGET:0": -60 }
+}
+```
+
+**SET THERMAL_BUDGET Completion:**
+
+```json
+{
+  "cmd_id": "...",
+  "action": "SET",
+  "status": "done",
+  "result": { "id": "0", "budget_tenths": "-60" }
 }
 ```
 

@@ -215,3 +215,35 @@ void test_auto_sleep_overrun_cancels_move_and_awake() {
   TEST_ASSERT_TRUE(line0.find(" moving=0") != std::string::npos);
   TEST_ASSERT_TRUE(line0.find(" awake=0") != std::string::npos);
 }
+
+void test_set_thermal_budget_command() {
+  MotorCommandProcessor p;
+  // Set budget to a specific value
+  std::string r = p.processLine("SET THERMAL_BUDGET:0=300", 0);
+  TEST_ASSERT_TRUE(r.rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(r.find("id=0") != std::string::npos);
+  TEST_ASSERT_TRUE(r.find("budget_tenths=300") != std::string::npos);
+
+  // Check STATUS shows the new budget (300 tenths = 30 seconds)
+  std::string st = p.processLine("STATUS", 0);
+  TEST_ASSERT_TRUE(st.find("budget_s=30") != std::string::npos);
+
+  // Set negative budget (overrun state)
+  std::string r2 = p.processLine("SET THERMAL_BUDGET:0=-60", 0);
+  TEST_ASSERT_TRUE(r2.rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(r2.find("budget_tenths=-60") != std::string::npos);
+
+  // Check STATUS shows negative budget
+  std::string st2 = p.processLine("STATUS", 0);
+  TEST_ASSERT_TRUE(st2.find("budget_s=-6") != std::string::npos);
+
+  // Bad motor ID should fail
+  std::string r3 = p.processLine("SET THERMAL_BUDGET:99=100", 0);
+  TEST_ASSERT_TRUE(r3.rfind("CTRL:ERR", 0) == 0);
+  TEST_ASSERT_TRUE(r3.find("E02") != std::string::npos);
+
+  // Bad value should fail
+  std::string r4 = p.processLine("SET THERMAL_BUDGET:0=abc", 0);
+  TEST_ASSERT_TRUE(r4.rfind("CTRL:ERR", 0) == 0);
+  TEST_ASSERT_TRUE(r4.find("E03") != std::string::npos);
+}
