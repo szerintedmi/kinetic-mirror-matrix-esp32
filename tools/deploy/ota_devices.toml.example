@@ -7,3 +7,7 @@ ips = [
     "192.168.1.100",
     "192.168.1.101",
 ]
+
+[ota]
+# OTA password - must match OTA_PASSWORD in secrets.h
+password = "kinetic-mirror-ota"

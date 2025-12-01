@@ -22,17 +22,16 @@ class FirmwareInfo:
     date: str  # GIT_COMMIT_DATE from version.h
 
 
-# OTA password from platformio.ini upload_flags
-OTA_PASSWORD = "kinetic-mirror-ota"
 OTA_PORT = 3232
 
 
 class PioWrapper:
     """Wrapper for PlatformIO build and espota.py upload operations."""
 
-    def __init__(self, env: str, project_dir: Path | None = None):
+    def __init__(self, env: str, project_dir: Path | None = None, ota_password: str = ""):
         self.env = env
         self.project_dir = project_dir or Path.cwd()
+        self.ota_password = ota_password
         # espota.py progress pattern: "Uploading: [====     ] 45%"
         self.progress_pattern = re.compile(r"]\s*(\d+)%")
 
@@ -127,7 +126,7 @@ class PioWrapper:
             "-p",
             str(OTA_PORT),
             "-a",
-            OTA_PASSWORD,
+            self.ota_password,
             "-f",
             str(firmware_path),
         ]

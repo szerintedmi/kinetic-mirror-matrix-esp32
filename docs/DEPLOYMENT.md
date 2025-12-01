@@ -14,10 +14,10 @@ pio run -e esp32DedicatedStep -t upload    # Upload firmware
 pio run -e esp32DedicatedStep -t uploadfs  # Upload filesystem
 
 # Upload via OTA (single device)
-pio run -e esp32DedicatedStep -t upload --upload-port <IP>
+poetry run python -m tools.deploy.ota_deploy --device <IP>
 
-# Multi-device OTA deployment (recommended)
-poetry run python -m tools.deploy.ota_deploy  # Build and deploy to all devices
+# Upload via OTA (all devices in config)
+poetry run python -m tools.deploy.ota_deploy
 ```
 
 ## Build Environments
@@ -74,35 +74,39 @@ Update firmware over the network using ArduinoOTA. Device must be on WiFi.
 
 ### OTA Password
 
-Configure in `include/secrets.h`:
+Configure in `include/secrets.h` (firmware side):
 
 ```cpp
 #define OTA_PASSWORD "your-secure-password"
 ```
 
-Must match `upload_flags` in `platformio.ini`:
+Configure in `tools/deploy/ota_devices.toml` (deploy script side):
 
-```ini
-upload_flags =
-    --auth=your-secure-password
+```toml
+[ota]
+password = "your-secure-password"
 ```
+
+Both must match for OTA uploads to succeed.
 
 ### Single Device OTA
 
 Get device IP from serial monitor, MQTT, or web portal, then:
 
 ```bash
-# Upload firmware
-pio run -e esp32DedicatedStep -t upload --upload-port <IP>
+# Build and deploy to single device
+poetry run python -m tools.deploy.ota_deploy --device <IP>
 
-# Upload filesystem
-pio run -e esp32DedicatedStep -t buildfs
-pio run -e esp32DedicatedStep -t uploadfs --upload-port <IP>
+# Deploy existing build (skip rebuild)
+poetry run python -m tools.deploy.ota_deploy --device <IP> --skip-build
+
+# Skip POST-deploy verification
+poetry run python -m tools.deploy.ota_deploy --device <IP> --no-verify
 ```
 
-### Multi-Device OTA Deployment
+### OTA Deploy Script
 
-Deploy to multiple devices in parallel with progress tracking and verification.
+Deploy to one or more devices with progress tracking and verification.
 
 #### Setup
 
@@ -111,19 +115,26 @@ Deploy to multiple devices in parallel with progress tracking and verification.
    cp tools/deploy/ota_devices.toml.example tools/deploy/ota_devices.toml
    ```
 
-2. Edit `tools/deploy/ota_devices.toml` with your device IPs:
+2. Edit `tools/deploy/ota_devices.toml`:
    ```toml
    [devices]
    ips = [
        "192.168.1.100",
        "192.168.1.101",
    ]
+
+   [ota]
+   # Must match OTA_PASSWORD in secrets.h
+   password = "kinetic-mirror-ota"
    ```
 
 #### Usage
 
 ```bash
-# Build and deploy to all devices (default)
+# Deploy to single device
+poetry run python -m tools.deploy.ota_deploy --device <IP>
+
+# Build and deploy to all devices in config
 poetry run python -m tools.deploy.ota_deploy
 
 # Build only, no deploy

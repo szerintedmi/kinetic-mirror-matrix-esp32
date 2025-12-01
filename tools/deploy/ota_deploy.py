@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """OTA deployment CLI for ESP32 devices.
 
-Builds firmware once, then deploys to multiple devices in parallel via OTA.
+Builds firmware once, then deploys to devices via OTA.
 Verifies successful deployment by checking /api/status on each device.
 
 Usage:
-    # Build and deploy to all devices (default)
+    # Deploy to single device
+    poetry run python -m tools.deploy.ota_deploy --device 192.168.1.100
+
+    # Build and deploy to all devices in config (default)
     poetry run python -m tools.deploy.ota_deploy
 
     # Build only (no deploy)
@@ -77,21 +80,55 @@ class OtaDeployer:
         deploy: bool = True,
         verify: bool = True,
         retry_file: Path | None = None,
+        single_device: str | None = None,
     ):
         self.config_path = config_path
         self.build = build
         self.deploy = deploy
         self.verify = verify
         self.retry_file = retry_file
+        self.single_device = single_device
         self.console = Console()
         self.project_dir = Path.cwd()
-        self.pio = PioWrapper(PIO_ENV, self.project_dir)
+        self.pio: PioWrapper | None = None  # Created after loading config
         self.log_dir = self.project_dir / "tools" / "deploy" / "logs"
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
+    def _load_config(self) -> tuple[list[str], str]:
+        """Load device IPs and OTA password from config file.
+
+        Returns:
+            Tuple of (list of IPs, OTA password)
+        """
+        if not self.config_path.exists():
+            self.console.print(f"[red]Config not found:[/] {self.config_path}")
+            self.console.print("Copy ota_devices.toml.example and customize it.")
+            sys.exit(1)
+
+        try:
+            with open(self.config_path, "rb") as f:
+                config = tomllib.load(f)
+                devices = config.get("devices", {})
+                ips = devices.get("ips", [])
+                if not ips:
+                    self.console.print("[yellow]No devices configured in config file[/]")
+                    sys.exit(1)
+                password = config.get("ota", {}).get("password", "")
+                if not password:
+                    self.console.print("[yellow]Warning: No OTA password configured[/]")
+                return ips, password
+        except tomllib.TOMLDecodeError as e:
+            self.console.print(f"[red]Invalid TOML in config file:[/] {e}")
+            sys.exit(1)
+
     def load_devices(self) -> list[str]:
-        """Load device IPs from config file or retry file."""
+        """Load device IPs from --device arg, retry file, or config file."""
+        # Single device override (--device flag)
+        if self.single_device:
+            return [self.single_device]
+
+        # Retry from previous failed deployment
         if self.retry_file:
             if not self.retry_file.exists():
                 self.console.print(f"[red]Retry file not found:[/] {self.retry_file}")
@@ -108,23 +145,9 @@ class OtaDeployer:
                 self.console.print(f"[red]Invalid JSON in retry file:[/] {e}")
                 sys.exit(1)
 
-        if not self.config_path.exists():
-            self.console.print(f"[red]Config not found:[/] {self.config_path}")
-            self.console.print("Copy ota_devices.toml.example and customize it.")
-            sys.exit(1)
-
-        try:
-            with open(self.config_path, "rb") as f:
-                config = tomllib.load(f)
-                devices = config.get("devices", {})
-                ips = devices.get("ips", [])
-                if not ips:
-                    self.console.print("[yellow]No devices configured in config file[/]")
-                    sys.exit(1)
-                return ips
-        except tomllib.TOMLDecodeError as e:
-            self.console.print(f"[red]Invalid TOML in config file:[/] {e}")
-            sys.exit(1)
+        # Load from config file
+        ips, _ = self._load_config()
+        return ips
 
     async def run(self) -> int:
         """Run the deployment process.
@@ -132,6 +155,10 @@ class OtaDeployer:
         Returns:
             Exit code (0 for success, 1 for failures)
         """
+        # Load config and initialize PioWrapper with password
+        _, ota_password = self._load_config()
+        self.pio = PioWrapper(PIO_ENV, self.project_dir, ota_password=ota_password)
+
         # Step 1: Build firmware (if requested)
         firmware_info: FirmwareInfo
         if self.build:
@@ -316,15 +343,16 @@ class OtaDeployer:
 def main() -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Deploy firmware to multiple ESP32 devices via OTA",
+        description="Deploy firmware to ESP32 devices via OTA",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  poetry run python -m tools.deploy.ota_deploy               # Build and deploy (default)
-  poetry run python -m tools.deploy.ota_deploy --build-only  # Build only, no deploy
-  poetry run python -m tools.deploy.ota_deploy --skip-build  # Deploy existing build
-  poetry run python -m tools.deploy.ota_deploy --no-verify   # Skip API verification
-  poetry run python -m tools.deploy.ota_deploy --retry <file>  # Retry failed devices
+  poetry run python -m tools.deploy.ota_deploy --device <IP>  # Single device
+  poetry run python -m tools.deploy.ota_deploy                # All devices from config
+  poetry run python -m tools.deploy.ota_deploy --build-only   # Build only, no deploy
+  poetry run python -m tools.deploy.ota_deploy --skip-build   # Deploy existing build
+  poetry run python -m tools.deploy.ota_deploy --no-verify    # Skip API verification
+  poetry run python -m tools.deploy.ota_deploy --retry <file> # Retry failed devices
 """,
     )
     parser.add_argument(
@@ -354,6 +382,12 @@ Examples:
         metavar="FILE",
         help="Retry failed devices from a previous summary.json",
     )
+    parser.add_argument(
+        "--device",
+        type=str,
+        metavar="IP",
+        help="Deploy to a single device (overrides config file device list)",
+    )
 
     args = parser.parse_args()
 
@@ -367,6 +401,7 @@ Examples:
         deploy=not args.build_only,
         verify=not args.no_verify,
         retry_file=args.retry,
+        single_device=args.device,
     )
 
     return asyncio.run(deployer.run())
