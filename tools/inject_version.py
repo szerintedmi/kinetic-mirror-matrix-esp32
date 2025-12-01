@@ -9,6 +9,7 @@ version.h is available when libraries that include it are compiled.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
@@ -58,14 +59,39 @@ def get_git_info() -> tuple[str, str]:
         return "unknown", "unknown"
 
 
+def _read_existing_version(version_file: str) -> tuple[str, str] | None:
+    """Read existing version.h and extract hash/date if present."""
+    if not os.path.exists(version_file):
+        return None
+    try:
+        with open(version_file) as f:
+            content = f.read()
+        # Parse: #define GIT_COMMIT_HASH "xxx"
+        hash_match = re.search(r'GIT_COMMIT_HASH "([^"]+)"', content)
+        date_match = re.search(r'GIT_COMMIT_DATE "([^"]+)"', content)
+        if hash_match and date_match:
+            return hash_match.group(1), date_match.group(1)
+    except OSError:
+        pass
+    return None
+
+
 def generate_version_header() -> None:
     """Generate version.h header file."""
     print("*** Injecting version information ***")
 
-    project_dir = env.get("PROJECT_DIR")
+    project_dir = env.get("PROJECT_DIR")  # noqa: F821 - env injected by PlatformIO
     version_file = os.path.join(project_dir, "include", "version.h")
 
     commit_hash, commit_date = get_git_info()
+
+    # For dirty builds: reuse existing timestamp if hash matches
+    # This prevents timestamp drift when firmware.bin is cached
+    if commit_hash.endswith("-dirty"):
+        existing = _read_existing_version(version_file)
+        if existing and existing[0] == commit_hash:
+            commit_date = existing[1]
+            print("  Reusing existing timestamp (dirty build, same hash)")
 
     print(f"  Git Commit: {commit_hash}")
     print(f"  Commit Date: {commit_date}")

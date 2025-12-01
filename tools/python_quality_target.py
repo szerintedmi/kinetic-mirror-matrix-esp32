@@ -66,7 +66,8 @@ def _pytest_invocation() -> List[str]:
 
 
 def _test_action(target, source, env):  # pylint: disable=unused-argument
-    cmd = _pytest_invocation() + [
+    cmd = [
+        *_pytest_invocation(),
         str(PROJECT_ROOT / "tools" / "mirror_cli" / "tests"),
         "-v",
         "--tb=short",
