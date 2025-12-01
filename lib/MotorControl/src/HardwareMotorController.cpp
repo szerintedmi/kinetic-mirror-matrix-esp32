@@ -368,7 +368,12 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     }
     motors_[i].position = pos;
 #if defined(ARDUINO)
-    motors_[i].awake = running || ((forced_awake_mask_ & (1u << i)) != 0);
+    bool should_be_awake = running || ((forced_awake_mask_ & (1u << i)) != 0);
+    if (motors_[i].awake && !should_be_awake) {
+      fas_->disableOutputs(i);
+      fas_->setAutoEnable(i, true);
+    }
+    motors_[i].awake = should_be_awake;
 #else
     // Auto-sleep at idle in native mode to validate latch behavior
     if (!running && (forced_awake_mask_ & (1u << i)) == 0) {
