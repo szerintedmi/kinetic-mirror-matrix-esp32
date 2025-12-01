@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
 """OTA deployment CLI for ESP32 devices.
 
-Builds firmware once, then deploys to devices via OTA.
-Verifies successful deployment by checking /api/status on each device.
+Builds and deploys firmware and/or filesystem to devices via OTA.
+Verifies successful firmware deployment by checking /api/status on each device.
 
 Usage:
-    # Deploy to single device
+    # Deploy firmware to single device
     poetry run python -m tools.deploy.ota_deploy --device 192.168.1.100
 
-    # Build and deploy to all devices in config (default)
+    # Deploy firmware to all devices in config (default)
     poetry run python -m tools.deploy.ota_deploy
+
+    # Deploy filesystem only
+    poetry run python -m tools.deploy.ota_deploy --filesystem --device <IP>
+
+    # Deploy both firmware and filesystem
+    poetry run python -m tools.deploy.ota_deploy --with-filesystem --device <IP>
 
     # Build only (no deploy)
     poetry run python -m tools.deploy.ota_deploy --build-only
 
     # Deploy existing build (skip build step)
     poetry run python -m tools.deploy.ota_deploy --skip-build
-
-    # Skip verification
-    poetry run python -m tools.deploy.ota_deploy --no-verify
 
     # Retry failed devices from previous run
     poetry run python -m tools.deploy.ota_deploy --retry tools/deploy/logs/<timestamp>_summary.json
@@ -81,6 +84,8 @@ class OtaDeployer:
         verify: bool = True,
         retry_file: Path | None = None,
         single_device: str | None = None,
+        filesystem_only: bool = False,
+        with_filesystem: bool = False,
     ):
         self.config_path = config_path
         self.build = build
@@ -88,6 +93,8 @@ class OtaDeployer:
         self.verify = verify
         self.retry_file = retry_file
         self.single_device = single_device
+        self.filesystem_only = filesystem_only
+        self.with_filesystem = with_filesystem
         self.console = Console()
         self.project_dir = Path.cwd()
         self.pio: PioWrapper | None = None  # Created after loading config
@@ -159,31 +166,58 @@ class OtaDeployer:
         _, ota_password = self._load_config()
         self.pio = PioWrapper(PIO_ENV, self.project_dir, ota_password=ota_password)
 
-        # Step 1: Build firmware (if requested)
-        firmware_info: FirmwareInfo
+        # Step 1: Build phase
+        firmware_info: FirmwareInfo | None = None
+        fs_path: Path | None = None
+
         if self.build:
-            self.console.print("[bold]Building firmware...[/]")
-            build_log = self.log_dir / f"{self.timestamp}_build.log"
-            try:
-                firmware_info = await self.pio.build(build_log)
-                self.console.print(
-                    f"[green]Build complete:[/] {firmware_info.version} ({firmware_info.date})"
-                )
-                self.console.print(f"[dim]Log: {build_log}[/]")
-            except RuntimeError as e:
-                self.console.print(f"[red]Build failed:[/] {e}")
-                self.console.print(f"See log: {build_log}")
-                return 1
+            # Build firmware (unless filesystem-only mode)
+            if not self.filesystem_only:
+                self.console.print("[bold]Building firmware...[/]")
+                build_log = self.log_dir / f"{self.timestamp}_build.log"
+                try:
+                    firmware_info = await self.pio.build(build_log)
+                    self.console.print(
+                        f"[green]Build complete:[/] {firmware_info.version} ({firmware_info.date})"
+                    )
+                    self.console.print(f"[dim]Log: {build_log}[/]")
+                except RuntimeError as e:
+                    self.console.print(f"[red]Build failed:[/] {e}")
+                    self.console.print(f"See log: {build_log}")
+                    return 1
+
+            # Build filesystem (if filesystem-only or with-filesystem mode)
+            if self.filesystem_only or self.with_filesystem:
+                self.console.print("[bold]Building filesystem...[/]")
+                fs_log = self.log_dir / f"{self.timestamp}_buildfs.log"
+                try:
+                    fs_path = await self.pio.build_filesystem(fs_log)
+                    self.console.print("[green]Filesystem build complete[/]")
+                    self.console.print(f"[dim]Log: {fs_log}[/]")
+                except RuntimeError as e:
+                    self.console.print(f"[red]Filesystem build failed:[/] {e}")
+                    self.console.print(f"See log: {fs_log}")
+                    return 1
         else:
-            try:
-                firmware_info = await self.pio.get_firmware_info()
-                self.console.print(
-                    f"[dim]Using existing build:[/] {firmware_info.version} ({firmware_info.date})"
-                )
-            except FileNotFoundError as e:
-                self.console.print(f"[red]No existing build:[/] {e}")
-                self.console.print("Run without --skip-build to build first.")
-                return 1
+            # Skip-build mode: use existing artifacts
+            if not self.filesystem_only:
+                try:
+                    firmware_info = await self.pio.get_firmware_info()
+                    self.console.print(
+                        f"[dim]Using existing build:[/] {firmware_info.version} ({firmware_info.date})"
+                    )
+                except FileNotFoundError as e:
+                    self.console.print(f"[red]No existing build:[/] {e}")
+                    self.console.print("Run without --skip-build to build first.")
+                    return 1
+
+            if self.filesystem_only or self.with_filesystem:
+                try:
+                    fs_path = self.pio.get_filesystem_path()
+                    self.console.print(f"[dim]Using existing filesystem:[/] {fs_path.name}")
+                except FileNotFoundError as e:
+                    self.console.print(f"[red]No existing filesystem:[/] {e}")
+                    return 1
 
         # Build-only mode: stop here
         if not self.deploy:
@@ -196,13 +230,38 @@ class OtaDeployer:
             self.console.print("[yellow]No devices configured[/]")
             return 1
 
-        # Step 2: Deploy to all devices in parallel
-        self.console.print(f"\n[bold]Deploying to {len(devices)} device(s)...[/]\n")
-        await self._deploy_parallel(devices, firmware_info)
+        # Step 2: Deploy firmware (if not filesystem-only)
+        if not self.filesystem_only:
+            assert firmware_info is not None
+            self.console.print(f"\n[bold]Deploying firmware to {len(devices)} device(s)...[/]\n")
+            await self._deploy_parallel(devices, firmware_info)
 
-        # Step 3: Print and save summary
-        self._print_summary(devices, firmware_info)
-        self._save_summary(devices, firmware_info)
+            # Print firmware summary
+            self._print_summary(devices, firmware_info)
+            self._save_summary(devices, firmware_info)
+
+            # Check for failures before continuing to filesystem
+            failed = [d for d in devices if d.status == "failed"]
+            if failed and self.with_filesystem:
+                self.console.print(
+                    "\n[yellow]Skipping filesystem deploy due to firmware failures[/]"
+                )
+                return 1
+
+        # Step 3: Deploy filesystem (if filesystem-only or with-filesystem)
+        if self.filesystem_only or self.with_filesystem:
+            assert fs_path is not None
+            # Reset device status for filesystem deploy
+            for d in devices:
+                d.status = "pending"
+                d.progress = 0
+                d.error = None
+
+            self.console.print(f"\n[bold]Deploying filesystem to {len(devices)} device(s)...[/]\n")
+            await self._deploy_filesystem_parallel(devices, fs_path)
+
+            # Print filesystem summary
+            self._print_filesystem_summary(devices)
 
         failed = [d for d in devices if d.status == "failed"]
         return 1 if failed else 0
@@ -282,6 +341,91 @@ class OtaDeployer:
         with Live(progress, console=self.console, refresh_per_second=4):
             await asyncio.gather(*[deploy_single(d) for d in devices])
 
+    async def _deploy_filesystem_parallel(
+        self, devices: list[DeviceStatus], fs_path: Path
+    ) -> None:
+        """Deploy filesystem to all devices in parallel with live progress."""
+        progress = Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(bar_width=30),
+            TextColumn("{task.fields[status]}"),
+            console=self.console,
+        )
+
+        tasks: dict[str, TaskID] = {}
+        for device in devices:
+            task_id = progress.add_task(
+                f"[cyan]{device.ip:15}[/]",
+                total=100,
+                status="Pending",
+            )
+            tasks[device.ip] = task_id
+
+        async def deploy_single(device: DeviceStatus) -> None:
+            task_id = tasks[device.ip]
+            log_file = self.log_dir / f"{self.timestamp}_{device.ip}_fs.log"
+
+            try:
+                device.status = "uploading"
+                progress.update(task_id, status="[yellow]Connecting...[/]")
+
+                assert self.pio is not None
+                async for percent in self.pio.upload_filesystem(device.ip, log_file, fs_path):
+                    device.progress = percent
+                    progress.update(
+                        task_id, completed=percent, status=f"[yellow]Uploading {percent}%[/]"
+                    )
+
+                device.status = "success"
+                progress.update(task_id, status="[green]Success[/]")
+
+            except RuntimeError as e:
+                device.status = "failed"
+                device.error = str(e)
+                progress.update(task_id, status="[red]Upload failed[/]")
+
+            except Exception as e:
+                device.status = "failed"
+                device.error = str(e)
+                progress.update(task_id, status="[red]Error[/]")
+
+        with Live(progress, console=self.console, refresh_per_second=4):
+            await asyncio.gather(*[deploy_single(d) for d in devices])
+
+    def _print_filesystem_summary(self, devices: list[DeviceStatus]) -> None:
+        """Print filesystem deployment summary table."""
+        self.console.print()
+
+        table = Table(title="Filesystem Deployment Summary")
+        table.add_column("IP", style="cyan")
+        table.add_column("Status", justify="center")
+        table.add_column("Error", style="red")
+
+        for device in devices:
+            status_text = "[green]\u2714[/]" if device.status == "success" else "[red]\u2718[/]"
+            table.add_row(
+                device.ip,
+                status_text,
+                device.error or "",
+            )
+
+        self.console.print(table)
+
+        succeeded = sum(1 for d in devices if d.status == "success")
+        failed_devices = [d for d in devices if d.status == "failed"]
+
+        self.console.print()
+        if failed_devices:
+            self.console.print(
+                f"[green]Succeeded:[/] {succeeded}  [red]Failed:[/] {len(failed_devices)}"
+            )
+            self.console.print(f"[red]Failed IPs:[/] {', '.join(d.ip for d in failed_devices)}")
+        else:
+            self.console.print(f"[green]All {succeeded} device(s) filesystem deployed![/]")
+
+        self.console.print(f"\n[dim]Logs saved to: {self.log_dir}[/]")
+
     def _print_summary(self, devices: list[DeviceStatus], firmware_info: FirmwareInfo) -> None:
         """Print deployment summary table."""
         self.console.print()
@@ -343,16 +487,17 @@ class OtaDeployer:
 def main() -> int:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
-        description="Deploy firmware to ESP32 devices via OTA",
+        description="Deploy firmware and/or filesystem to ESP32 devices via OTA",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  poetry run python -m tools.deploy.ota_deploy --device <IP>  # Single device
-  poetry run python -m tools.deploy.ota_deploy                # All devices from config
-  poetry run python -m tools.deploy.ota_deploy --build-only   # Build only, no deploy
-  poetry run python -m tools.deploy.ota_deploy --skip-build   # Deploy existing build
-  poetry run python -m tools.deploy.ota_deploy --no-verify    # Skip API verification
-  poetry run python -m tools.deploy.ota_deploy --retry <file> # Retry failed devices
+  poetry run python -m tools.deploy.ota_deploy --device <IP>    # Firmware to single device
+  poetry run python -m tools.deploy.ota_deploy                  # Firmware to all devices
+  poetry run python -m tools.deploy.ota_deploy --filesystem     # Filesystem only
+  poetry run python -m tools.deploy.ota_deploy --with-filesystem  # Both firmware and filesystem
+  poetry run python -m tools.deploy.ota_deploy --build-only     # Build only, no deploy
+  poetry run python -m tools.deploy.ota_deploy --skip-build     # Deploy existing build
+  poetry run python -m tools.deploy.ota_deploy --retry <file>   # Retry failed devices
 """,
     )
     parser.add_argument(
@@ -388,12 +533,24 @@ Examples:
         metavar="IP",
         help="Deploy to a single device (overrides config file device list)",
     )
+    parser.add_argument(
+        "--filesystem",
+        action="store_true",
+        help="Deploy filesystem only (littlefs.bin), skip firmware",
+    )
+    parser.add_argument(
+        "--with-filesystem",
+        action="store_true",
+        help="Deploy both firmware and filesystem",
+    )
 
     args = parser.parse_args()
 
     # Validate mutually exclusive options
     if args.build_only and args.skip_build:
         parser.error("--build-only and --skip-build are mutually exclusive")
+    if args.filesystem and args.with_filesystem:
+        parser.error("--filesystem and --with-filesystem are mutually exclusive")
 
     deployer = OtaDeployer(
         config_path=args.config,
@@ -402,6 +559,8 @@ Examples:
         verify=not args.no_verify,
         retry_file=args.retry,
         single_device=args.device,
+        filesystem_only=args.filesystem,
+        with_filesystem=args.with_filesystem,
     )
 
     return asyncio.run(deployer.run())

@@ -18,6 +18,12 @@ poetry run python -m tools.deploy.ota_deploy --device <IP>
 
 # Upload via OTA (all devices in config)
 poetry run python -m tools.deploy.ota_deploy
+
+# Upload filesystem via OTA
+poetry run python -m tools.deploy.ota_deploy --filesystem --device <IP>
+
+# Upload firmware + filesystem via OTA
+poetry run python -m tools.deploy.ota_deploy --with-filesystem --device <IP>
 ```
 
 ## Build Environments
@@ -94,7 +100,7 @@ Both must match for OTA uploads to succeed.
 Get device IP from serial monitor, MQTT, or web portal, then:
 
 ```bash
-# Build and deploy to single device
+# Build and deploy firmware to single device
 poetry run python -m tools.deploy.ota_deploy --device <IP>
 
 # Deploy existing build (skip rebuild)
@@ -102,6 +108,12 @@ poetry run python -m tools.deploy.ota_deploy --device <IP> --skip-build
 
 # Skip POST-deploy verification
 poetry run python -m tools.deploy.ota_deploy --device <IP> --no-verify
+
+# Deploy filesystem only
+poetry run python -m tools.deploy.ota_deploy --filesystem --device <IP>
+
+# Deploy both firmware and filesystem
+poetry run python -m tools.deploy.ota_deploy --with-filesystem --device <IP>
 ```
 
 ### OTA Deploy Script
@@ -131,10 +143,10 @@ Deploy to one or more devices with progress tracking and verification.
 #### Usage
 
 ```bash
-# Deploy to single device
+# Deploy firmware to single device
 poetry run python -m tools.deploy.ota_deploy --device <IP>
 
-# Build and deploy to all devices in config
+# Build and deploy firmware to all devices in config
 poetry run python -m tools.deploy.ota_deploy
 
 # Build only, no deploy
@@ -148,14 +160,29 @@ poetry run python -m tools.deploy.ota_deploy --no-verify
 
 # Retry failed devices from previous run
 poetry run python -m tools.deploy.ota_deploy --retry tools/deploy/logs/<timestamp>_summary.json
+
+# Deploy filesystem only (littlefs.bin with web assets)
+poetry run python -m tools.deploy.ota_deploy --filesystem --device <IP>
+
+# Deploy both firmware and filesystem
+poetry run python -m tools.deploy.ota_deploy --with-filesystem --device <IP>
 ```
 
 #### What It Does
 
+**Firmware deploy (default):**
 1. **Build**: Runs `pio run -e esp32DedicatedStep` (unless `--skip-build`)
 2. **Upload**: Uses `espota.py` directly to upload to all devices in parallel (no rebuild per device)
 3. **Verify**: Checks `/api/status` on each device to confirm firmware version
 4. **Report**: Shows summary table with success/failure status
+
+**Filesystem deploy (`--filesystem`):**
+1. **Build**: Runs `pio run -e esp32DedicatedStep -t buildfs`
+2. **Upload**: Uses `espota.py -s` to upload littlefs.bin to all devices in parallel
+3. **Report**: Shows summary table (no version verification for filesystem-only)
+
+**Combined deploy (`--with-filesystem`):**
+Performs firmware deploy first, then filesystem deploy if all firmware uploads succeed.
 
 #### Output Example
 
@@ -184,8 +211,10 @@ Logs saved to: tools/deploy/logs
 #### Logs
 
 All output is logged to `tools/deploy/logs/`:
-- `<timestamp>_build.log` - Build output (includes command executed)
-- `<timestamp>_<ip>.log` - Per-device upload output (includes espota.py command)
+- `<timestamp>_build.log` - Firmware build output
+- `<timestamp>_buildfs.log` - Filesystem build output (when using `--filesystem` or `--with-filesystem`)
+- `<timestamp>_<ip>.log` - Per-device firmware upload output
+- `<timestamp>_<ip>_fs.log` - Per-device filesystem upload output
 - `<timestamp>_summary.json` - Deployment results (for retry)
 
 ### Auto-Rollback

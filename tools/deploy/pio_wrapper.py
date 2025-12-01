@@ -86,6 +86,40 @@ class PioWrapper:
             date=data["date"],
         )
 
+    async def build_filesystem(self, log_file: Path | None = None) -> Path:
+        """Build filesystem image.
+
+        Args:
+            log_file: Optional path to write build output
+
+        Returns:
+            Path to littlefs.bin
+        """
+        cmd = ["pio", "run", "-e", self.env, "-t", "buildfs"]
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=self.project_dir,
+        )
+
+        output = await self._capture_output(proc, log_file, cmd)
+
+        if proc.returncode != 0:
+            raise RuntimeError(f"Filesystem build failed with code {proc.returncode}\n{output}")
+
+        return self.get_filesystem_path()
+
+    def get_filesystem_path(self) -> Path:
+        """Get path to built littlefs.bin."""
+        fs_path = self.project_dir / ".pio" / "build" / self.env / "littlefs.bin"
+        if not fs_path.exists():
+            raise FileNotFoundError(
+                f"Filesystem image not found: {fs_path}\n"
+                f"Run 'pio run -e {self.env} -t buildfs' to build first."
+            )
+        return fs_path
+
     def _find_espota(self) -> Path:
         """Find espota.py in PlatformIO packages."""
         espota_path = (
@@ -177,6 +211,77 @@ class PioWrapper:
         await proc.wait()
         if proc.returncode != 0:
             raise RuntimeError(f"Upload failed (exit {proc.returncode})")
+
+        yield 100
+
+    async def upload_filesystem(
+        self, ip: str, log_file: Path, fs_path: Path
+    ) -> AsyncIterator[int]:
+        """Upload filesystem via OTA using espota.py with -s flag.
+
+        Args:
+            ip: Device IP address
+            log_file: Path to write upload output
+            fs_path: Path to littlefs.bin file
+
+        Yields:
+            Progress percentage (0-100)
+        """
+        espota = self._find_espota()
+
+        cmd = [
+            "python3",
+            str(espota),
+            "-r",  # show progress bar output
+            "-d",  # debug output
+            "-s",  # SPIFFS/LittleFS mode
+            "-i",
+            ip,
+            "-p",
+            str(OTA_PORT),
+            "-a",
+            self.ota_password,
+            "-f",
+            str(fs_path),
+        ]
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=self.project_dir,
+        )
+
+        last_percent = 0
+        with open(log_file, "wb") as log:
+            header = f"# Command: {' '.join(cmd)}\n# Started: {datetime.now().isoformat()}\n\n"
+            log.write(header.encode())
+            log.flush()
+
+            assert proc.stdout is not None
+            buffer = ""
+            while True:
+                chunk = await proc.stdout.read(256)
+                if not chunk:
+                    break
+
+                log.write(chunk)
+                log.flush()
+
+                buffer += chunk.decode("utf-8", errors="ignore")
+
+                for match in self.progress_pattern.finditer(buffer):
+                    percent = int(match.group(1))
+                    if percent > last_percent:
+                        last_percent = percent
+                        yield percent
+
+                if len(buffer) > 1024:
+                    buffer = buffer[-512:]
+
+        await proc.wait()
+        if proc.returncode != 0:
+            raise RuntimeError(f"Filesystem upload failed (exit {proc.returncode})")
 
         yield 100
 
