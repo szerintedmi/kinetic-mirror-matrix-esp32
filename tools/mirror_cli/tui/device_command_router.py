@@ -59,9 +59,7 @@ class DeviceCommandRouter:
     def _switch_device(self, device_index: int) -> None:
         """Switch active device (existing /N behavior)."""
         if not hasattr(self._worker, "set_selected_device_by_index"):
-            self._notify(
-                "Driver selection not supported for this transport", "warning", 2.0
-            )
+            self._notify("Driver selection not supported for this transport", "warning", 2.0)
             return
 
         ok, dev, total = self._worker.set_selected_device_by_index(device_index)
@@ -70,27 +68,19 @@ class DeviceCommandRouter:
         else:
             self._notify(f"No driver #{device_index} (available: {total})", "warning", 2.0)
 
-    def _execute_on_device(
-        self, device_index: int, command: str
-    ) -> Tuple[bool, Optional[str]]:
+    def _execute_on_device(self, device_index: int, command: str) -> Tuple[bool, Optional[str]]:
         """Execute command on specific device without switching active device."""
         if not hasattr(self._worker, "set_selected_device_by_index"):
-            self._notify(
-                "Device targeting not supported for this transport", "error", 3.0
-            )
+            self._notify("Device targeting not supported for this transport", "error", 3.0)
             return True, None
 
         # Get current selection to restore later
         original_index = self._get_selected_index()
 
         # Temporarily switch to target device (silently)
-        ok, _dev, total = self._worker.set_selected_device_by_index(
-            device_index, silent=True
-        )
+        ok, _dev, total = self._worker.set_selected_device_by_index(device_index, silent=True)
         if not ok:
-            self._notify(
-                f"No driver #{device_index} (available: {total})", "error", 3.0
-            )
+            self._notify(f"No driver #{device_index} (available: {total})", "error", 3.0)
             return True, None
 
         # Echo the targeted command

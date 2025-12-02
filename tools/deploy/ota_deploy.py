@@ -341,9 +341,7 @@ class OtaDeployer:
         with Live(progress, console=self.console, refresh_per_second=4):
             await asyncio.gather(*[deploy_single(d) for d in devices])
 
-    async def _deploy_filesystem_parallel(
-        self, devices: list[DeviceStatus], fs_path: Path
-    ) -> None:
+    async def _deploy_filesystem_parallel(self, devices: list[DeviceStatus], fs_path: Path) -> None:
         """Deploy filesystem to all devices in parallel with live progress."""
         progress = Progress(
             SpinnerColumn(),

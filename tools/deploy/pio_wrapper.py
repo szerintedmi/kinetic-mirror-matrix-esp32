@@ -63,12 +63,13 @@ class PioWrapper:
     async def get_firmware_info(self) -> FirmwareInfo:
         """Extract firmware version and date from built artifacts."""
         firmware_path = self.project_dir / ".pio" / "build" / self.env / "firmware.bin"
-        build_info_path = self.project_dir / ".pio" / "build" / self.env / "firmware_build_info.json"
+        build_info_path = (
+            self.project_dir / ".pio" / "build" / self.env / "firmware_build_info.json"
+        )
 
         if not firmware_path.exists():
             raise FileNotFoundError(
-                f"Firmware not found: {firmware_path}\n"
-                f"Run 'pio run -e {self.env}' to build first."
+                f"Firmware not found: {firmware_path}\nRun 'pio run -e {self.env}' to build first."
             )
 
         if not build_info_path.exists():
@@ -214,9 +215,7 @@ class PioWrapper:
 
         yield 100
 
-    async def upload_filesystem(
-        self, ip: str, log_file: Path, fs_path: Path
-    ) -> AsyncIterator[int]:
+    async def upload_filesystem(self, ip: str, log_file: Path, fs_path: Path) -> AsyncIterator[int]:
         """Upload filesystem via OTA using espota.py with -s flag.
 
         Args:
