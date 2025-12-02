@@ -48,6 +48,27 @@ def _format_thermal(thermal_state: Optional[Tuple[bool, Optional[int]]]) -> str:
     return "OFF"
 
 
+def _format_firmware_date(firmware_date: Optional[str]) -> str:
+    """Format firmware date ISO string to local time display."""
+    if not firmware_date:
+        return "-"
+    try:
+        from datetime import datetime
+
+        # Parse ISO 8601 format: 2025-12-02T21:46:06+0000
+        # Handle +0000 timezone format
+        date_str = firmware_date
+        if len(date_str) > 19 and date_str[19] in ("+", "-"):
+            # Convert +0000 to +00:00 for fromisoformat
+            date_str = date_str[:22] + ":" + date_str[22:]
+        dt = datetime.fromisoformat(date_str)
+        # Convert to local timezone
+        local_dt = dt.astimezone()
+        return local_dt.strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError):
+        return firmware_date[:16] if len(firmware_date) > 16 else firmware_date
+
+
 def _color(value: str, swatch: Optional[str]) -> str:
     """Wrap value in Rich color markup."""
     if not value or not swatch:
@@ -80,7 +101,8 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
         ("age", "Age", 6),
         ("motors", "Mot", 4),
         ("thermal", "Therm", 6),
-        ("fw", "FW", 8),
+        ("fw", "FW", 14),
+        ("fw_date", "FW Date", 17),
         ("uptime", "Uptime", 8),
     ]
 
@@ -245,6 +267,10 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 # MAC short form (last 6 chars)
                 mac_short = mac[-12:] if len(mac) > 12 else mac
 
+                # Format firmware date
+                fw_date = details.get("firmware_date")
+                fw_date_fmt = _format_firmware_date(fw_date)
+
                 row_data = [
                     checkbox,
                     str(idx),
@@ -255,6 +281,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                     str(details.get("motor_count", 0)),
                     thermal_fmt,
                     str(details.get("firmware_version", "") or "-"),
+                    fw_date_fmt,
                     uptime_fmt,
                 ]
                 rows.append((mac, row_data))
