@@ -134,6 +134,12 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
         DataTable {
             height: 100%;
         }
+        #device-warnings {
+            height: auto;
+            max-height: 4;
+            padding: 0 1;
+            color: yellow;
+        }
         #device-help {
             height: 1;
             padding: 0 1;
@@ -169,6 +175,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                     DataTable(id="device-table", cursor_type="row"),
                     id="device-table-container",
                 ),
+                Static("", id="device-warnings"),
                 Static(
                     "Space=Toggle  a=All  n=None  Enter=Apply  Esc=Cancel",
                     id="device-help",
@@ -296,6 +303,59 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 # Restore cursor position
                 if rows and cursor_row < len(rows):
                     table.move_cursor(row=cursor_row)
+            except Exception:
+                pass
+
+            # Update warnings
+            self._update_warnings()
+
+        def _update_warnings(self) -> None:
+            """Check for and display fleet warnings."""
+            warnings: List[str] = []
+
+            if len(self._device_details) >= 2:
+                # Collect firmware versions and dates
+                fw_versions: Set[str] = set()
+                fw_dates: Set[str] = set()
+                uptimes: List[Tuple[str, int]] = []
+
+                for mac, details in self._device_details.items():
+                    fw_ver = details.get("firmware_version")
+                    if fw_ver:
+                        fw_versions.add(str(fw_ver))
+
+                    fw_date = details.get("firmware_date")
+                    if fw_date:
+                        fw_dates.add(str(fw_date))
+
+                    uptime_s = details.get("uptime_s")
+                    if uptime_s and isinstance(uptime_s, (int, float)):
+                        uptimes.append((mac[-6:], int(uptime_s)))
+
+                # Check for firmware mismatch
+                if len(fw_versions) > 1 or len(fw_dates) > 1:
+                    versions_str = ", ".join(sorted(fw_versions)) if fw_versions else "?"
+                    warnings.append(f"⚠ Firmware mismatch: {versions_str}")
+
+                # Check for uptime divergence (>60s difference indicates reboot)
+                if len(uptimes) >= 2:
+                    uptimes_sorted = sorted(uptimes, key=lambda x: x[1])
+                    min_mac, min_uptime = uptimes_sorted[0]
+                    max_mac, max_uptime = uptimes_sorted[-1]
+                    diff = max_uptime - min_uptime
+                    if diff > 60:
+                        warnings.append(
+                            f"⚠ Uptime mismatch: {min_mac} ({_format_uptime(min_uptime)}) "
+                            f"vs {max_mac} ({_format_uptime(max_uptime)}) - possible reboot"
+                        )
+
+            # Update warnings widget
+            try:
+                warnings_widget = self.query_one("#device-warnings", Static)
+                if warnings:
+                    warnings_widget.update("\n".join(warnings))
+                else:
+                    warnings_widget.update("")
             except Exception:
                 pass
 
