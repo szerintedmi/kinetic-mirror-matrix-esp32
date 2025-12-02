@@ -75,7 +75,24 @@ Commit updated secrets only if they contain non-sensitive defaults; otherwise ke
 - Publish a retained test payload: `mosquitto_pub -u mirror -P '<password>' -t test/ping -r -m 'pong'`
 - Confirm it is retained: `mosquitto_sub -u mirror -P '<password>' -t test/#`
 - With firmware running, watch for telemetry snapshots: `mosquitto_sub -u mirror -P '<password>' -t 'devices/+/status'`
+- Use the timestamped monitor script for debugging (reads credentials from `include/secrets.h`):
+
+  ```bash
+  poetry run python -m tools.mqtt_monitor                    # watch command topics
+  poetry run python -m tools.mqtt_monitor -t 'devices/+/cmd/#'  # watch commands & responses
+  poetry run python -m tools.mqtt_monitor -t 'devices/+/status'  # watch status
+  poetry run python -m tools.mqtt_monitor -t '#'             # all topics
+  ```
+
 - A healthy node immediately publishes `{"node_state":"ready","ip":"<ipv4>","motors":{...}}` at 1 Hz idle / 5 Hz motion, and the broker delivers the LWT payload `{"node_state":"offline","motors":{}}` if the node disconnects unexpectedly.
+- Altenratively you can also monitor the MQTT broker with `mosquitto_sub` and `gdate` to get timestamps for events:
+
+```bash
+ mosquitto_sub -h 192.168.1.25 -p 1883 -u mirror -P <yourpass> -t "devices/+/cmd/#" -v \
+| while IFS= read -r line; do
+      printf "%s %s\n" "$(gdate +'%H:%M:%S.%3N')" "$line"
+    done
+```
 
 ## 7. Troubleshooting Checklist
 
