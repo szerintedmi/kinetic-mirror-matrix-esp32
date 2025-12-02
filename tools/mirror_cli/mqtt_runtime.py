@@ -9,7 +9,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Deque, Dict, List, Optional, Sequence, Tuple
+from typing import Callable, Deque, Dict, List, Optional, Sequence, Set, Tuple
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
@@ -120,6 +120,7 @@ class MqttWorker(threading.Thread):
         self._node_id = node_id
         self._condition = threading.Condition(self._lock)
         self._columns = (
+            ("dev", "dev", 4),  # Device sequence number for multi-device view
             ("id", "id", 4),
             ("pos", "pos", 8),
             ("moving", "moving", 6),
@@ -144,6 +145,8 @@ class MqttWorker(threading.Thread):
         self._help_text: str = ""
         self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
         self._selected_device: Optional[str] = None
+        # Device visibility filter: empty set = all devices visible (default)
+        self._visible_devices: Set[str] = set()
 
         if client_factory is not None:
             self._client_factory = client_factory
@@ -769,6 +772,8 @@ class MqttWorker(threading.Thread):
                 text = event.attributes.get("text") if event.attributes else None
                 self._help_text = text or event.raw or ""
 
+            # Extract device metadata from GET responses
+            self._maybe_update_device_metadata(node_id, event)
             self._maybe_update_net_state(event)
             # Compute device index for log prefix (1-based)
             device_label = None
@@ -838,6 +843,30 @@ class MqttWorker(threading.Thread):
                 self._net_state["device"] = strip_quotes(device.strip())
             self._requested_net_status = True
 
+    def _maybe_update_device_metadata(self, node_id: str, event: ResponseEvent) -> None:
+        """Extract firmware_version and uptime from GET responses."""
+        if not node_id or not event.attributes:
+            return
+        if event.action and event.action.upper() != "GET":
+            return
+        if event.event_type not in (EventType.DONE, EventType.ACK):
+            return
+
+        attrs = event.attributes
+        fw_version = attrs.get("firmware_version")
+        uptime_s = attrs.get("uptime_ms")  # GET ALL returns uptime_ms
+
+        if fw_version or uptime_s:
+            entry = self._devices.get(node_id, {})
+            if fw_version:
+                entry["firmware_version"] = str(fw_version)
+            if uptime_s:
+                try:
+                    entry["uptime_s"] = int(float(uptime_s)) // 1000
+                except (TypeError, ValueError):
+                    pass
+            self._devices[node_id] = entry
+
     # ------------------------------------------------------------------
     def _append_log(self, line: str) -> None:
         with self._lock:
@@ -868,3 +897,52 @@ class MqttWorker(threading.Thread):
                     "last_seen": last_seen,
                 }
             return summaries
+
+    def get_visible_devices(self) -> Set[str]:
+        """Get set of visible device MACs. Empty set means all devices visible."""
+        with self._lock:
+            return set(self._visible_devices)
+
+    def set_visible_devices(self, device_macs: Set[str]) -> None:
+        """Set which devices are visible. Empty set means all devices visible."""
+        with self._lock:
+            self._visible_devices = set(device_macs)
+            if device_macs:
+                self._push_log_locked(
+                    f"[ui] device filter: {len(device_macs)} of {len(self._devices)} selected"
+                )
+            else:
+                self._push_log_locked("[ui] device filter: all devices visible")
+
+    def is_device_visible(self, device_mac: str) -> bool:
+        """Check if a device should be shown. Empty filter = all visible."""
+        with self._lock:
+            if not self._visible_devices:
+                return True  # No filter = all visible
+            return device_mac in self._visible_devices
+
+    def get_device_details(self) -> Dict[str, Dict[str, object]]:
+        """Get detailed device info for device view.
+
+        Returns dict keyed by MAC with: ip, node_state, age_s, motor_count,
+        thermal_state, microstep_state, firmware_version, uptime_s.
+        """
+        with self._lock:
+            now = time.time()
+            details: Dict[str, Dict[str, object]] = {}
+            for device, data in self._devices.items():
+                last_seen = float(data.get("last_seen", 0.0))
+                age_s = max(0.0, now - last_seen) if last_seen else float("inf")
+                motors = data.get("motors", {})
+                details[device] = {
+                    "ip": data.get("ip", ""),
+                    "node_state": data.get("node_state", ""),
+                    "age_s": age_s,
+                    "last_seen": last_seen,
+                    "motor_count": len(motors) if isinstance(motors, dict) else 0,
+                    "thermal_state": data.get("thermal_state"),
+                    "microstep_state": data.get("microstep_state"),
+                    "firmware_version": data.get("firmware_version", ""),
+                    "uptime_s": data.get("uptime_s", 0),
+                }
+            return details

@@ -5,6 +5,7 @@ from typing import ClassVar, Dict, List, Optional, Tuple
 from .base import BaseUI
 from .device_command_router import DeviceCommandRouter
 from .device_target_parser import parse_device_target
+from .device_view import create_device_view_screen
 
 
 class TextualUI(BaseUI):
@@ -41,6 +42,7 @@ class TextualUI(BaseUI):
 
         # Columns mapping mirroring render_table() layout
         STATUS_COLS: List[Tuple[str, str, int]] = [
+            ("dev", "dev", 4),  # Device sequence number (MQTT multi-device)
             ("id", "id", 4),
             ("pos", "pos", 8),
             ("moving", "moving", 8),
@@ -299,6 +301,7 @@ class TextualUI(BaseUI):
                     "Keys:",
                     "  Ctrl+Q = quit",
                     "  ? = help",
+                    "  Ctrl+L = device list (MQTT only)",
                     "  d = toggle theme",
                     "  c = clear log",
                     "  PageUp/PageDown = scroll log",
@@ -316,11 +319,16 @@ class TextualUI(BaseUI):
                     "  /<n> <cmd>  Send cmd to device #n without switching",
                     "  /all <cmd>  Send cmd to ALL devices in parallel",
                     "",
+                    "Device list (Ctrl+L, MQTT only):",
+                    "  View all devices with status and metadata",
+                    "  Select which devices' motors to display",
+                    "  Space=Toggle  a=All  n=None  r=Refresh  Enter=Apply  Esc=Cancel",
+                    "",
                     "Copy/paste:",
                     "  Tip: Hold Shift to select text in many terminals",
                     "",
                     "Status columns:",
-                    "  id, pos, moving, awake, homed",
+                    "  dev=device #, id, pos, moving, awake, homed",
                     "  steps_since_home, budget_s, ttfc_s",
                     "  est_ms, started_ms, actual_ms",
                 ]
@@ -369,6 +377,7 @@ class TextualUI(BaseUI):
                 Binding("Ctrl+x", "quit", "Quit", show=False),
                 Binding("Ctrl+q", "quit", "Quit", show=True),
                 Binding("Ctrl+i", "help", "Help"),
+                Binding("ctrl+l", "toggle_device_view", "Devices", show=True),
                 Binding("pageup", "scroll_log_up", "Log Up", show=False),
                 Binding("pagedown", "scroll_log_down", "Log Down", show=False),
             ]
@@ -476,6 +485,41 @@ class TextualUI(BaseUI):
             def action_scroll_log_down(self) -> None:
                 self.query_one("#log", RichLog).scroll_page_down()
 
+            def action_toggle_device_view(self) -> None:
+                """Open device manager modal (Tab key). MQTT only."""
+                if self._transport != "mqtt":
+                    self.notify(
+                        "Device view only available in MQTT mode", severity="warning", timeout=2.0
+                    )
+                    return
+
+                if not hasattr(worker, "get_device_summaries"):
+                    self.notify(
+                        "Device view not supported for this worker", severity="warning", timeout=2.0
+                    )
+                    return
+
+                summaries = worker.get_device_summaries()
+                if not summaries:
+                    self.notify("No devices detected", severity="warning", timeout=2.0)
+                    return
+
+                def _notify_wrapper(msg: str, severity: str, timeout: float) -> None:
+                    sev = "information" if severity == "info" else severity
+                    self.notify(msg, severity=sev, timeout=timeout)
+
+                def _on_dismiss(result) -> None:
+                    if result is not None and hasattr(worker, "set_visible_devices"):
+                        worker.set_visible_devices(result)
+                        count = len(result) if result else len(summaries)
+                        self.notify(f"Showing {count} device(s)", timeout=2.0)
+
+                try:
+                    DeviceViewScreen = create_device_view_screen(worker, _notify_wrapper)
+                    self.push_screen(DeviceViewScreen(), _on_dismiss)
+                except Exception as e:
+                    self.notify(f"Error opening device view: {e}", severity="error", timeout=3.0)
+
             def on_input_submitted(self, event: Input.Submitted) -> None:
                 text = (event.value or "").strip()
                 if not text:
@@ -577,17 +621,42 @@ class TextualUI(BaseUI):
                     status_text += f"  error={err}"
                 self.query_one("#status_bar", Static).update(status_text.strip())
 
-                # Update table - simple replace for now
+                # Update table - filter by visible devices and populate dev column
                 table = self.query_one("#status_table", DataTable)
                 try:
+                    # Build device index lookup for "dev" column
+                    devices_ordered: List[str] = []
+                    if hasattr(worker, "get_device_summaries"):
+                        try:
+                            summaries = worker.get_device_summaries()
+                            devices_ordered = sorted(summaries.keys())
+                        except Exception:
+                            pass
+                    device_idx_map: Dict[str, str] = {
+                        mac: str(i + 1) for i, mac in enumerate(devices_ordered)
+                    }
+
                     data: List[List[str]] = []
                     for r in rows or []:
+                        # Filter by visible devices
+                        device_mac = str(r.get("device", "") or "")
+                        if hasattr(worker, "is_device_visible"):
+                            try:
+                                if not worker.is_device_visible(device_mac):
+                                    continue
+                            except Exception:
+                                pass
+
                         row: List[str] = []
                         for key, _label, _w in self._columns:
-                            raw_val = r.get(key, "")
-                            if key in ("moving", "awake", "homed"):
+                            if key == "dev":
+                                # Device sequence number
+                                val = device_idx_map.get(device_mac, "-")
+                            elif key in ("moving", "awake", "homed"):
+                                raw_val = r.get(key, "")
                                 val = "1" if str(raw_val) in ("1", "True", "true") else "0"
                             else:
+                                raw_val = r.get(key, "")
                                 val = str(raw_val)
                             row.append(val)
                         data.append(row)
