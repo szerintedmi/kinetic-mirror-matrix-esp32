@@ -322,7 +322,7 @@ class TextualUI(BaseUI):
                     "Device list (Ctrl+L, MQTT only):",
                     "  View all devices with status and metadata",
                     "  Select which devices' motors to display",
-                    "  Space=Toggle  a=All  n=None  r=Refresh  Enter=Apply  Esc=Cancel",
+                    "  Space=Toggle  a=All  n=None  Enter=Apply  Esc=Cancel",
                     "",
                     "Copy/paste:",
                     "  Tip: Hold Shift to select text in many terminals",

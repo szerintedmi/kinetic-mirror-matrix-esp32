@@ -125,7 +125,6 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             Binding("space", "toggle_row", "Toggle", show=False),
             Binding("a", "select_all", "Select All", show=False),
             Binding("n", "select_none", "Select None", show=False),
-            Binding("r", "refresh", "Refresh", show=True),
         ]
 
         def __init__(self) -> None:
@@ -149,7 +148,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                     id="device-table-container",
                 ),
                 Static(
-                    "Space=Toggle  a=All  n=None  r=Refresh  Enter=Apply  Esc=Cancel",
+                    "Space=Toggle  a=All  n=None  Enter=Apply  Esc=Cancel",
                     id="device-help",
                 ),
             )
@@ -187,47 +186,9 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                     self._selected = set(all_devices)
                     self._initial_select_done = True
 
-            # Trigger GET ALL for all devices on open
-            self._trigger_refresh_all()
-
-            # Start refresh timer
+            # Start refresh timer (data comes from config topic, no polling needed)
             self.set_interval(0.5, self._refresh_table)
             self._refresh_table()
-
-        def _trigger_refresh_all(self) -> None:
-            """Send GET ALL to all devices to refresh firmware/uptime info."""
-            if not hasattr(self._worker, "get_device_summaries"):
-                return
-
-            summaries = self._worker.get_device_summaries()
-            if not summaries:
-                return
-
-            devices_ordered = sorted(summaries.keys())
-
-            # Save original device by MAC (not index) to handle device list changes
-            original_device_mac: Optional[str] = None
-            if hasattr(self._worker, "get_net_info"):
-                net = self._worker.get_net_info()
-                original_device_mac = net.get("selected_device")
-
-            # Send GET ALL to each device
-            for i, _mac in enumerate(devices_ordered, start=1):
-                if hasattr(self._worker, "set_selected_device_by_index"):
-                    ok, _dev, _total = self._worker.set_selected_device_by_index(i, silent=True)
-                    if ok and hasattr(self._worker, "queue_cmd"):
-                        self._worker.queue_cmd("GET ALL", silent=True)
-
-            # Restore original selection by MAC (handles device list changes)
-            if original_device_mac and hasattr(self._worker, "set_selected_device_by_index"):
-                # Get current device list and find the original device's new index
-                current_summaries = self._worker.get_device_summaries()
-                current_devices = sorted(current_summaries.keys())
-                if original_device_mac in current_devices:
-                    restore_index = current_devices.index(original_device_mac) + 1
-                    self._worker.set_selected_device_by_index(restore_index, silent=True)
-
-            self._notify(f"Refreshing {len(devices_ordered)} device(s)...", "info", 2.0)
 
         def _refresh_table(self) -> None:
             """Refresh device table with current data."""
@@ -341,10 +302,6 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             """Deselect all devices."""
             self._selected.clear()
             self._refresh_table()
-
-        def action_refresh(self) -> None:
-            """Refresh device data via GET ALL."""
-            self._trigger_refresh_all()
 
         def action_apply(self) -> None:
             """Apply selection and close."""

@@ -3,9 +3,23 @@
 #include <functional>
 #include <utility>
 
+#include "version.h"
+
+#if defined(ARDUINO)
+#include <Arduino.h>
+#endif
+
 namespace mqtt {
 
 namespace {
+
+unsigned long GetUptimeMs() {
+#if defined(ARDUINO)
+  return millis();
+#else
+  return 0;
+#endif
+}
 
 void AppendUnsignedDigits(std::string& out, unsigned long long value) {
   char buffer[21];
@@ -61,6 +75,7 @@ void MqttConfigPublisher::loop(uint32_t now_ms) {
     return;
   }
 
+  // Hash only the stable part (before uptime_ms is appended)
   std::size_t hash = std::hash<std::string>{}(scratch_);
   bool changed = !has_last_hash_ || hash != last_hash_;
 
@@ -68,6 +83,9 @@ void MqttConfigPublisher::loop(uint32_t now_ms) {
   if (!force_immediate_ && !changed) {
     return;
   }
+
+  // Append volatile fields (uptime) just before publishing
+  appendVolatileFields();
 
   if (!publish()) {
     return;
@@ -84,7 +102,7 @@ bool MqttConfigPublisher::buildSnapshot() {
   scratch_.clear();
   scratch_.reserve(256);
 
-  // Build JSON payload
+  // Build JSON payload (stable fields only - used for hash comparison)
   scratch_.append("{\"thermal_limiting\":\"");
   scratch_.append(processor_.thermalLimitsEnabled() ? "ON" : "OFF");
   scratch_.append("\",\"max_budget_s\":");
@@ -99,9 +117,28 @@ bool MqttConfigPublisher::buildSnapshot() {
   AppendSignedDigits(scratch_, processor_.defaultAccelSps2());
   scratch_.append(",\"decel\":");
   AppendSignedDigits(scratch_, processor_.defaultDecelSps2());
-  scratch_.push_back('}');
+  scratch_.append(",\"motor_count\":");
+  AppendUnsignedDigits(scratch_, processor_.controller().motorCount());
+#ifdef GIT_COMMIT_HASH
+  scratch_.append(",\"firmware_version\":\"");
+  scratch_.append(GIT_COMMIT_HASH);
+  scratch_.push_back('"');
+#endif
+#ifdef GIT_COMMIT_DATE
+  scratch_.append(",\"firmware_date\":\"");
+  scratch_.append(GIT_COMMIT_DATE);
+  scratch_.push_back('"');
+#endif
+  // Note: closing brace added by appendVolatileFields()
 
   return true;
+}
+
+void MqttConfigPublisher::appendVolatileFields() {
+  // Append volatile fields that change frequently (not included in hash)
+  scratch_.append(",\"uptime_ms\":");
+  AppendUnsignedDigits(scratch_, GetUptimeMs());
+  scratch_.push_back('}');
 }
 
 bool MqttConfigPublisher::publish() {

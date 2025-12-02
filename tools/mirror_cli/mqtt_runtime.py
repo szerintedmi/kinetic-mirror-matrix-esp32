@@ -577,11 +577,12 @@ class MqttWorker(threading.Thread):
             if isinstance(msg.payload, bytes)
             else str(msg.payload)
         )
+        ts = time.time()
         if msg.topic.endswith("/status"):
-            self.ingest_message(msg.topic, payload_text)
+            self.ingest_message(msg.topic, payload_text, timestamp=ts)
             return
         if msg.topic.endswith("/config"):
-            self.ingest_config(msg.topic, payload_text)
+            self.ingest_config(msg.topic, payload_text, timestamp=ts)
             return
         if msg.topic.endswith("/cmd/resp"):
             self.ingest_response(msg.topic, payload_text)
@@ -666,9 +667,10 @@ class MqttWorker(threading.Thread):
                     self._requested_net_status = True
             # If failed, leave flag False so next message triggers retry
 
-    def ingest_config(self, topic: str, payload: str) -> None:
+    def ingest_config(self, topic: str, payload: str, timestamp: Optional[float] = None) -> None:
         """Handle config messages from devices/<node_id>/config topic."""
         mac = topic.split("/")[1] if topic.startswith("devices/") else ""
+        ts = timestamp if timestamp is not None else time.time()
         try:
             obj = json.loads(payload)
         except (ValueError, TypeError, json.JSONDecodeError):
@@ -696,6 +698,37 @@ class MqttWorker(threading.Thread):
             if microstep:
                 microstep_state = str(microstep).upper()
 
+            # Parse firmware metadata (new fields)
+            firmware_version: Optional[str] = None
+            fw_ver = obj.get("firmware_version")
+            if fw_ver:
+                firmware_version = str(fw_ver)
+
+            firmware_date: Optional[str] = None
+            fw_date = obj.get("firmware_date")
+            if fw_date:
+                firmware_date = str(fw_date)
+
+            motor_count: Optional[int] = None
+            motor_cnt = obj.get("motor_count")
+            if motor_cnt is not None:
+                try:
+                    motor_count = int(motor_cnt)
+                except (TypeError, ValueError):
+                    pass
+
+            # Parse uptime and calculate boot timestamp
+            uptime_ms_raw = obj.get("uptime_ms")
+            boot_timestamp: Optional[float] = None
+            uptime_s: Optional[int] = None
+            if uptime_ms_raw is not None:
+                try:
+                    uptime_ms_val = float(uptime_ms_raw)
+                    uptime_s = int(uptime_ms_val // 1000)
+                    boot_timestamp = ts - (uptime_ms_val / 1000.0)
+                except (TypeError, ValueError):
+                    pass
+
             # Store config per-device
             if mac:
                 entry = self._devices.get(mac, {})
@@ -703,6 +736,16 @@ class MqttWorker(threading.Thread):
                     entry["thermal_state"] = thermal_state
                 if microstep_state is not None:
                     entry["microstep_state"] = microstep_state
+                if firmware_version is not None:
+                    entry["firmware_version"] = firmware_version
+                if firmware_date is not None:
+                    entry["firmware_date"] = firmware_date
+                if motor_count is not None:
+                    entry["motor_count_config"] = motor_count
+                if uptime_s is not None:
+                    entry["uptime_s"] = uptime_s
+                if boot_timestamp is not None:
+                    entry["boot_timestamp"] = boot_timestamp
                 self._devices[mac] = entry
 
             # Also update global state for backwards compatibility and single-device mode
@@ -772,8 +815,6 @@ class MqttWorker(threading.Thread):
                 text = event.attributes.get("text") if event.attributes else None
                 self._help_text = text or event.raw or ""
 
-            # Extract device metadata from GET responses
-            self._maybe_update_device_metadata(node_id, event)
             self._maybe_update_net_state(event)
             # Compute device index for log prefix (1-based)
             device_label = None
@@ -843,30 +884,6 @@ class MqttWorker(threading.Thread):
                 self._net_state["device"] = strip_quotes(device.strip())
             self._requested_net_status = True
 
-    def _maybe_update_device_metadata(self, node_id: str, event: ResponseEvent) -> None:
-        """Extract firmware_version and uptime from GET responses."""
-        if not node_id or not event.attributes:
-            return
-        if event.action and event.action.upper() != "GET":
-            return
-        if event.event_type not in (EventType.DONE, EventType.ACK):
-            return
-
-        attrs = event.attributes
-        fw_version = attrs.get("firmware_version")
-        uptime_s = attrs.get("uptime_ms")  # GET ALL returns uptime_ms
-
-        if fw_version or uptime_s:
-            entry = self._devices.get(node_id, {})
-            if fw_version:
-                entry["firmware_version"] = str(fw_version)
-            if uptime_s:
-                try:
-                    entry["uptime_s"] = int(float(uptime_s)) // 1000
-                except (TypeError, ValueError):
-                    pass
-            self._devices[node_id] = entry
-
     # ------------------------------------------------------------------
     def _append_log(self, line: str) -> None:
         with self._lock:
@@ -925,7 +942,11 @@ class MqttWorker(threading.Thread):
         """Get detailed device info for device view.
 
         Returns dict keyed by MAC with: ip, node_state, age_s, motor_count,
-        thermal_state, microstep_state, firmware_version, uptime_s.
+        thermal_state, microstep_state, firmware_version, firmware_date,
+        uptime_s, boot_timestamp.
+
+        Note: uptime_s is calculated dynamically from boot_timestamp to keep
+        it updating even when config topic doesn't change frequently.
         """
         with self._lock:
             now = time.time()
@@ -934,15 +955,33 @@ class MqttWorker(threading.Thread):
                 last_seen = float(data.get("last_seen", 0.0))
                 age_s = max(0.0, now - last_seen) if last_seen else float("inf")
                 motors = data.get("motors", {})
+
+                # Use motor_count from config if available, else count motors dict
+                motor_count_config = data.get("motor_count_config")
+                motor_count = (
+                    motor_count_config
+                    if motor_count_config is not None
+                    else (len(motors) if isinstance(motors, dict) else 0)
+                )
+
+                # Calculate uptime dynamically from boot_timestamp
+                boot_timestamp = data.get("boot_timestamp")
+                if boot_timestamp is not None:
+                    uptime_s = int(now - boot_timestamp)
+                else:
+                    uptime_s = 0
+
                 details[device] = {
                     "ip": data.get("ip", ""),
                     "node_state": data.get("node_state", ""),
                     "age_s": age_s,
                     "last_seen": last_seen,
-                    "motor_count": len(motors) if isinstance(motors, dict) else 0,
+                    "motor_count": motor_count,
                     "thermal_state": data.get("thermal_state"),
                     "microstep_state": data.get("microstep_state"),
                     "firmware_version": data.get("firmware_version", ""),
-                    "uptime_s": data.get("uptime_s", 0),
+                    "firmware_date": data.get("firmware_date", ""),
+                    "uptime_s": uptime_s,
+                    "boot_timestamp": boot_timestamp,
                 }
             return details

@@ -18,7 +18,10 @@ namespace mqtt {
  * Uses retain=true so new subscribers get current config immediately.
  *
  * Payload includes: thermal_limiting, max_budget_s, microstep, microstep_mult,
- * speed, accel, decel.
+ * speed, accel, decel, motor_count, uptime_ms, firmware_version, firmware_date.
+ *
+ * Note: uptime_ms is a volatile field excluded from hash comparison to avoid
+ * continuous republishing. It's appended just before publishing.
  */
 class MqttConfigPublisher {
 public:
@@ -40,6 +43,7 @@ public:
 
 private:
   bool buildSnapshot();
+  void appendVolatileFields();
   bool publish();
   static const char* microstepToString(uint8_t multiplier);
 

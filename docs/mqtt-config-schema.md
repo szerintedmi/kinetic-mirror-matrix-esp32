@@ -12,7 +12,11 @@ Firmware publishes device configuration on `devices/<node_id>/config` where `<no
   "microstep_mult": 1,
   "speed": 4000,
   "accel": 16000,
-  "decel": 16000
+  "decel": 16000,
+  "motor_count": 8,
+  "uptime_ms": 123456789,
+  "firmware_version": "9953783",
+  "firmware_date": "2025-12-02T19:59:32+0000"
 }
 ```
 
@@ -27,6 +31,10 @@ Firmware publishes device configuration on `devices/<node_id>/config` where `<no
 | `speed`            | number | Default speed in steps per second. |
 | `accel`            | number | Default acceleration in steps per second squared. |
 | `decel`            | number | Default deceleration in steps per second squared. |
+| `motor_count`      | number | Number of motors connected to the device. |
+| `uptime_ms`        | number | Milliseconds since device boot (`millis()`). |
+| `firmware_version` | string | Git commit hash at build time (optional, requires `GIT_COMMIT_HASH` macro). |
+| `firmware_date`    | string | Git commit date in ISO 8601 format (optional, requires `GIT_COMMIT_DATE` macro). |
 
 ## Publish Triggers
 
@@ -44,7 +52,7 @@ The config topic (`devices/<node_id>/config`) contains session-level settings th
 | Topic | Cadence | Content |
 |-------|---------|---------|
 | `.../status` | 1 Hz idle, 5 Hz motion | Per-motor positions, moving state, thermal budget |
-| `.../config` | On change only | Global settings: microstep, thermal flag, speed/accel/decel defaults |
+| `.../config` | On change only | Global settings: microstep, thermal flag, speed/accel/decel defaults, firmware info, uptime |
 
 This separation allows subscribers to efficiently track motor state without repeated config data in every status update.
 
@@ -58,6 +66,8 @@ def on_config(client, userdata, msg):
     config = json.loads(msg.payload)
     print(f"Thermal: {config['thermal_limiting']}")
     print(f"Microstep: {config['microstep']}")
+    print(f"Motors: {config.get('motor_count', 'N/A')}")
+    print(f"Firmware: {config.get('firmware_version', 'N/A')}")
 
 client = mqtt.Client()
 client.on_message = on_config

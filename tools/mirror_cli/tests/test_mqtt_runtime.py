@@ -438,6 +438,74 @@ class MqttRuntimeTests(unittest.TestCase):
         self.assertEqual(len(get_thermal_cmds), 0, "Should not poll for thermal status")
         self.assertEqual(len(get_microstep_cmds), 0, "Should not poll for microstep")
 
+    def test_firmware_metadata_from_config_topic(self) -> None:
+        """Config topic messages update firmware metadata and uptime."""
+        import time as time_module
+
+        # Use current time so uptime calculation is realistic
+        now = time_module.time()
+        uptime_ms = 60000  # 60 seconds uptime at message arrival
+
+        payload = json.dumps(
+            {
+                "thermal_limiting": "ON",
+                "max_budget_s": 90,
+                "microstep": "FULL",
+                "microstep_mult": 1,
+                "speed": 4000,
+                "accel": 16000,
+                "decel": 16000,
+                "motor_count": 8,
+                "uptime_ms": uptime_ms,
+                "firmware_version": "abc1234",
+                "firmware_date": "2025-01-15T10:30:00+0000",
+            }
+        )
+        self.worker.ingest_config("devices/node123/config", payload, timestamp=now)
+
+        details = self.worker.get_device_details()
+        self.assertIn("node123", details)
+        dev = details["node123"]
+
+        # Check firmware metadata
+        self.assertEqual(dev.get("firmware_version"), "abc1234")
+        self.assertEqual(dev.get("firmware_date"), "2025-01-15T10:30:00+0000")
+        self.assertEqual(dev.get("motor_count"), 8)
+
+        # Check boot timestamp calculation: msg_timestamp - (uptime_ms / 1000)
+        expected_boot = now - (uptime_ms / 1000.0)
+        self.assertAlmostEqual(dev.get("boot_timestamp"), expected_boot, places=3)
+
+        # Check uptime is calculated dynamically (should be ~60s, allow some slack)
+        uptime_s = dev.get("uptime_s")
+        self.assertGreaterEqual(uptime_s, 60)
+        self.assertLess(uptime_s, 65)  # Allow up to 5s of test execution time
+
+    def test_config_topic_partial_fields(self) -> None:
+        """Config topic with only some optional fields should not error."""
+        payload = json.dumps(
+            {
+                "thermal_limiting": "OFF",
+                "max_budget_s": 90,
+                "microstep": "HALF",
+                "microstep_mult": 2,
+                "speed": 4000,
+                "accel": 16000,
+                "decel": 16000,
+                # No motor_count, uptime_ms, firmware_version, firmware_date
+            }
+        )
+        self.worker.ingest_config("devices/node456/config", payload)
+
+        details = self.worker.get_device_details()
+        self.assertIn("node456", details)
+        dev = details["node456"]
+
+        # Optional fields default to empty string or 0 (not None)
+        self.assertEqual(dev.get("firmware_version"), "")
+        self.assertEqual(dev.get("uptime_s"), 0)
+        self.assertIsNone(dev.get("boot_timestamp"))
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()
