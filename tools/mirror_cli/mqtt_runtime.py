@@ -23,7 +23,13 @@ from .command_builder import (
     build_requests,
 )
 from .constants import LOG_HISTORY_LIMIT
-from .response_events import EventType, ResponseEvent, format_event, parse_mqtt_payload
+from .response_events import (
+    EventType,
+    ResponseEvent,
+    format_event,
+    parse_mqtt_payload,
+    strip_quotes,
+)
 
 
 def _default_cmd_id() -> str:
@@ -233,10 +239,42 @@ class MqttWorker(threading.Thread):
     # Control/compatibility helpers (mirrors SerialWorker)
     # ------------------------------------------------------------------
     def _ordered_devices_locked(self) -> List[str]:
-        # Stable ordering for sequence numbers (alphabetical by device id)
+        """Return device IDs in stable order (alphabetical). Must hold lock."""
         return sorted(self._devices.keys())
 
-    def set_selected_device_by_index(self, index: int) -> Tuple[bool, Optional[str], int]:
+    def _resolve_selected_device_locked(self) -> Tuple[Optional[str], int, List[str]]:
+        """Resolve the currently selected device and its index. Must hold lock.
+
+        Returns:
+            Tuple of (selected_device_id, selected_index_1based, ordered_device_list)
+        """
+        devices_ordered = self._ordered_devices_locked()
+        selected = None
+        if self._selected_device and self._selected_device in self._devices:
+            selected = self._selected_device
+        elif self._node_id and self._node_id in self._devices:
+            selected = self._node_id
+        elif devices_ordered:
+            selected = devices_ordered[0]
+
+        selected_index = 0
+        if selected and selected in devices_ordered:
+            selected_index = devices_ordered.index(selected) + 1
+
+        return selected, selected_index, devices_ordered
+
+    def set_selected_device_by_index(
+        self, index: int, *, silent: bool = False
+    ) -> Tuple[bool, Optional[str], int]:
+        """Select a device by its 1-based index.
+
+        Args:
+            index: 1-based device index
+            silent: If True, suppress the [ui] log message
+
+        Returns:
+            Tuple of (success, device_id, total_devices)
+        """
         # Explicit type coercion for safety (index may come from string parsing)
         try:
             index = int(index)
@@ -250,7 +288,10 @@ class MqttWorker(threading.Thread):
             if index < 1 or index > total:
                 return False, None, total
             self._selected_device = devices[index - 1]
-            self._push_log_locked(f"[ui] selected device {index}/{total}: {self._selected_device}")
+            if not silent:
+                self._push_log_locked(
+                    f"[ui] selected device {index}/{total}: {self._selected_device}"
+                )
             return True, self._selected_device, total
 
     def queue_cmd(self, cmd: str, *, silent: bool = False) -> List[int]:
@@ -363,18 +404,7 @@ class MqttWorker(threading.Thread):
                     return str(value)
 
             rows.sort(key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", ""))))
-            devices_ordered = self._ordered_devices_locked()
-            selected = None
-            if self._selected_device and self._selected_device in self._devices:
-                selected = self._selected_device
-            elif self._node_id and self._node_id in self._devices:
-                selected = self._node_id
-            elif devices_ordered:
-                selected = devices_ordered[0]
-
-            selected_index = None
-            if selected and selected in devices_ordered:
-                selected_index = devices_ordered.index(selected) + 1
+            selected, selected_index, devices_ordered = self._resolve_selected_device_locked()
 
             net = {
                 "transport": "mqtt",
@@ -400,17 +430,7 @@ class MqttWorker(threading.Thread):
 
     def get_net_info(self) -> Dict[str, str]:
         with self._lock:
-            devices_ordered = self._ordered_devices_locked()
-            selected = None
-            if self._selected_device and self._selected_device in self._devices:
-                selected = self._selected_device
-            elif self._node_id and self._node_id in self._devices:
-                selected = self._node_id
-            elif devices_ordered:
-                selected = devices_ordered[0]
-            selected_index = 0
-            if selected and selected in devices_ordered:
-                selected_index = devices_ordered.index(selected) + 1
+            selected, selected_index, devices_ordered = self._resolve_selected_device_locked()
             return {
                 "transport": "mqtt",
                 "host": str(self._broker.get("host", "")),
@@ -750,7 +770,13 @@ class MqttWorker(threading.Thread):
                 self._help_text = text or event.raw or ""
 
             self._maybe_update_net_state(event)
-            formatted = format_event(event, latency_ms=latency)
+            # Compute device index for log prefix (1-based)
+            device_label = None
+            if node_id:
+                devices = self._ordered_devices_locked()
+                if node_id in devices:
+                    device_label = str(devices.index(node_id) + 1)
+            formatted = format_event(event, latency_ms=latency, device_label=device_label)
             self._push_log_locked(formatted)
 
             # Clean up completed commands
@@ -801,23 +827,15 @@ class MqttWorker(threading.Thread):
                     ip = tokens.get("IP", ip)
                     device = tokens.get("DEVICE", device)
 
-        def _trim(value: Optional[str]) -> Optional[str]:
-            if value is None:
-                return None
-            value = value.strip()
-            if len(value) >= 2 and value[0] == value[-1] == '"':
-                value = value[1:-1]
-            return value
-
         if state or ssid or ip:
             if state:
-                self._net_state["state"] = _trim(state) or ""
+                self._net_state["state"] = strip_quotes(state.strip())
             if ssid:
-                self._net_state["ssid"] = _trim(ssid) or ""
+                self._net_state["ssid"] = strip_quotes(ssid.strip())
             if ip:
-                self._net_state["ip"] = _trim(ip) or ""
+                self._net_state["ip"] = strip_quotes(ip.strip())
             if device:
-                self._net_state["device"] = _trim(device) or ""
+                self._net_state["device"] = strip_quotes(device.strip())
             self._requested_net_status = True
 
     # ------------------------------------------------------------------

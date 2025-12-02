@@ -396,6 +396,40 @@ class TestFormatEvent(unittest.TestCase):
         formatted = format_event(event, latency_ms=123.456)
         self.assertIn("latency_ms=123", formatted)
 
+    def test_device_label_prefix(self):
+        """Device label should be prepended to output."""
+        event = ResponseEvent(
+            source="mqtt",
+            raw="",
+            event_type=EventType.ACK,
+            action="MOVE",
+        )
+        formatted = format_event(event, device_label="1")
+        self.assertTrue(formatted.startswith("[1] [ACK]"))
+        self.assertIn("action=MOVE", formatted)
+
+    def test_device_label_none_no_prefix(self):
+        """No prefix when device_label is None."""
+        event = ResponseEvent(
+            source="mqtt",
+            raw="",
+            event_type=EventType.ACK,
+        )
+        formatted = format_event(event, device_label=None)
+        self.assertTrue(formatted.startswith("[ACK]"))
+
+    def test_device_label_with_latency(self):
+        """Device label and latency should both appear."""
+        event = ResponseEvent(
+            source="mqtt",
+            raw="",
+            event_type=EventType.DONE,
+            action="HOME",
+        )
+        formatted = format_event(event, latency_ms=50.0, device_label="2")
+        self.assertTrue(formatted.startswith("[2] [DONE]"))
+        self.assertIn("latency_ms=50", formatted)
+
 
 class TestResponseEventDataclass(unittest.TestCase):
     """Tests for ResponseEvent dataclass."""

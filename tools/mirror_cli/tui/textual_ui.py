@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import ClassVar, Dict, List, Optional, Tuple
 
 from .base import BaseUI
+from .device_command_router import DeviceCommandRouter
+from .device_target_parser import parse_device_target
 
 
 class TextualUI(BaseUI):
@@ -309,8 +311,10 @@ class TextualUI(BaseUI):
                     "  GET/SET SPEED, ACCEL, DECEL",
                     "  GET LAST_OP_TIMING[:<id|ALL>]",
                     "",
-                    "Driver selection:",
-                    "  /<n>  (e.g., /1 selects driver #1)",
+                    "Device targeting (MQTT only):",
+                    "  /<n>        Switch to device #n (e.g., /1)",
+                    "  /<n> <cmd>  Send cmd to device #n without switching",
+                    "  /all <cmd>  Send cmd to ALL devices in parallel",
                     "",
                     "Copy/paste:",
                     "  Tip: Hold Shift to select text in many terminals",
@@ -385,6 +389,14 @@ class TextualUI(BaseUI):
                 self._hist_buffer: Optional[str] = None
                 self._columns: List[Tuple[str, str, int]] = list(TABLE_COLS)
                 self._transport = base_transport
+
+                # Device command router for /N cmd and /all cmd syntax
+                def _notify_wrapper(msg: str, severity: str, timeout: float) -> None:
+                    # Map severity to Textual's expected values
+                    sev = "information" if severity == "info" else severity
+                    self.notify(msg, severity=sev, timeout=timeout)
+
+                self._device_router = DeviceCommandRouter(worker, _notify_wrapper)
 
             def compose(self) -> ComposeResult:  # type: ignore[override]
                 yield Header(show_clock=False)
@@ -468,23 +480,21 @@ class TextualUI(BaseUI):
                 text = (event.value or "").strip()
                 if not text:
                     return
-                # Driver selection shortcut: "/<n>" selects driver sequence number
-                if text.startswith("/") and text[1:].isdigit():
-                    idx = int(text[1:])
-                    if hasattr(worker, "set_selected_device_by_index"):
-                        ok, dev, total = worker.set_selected_device_by_index(idx)  # type: ignore[attr-defined]
-                        if ok:
-                            self.notify(f"Selected driver {idx}/{total}: {dev}", timeout=2.0)
-                        else:
-                            self.notify(f"No driver #{idx} (available: {total})", timeout=2.0)
-                    else:
-                        self.notify(
-                            "Driver selection not supported for this transport",
-                            timeout=2.0,
-                        )
-                    event.input.value = ""
-                    return
-                # Only device commands are sent; use ctrl+h / ctrl+q for app actions
+
+                # Check for device targeting syntax: /N, /N cmd, /all cmd
+                target = parse_device_target(text)
+                if target is not None:
+                    handled, cmd_sent = self._device_router.execute(target)
+                    if handled:
+                        # Add to history if a command was actually sent
+                        if cmd_sent and ((not self._hist) or self._hist[-1] != text):
+                            self._hist.append(text)
+                        self._hist_idx = None
+                        self._hist_buffer = None
+                        event.input.value = ""
+                        return
+
+                # Regular device command (no device targeting prefix)
                 worker.queue_cmd(text)
                 if (not self._hist) or self._hist[-1] != text:
                     self._hist.append(text)

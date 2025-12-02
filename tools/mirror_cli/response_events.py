@@ -198,8 +198,23 @@ def parse_mqtt_payload(payload: Dict[str, object]) -> Optional[ResponseEvent]:
     )
 
 
-def format_event(event: ResponseEvent, *, latency_ms: Optional[float] = None) -> str:
+def format_event(
+    event: ResponseEvent,
+    *,
+    latency_ms: Optional[float] = None,
+    device_label: Optional[str] = None,
+) -> str:
+    """Format a response event as a log line.
+
+    Args:
+        event: The response event to format
+        latency_ms: Optional latency in milliseconds to include
+        device_label: Optional device label to prefix (e.g., "1", "2" for device index)
+    """
     headline = f"[{event.event_type.value.upper()}]"
+    # Prepend device label if provided (for multi-device MQTT mode)
+    if device_label:
+        headline = f"[{device_label}] {headline}"
     parts: List[str] = [headline]
     if event.action:
         parts.append(f"action={event.action}")
