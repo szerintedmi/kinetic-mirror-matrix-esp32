@@ -355,17 +355,21 @@ class TextualUI(BaseUI):
 
         class SerialApp(App):
             TITLE = "Motor Control"
+            # Maximum motors to display in main table (rest hidden, use Ctrl+L to filter)
+            MAX_MOTOR_ROWS = 16
+
             CSS = """
             Screen { background: $surface; }
             Header { height: 1; }
             Footer { height: 1; }
             #main { layout: vertical; }
             #status_bar { height: 1; content-align: left middle; padding: 0 1; }
-            #table_panel { height: 8; background: $panel; }
+            #table_panel { height: auto; max-height: 18; background: $panel; }
             /* Revert to accent header + normal intensity */
-            DataTable { background: $panel; color: $text; }
+            DataTable { background: $panel; color: $text; height: auto; }
             DataTable .datatable--header { background: $accent; color: $text; text-style: bold; }
             DataTable .datatable--cursor { background: $accent-darken-1; }
+            #table_hint { height: 1; padding: 0 1; color: $text-muted; }
             #log_panel { height: 1fr; }
             #input_row { height: 1; layout: horizontal; background: $boost; }
             /* Ensure the "> " prompt is always visible: give it room and no side padding */
@@ -398,6 +402,9 @@ class TextualUI(BaseUI):
                 self._hist_buffer: Optional[str] = None
                 self._columns: List[Tuple[str, str, int]] = list(TABLE_COLS)
                 self._transport = base_transport
+                # Cache for table data and hint to avoid unnecessary updates
+                self._last_table_data: List[List[str]] = []
+                self._last_hint: str = ""
 
                 # Device command router for /N cmd and /all cmd syntax
                 def _notify_wrapper(msg: str, severity: str, timeout: float) -> None:
@@ -413,6 +420,7 @@ class TextualUI(BaseUI):
                     yield Static("", id="status_bar")
                     with Container(id="table_panel"):
                         yield DataTable(id="status_table")
+                        yield Static("", id="table_hint")
                     with Container(id="log_panel"):
                         yield RichLog(id="log", highlight=True, wrap=True)
                     with Container(id="input_row"):
@@ -635,7 +643,10 @@ class TextualUI(BaseUI):
                     device_idx_map: Dict[str, str] = {
                         mac: str(i + 1) for i, mac in enumerate(devices_ordered)
                     }
+                    total_devices = len(devices_ordered)
 
+                    # Track visible devices for hint
+                    visible_devices: set = set()
                     data: List[List[str]] = []
                     for r in rows or []:
                         # Filter by visible devices
@@ -647,6 +658,7 @@ class TextualUI(BaseUI):
                             except Exception:
                                 pass
 
+                        visible_devices.add(device_mac)
                         row: List[str] = []
                         for key, _label, _w in self._columns:
                             if key == "dev":
@@ -660,13 +672,45 @@ class TextualUI(BaseUI):
                                 val = str(raw_val)
                             row.append(val)
                         data.append(row)
-                    if table.row_count != len(data):
-                        table.clear()
-                        for rec in data:
-                            table.add_row(*rec)
+
+                    # Limit displayed rows to MAX_MOTOR_ROWS
+                    filtered_motors = len(data)
+                    truncated = filtered_motors > self.MAX_MOTOR_ROWS
+                    display_data = data[: self.MAX_MOTOR_ROWS] if truncated else data
+                    num_visible_devices = len(visible_devices)
+
+                    # Only update table if data changed
+                    if display_data != self._last_table_data:
+                        if table.row_count != len(display_data):
+                            table.clear()
+                            for rec in display_data:
+                                table.add_row(*rec)
+                        else:
+                            for i, rec in enumerate(display_data):
+                                if i >= len(self._last_table_data) or rec != self._last_table_data[i]:
+                                    table.update_row(i, rec)
+                        self._last_table_data = [list(row) for row in display_data]
+
+                    # Update hint for truncated rows (only if changed)
+                    hint_widget = self.query_one("#table_hint", Static)
+                    if truncated:
+                        hidden = filtered_motors - self.MAX_MOTOR_ROWS
+                        # Build contextual hint
+                        if num_visible_devices < total_devices:
+                            # Filtered view
+                            new_hint = (
+                                f"[dim]... +{hidden} more "
+                                f"({num_visible_devices}/{total_devices} devices selected, "
+                                f"^L to change)[/dim]"
+                            )
+                        else:
+                            # All devices visible
+                            new_hint = f"[dim]... +{hidden} more motors (^L to filter devices)[/dim]"
                     else:
-                        for i, rec in enumerate(data):
-                            table.update_row(i, rec)
+                        new_hint = ""
+                    if self._last_hint != new_hint:
+                        hint_widget.update(new_hint)
+                        self._last_hint = new_hint
                 except Exception:
                     # Be robust to transient shape changes
                     try:
@@ -703,31 +747,7 @@ class TextualUI(BaseUI):
                 if err:
                     self.status = f"[yellow]{err}[/]"
 
-                # Dynamic sizing: fit table to motors, leave min 3 lines for logs
-                try:
-                    total_h = self.size.height or 24
-                    fixed = 1 + 1 + 1 + 1  # header + footer + status bar + input
-                    remain = max(0, total_h - fixed)
-                    min_log = 3
-                    desired_table = max(3, (len(rows) or 0) + 1)  # header + rows
-                    if remain >= min_log + 3:
-                        desired_table = min(desired_table, remain - min_log)
-                    else:
-                        desired_table = 3
-                    log_h = max(min_log, remain - desired_table)
-                    tp = self.query_one("#table_panel")
-                    lp = self.query_one("#log_panel")
-                    # Apply only if changed to reduce churn
-                    if int(getattr(tp.styles.height, "value", tp.styles.height or 0) or 0) != int(
-                        desired_table
-                    ):
-                        tp.styles.height = desired_table
-                    if int(getattr(lp.styles.height, "value", lp.styles.height or 0) or 0) != int(
-                        log_h
-                    ):
-                        lp.styles.height = log_h
-                except Exception:
-                    pass
+                # Table panel uses auto height with max-height in CSS, no dynamic sizing needed
 
         try:
             SerialApp().run()
