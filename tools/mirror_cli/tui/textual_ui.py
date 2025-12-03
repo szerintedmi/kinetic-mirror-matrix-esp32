@@ -681,31 +681,45 @@ class TextualUI(BaseUI):
 
                     # Only update table if data changed
                     if display_data != self._last_table_data:
-                        if table.row_count != len(display_data):
-                            table.clear()
-                            for rec in display_data:
-                                table.add_row(*rec)
-                        else:
-                            for i, rec in enumerate(display_data):
-                                if i >= len(self._last_table_data) or rec != self._last_table_data[i]:
-                                    table.update_row(i, rec)
+                        # Always clear and rebuild - simpler and avoids API issues
+                        table.clear()
+                        for rec in display_data:
+                            table.add_row(*rec)
                         self._last_table_data = [list(row) for row in display_data]
 
-                    # Update hint for truncated rows (only if changed)
+                    # Update hint for truncated rows or active filter
+                    # Use worker's filter state directly for accurate count
                     hint_widget = self.query_one("#table_hint", Static)
+                    filter_active = False
+                    filter_count = 0
+                    if hasattr(worker, "get_visible_devices"):
+                        try:
+                            visible_set = worker.get_visible_devices()
+                            # Non-empty set means filter is active
+                            # (empty set = all visible, no filter)
+                            if visible_set:
+                                filter_active = True
+                                # Exclude sentinel value
+                                filter_count = len(visible_set - {"__none__"})
+                        except Exception:
+                            pass
+
                     if truncated:
                         hidden = filtered_motors - self.MAX_MOTOR_ROWS
-                        # Build contextual hint
-                        if num_visible_devices < total_devices:
-                            # Filtered view
+                        if filter_active:
                             new_hint = (
-                                f"[dim]... +{hidden} more "
-                                f"({num_visible_devices}/{total_devices} devices selected, "
-                                f"^L to change)[/dim]"
+                                f"[dim]... +{hidden} more motors - "
+                                f"{filter_count}/{total_devices} devices selected "
+                                f"^L to change[/dim]"
                             )
                         else:
-                            # All devices visible
-                            new_hint = f"[dim]... +{hidden} more motors (^L to filter devices)[/dim]"
+                            new_hint = f"[dim]... +{hidden} more motors ^L to filter devices[/dim]"
+                    elif filter_active and total_devices > 0:
+                        # Not truncated, but filter is active
+                        new_hint = (
+                            f"[dim]{filter_count}/{total_devices} devices selected "
+                            f"^L to change[/dim]"
+                        )
                     else:
                         new_hint = ""
                     if self._last_hint != new_hint:
