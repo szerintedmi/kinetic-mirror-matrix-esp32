@@ -7,7 +7,7 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 ## What It Does
 
 - **Multi-controller support via MQTT**: Control multiple ESP32 nodes from a single CLI/TUI session
-- **Wi-Fi connectivity**: SoftAP mode for easy setup, STA mode for production use
+- **Dual-network Wi-Fi**: Primary + secondary credentials with automatic failover; safely update credentials fleet-wide via MQTT
 - **OTA firmware updates**: Update firmware and filesystem over the network via PlatformIO
 - **Real-time telemetry**: MQTT-based status publishing (1-5 Hz) with per-motor state
 - **Serial and MQTT command interface**: Human-readable protocol (`MOVE`, `HOME`, `STATUS`, etc.)
@@ -121,9 +121,11 @@ Schema: [`docs/mqtt-status-schema.md`](./docs/mqtt-status-schema.md), [`docs/mqt
 
 ## Wi-Fi Onboarding
 
+Devices support **primary** (home) and **secondary** (hotspot) networks with automatic failover.
+
 1. Power device with no credentials (hold BOOT 5s to clear existing)
 2. Join `SOFT_AP_SSID_PREFIX + MAC` using password from `include/secrets.h`
-3. Browse to `http://192.168.4.1/` to configure WiFi
+3. Browse to `http://192.168.4.1/` to configure networks
 
 Status LED (GPIO2): Fast blink = SoftAP active, Slow blink = Connecting, Solid = Connected
 

@@ -221,6 +221,132 @@ static void handleApiReset_(AsyncWebServerRequest* request) {
   request->send(200, "application/json", out.c_str());
 }
 
+static void handleApiConfig_(AsyncWebServerRequest* request) {
+  if (!g_portal_net) {
+    sendJsonError_(request, 503, "net-unavailable");
+    return;
+  }
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+
+  std::string primary_ssid, primary_pass;
+  std::string secondary_ssid, secondary_pass;
+  bool has_primary = g_portal_net->getPrimaryCredentials(primary_ssid, primary_pass);
+  bool has_secondary = g_portal_net->getSecondaryCredentials(secondary_ssid, secondary_pass);
+
+  JsonObject primary = root["primary"].to<JsonObject>();
+  primary["ssid"] = has_primary ? primary_ssid.c_str() : "";
+  primary["configured"] = has_primary;
+
+  JsonObject secondary = root["secondary"].to<JsonObject>();
+  secondary["ssid"] = has_secondary ? secondary_ssid.c_str() : "";
+  secondary["configured"] = has_secondary;
+
+  Status st = g_portal_net->status();
+  if (st.state == State::CONNECTED) {
+    root["connected_to"] = (st.connected_slot == CredentialSlot::PRIMARY) ? "primary" : "secondary";
+  } else {
+    root["connected_to"] = nullptr;
+  }
+
+  std::string out;
+  serializeJson(doc, out);
+  request->send(200, "application/json", out.c_str());
+}
+
+static void
+handleApiWifiSecondaryLogic_(AsyncWebServerRequest* request, const String& ssid, const String& pass) {
+  if (!g_portal_net) {
+    sendJsonError_(request, 503, "net-unavailable");
+    return;
+  }
+  if (ssid.length() == 0 || ssid.length() > 32) {
+    sendJsonError_(request, 400, "invalid-ssid");
+    return;
+  }
+  if (pass.length() > 0 && (pass.length() < 8 || pass.length() > 63)) {
+    if (pass.length() < 8) {
+      sendJsonError_(request, 400, "pass-too-short");
+    } else {
+      sendJsonError_(request, 400, "invalid-pass");
+    }
+    return;
+  }
+  if (!g_portal_net->setSecondaryCredentials(ssid.c_str(), pass.c_str())) {
+    sendJsonError_(request, 500, "persist-failed");
+    return;
+  }
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  root["status"] = "saved";
+  root["slot"] = "secondary";
+  std::string out;
+  serializeJson(doc, out);
+  request->send(200, "application/json", out.c_str());
+}
+
+static void registerWifiSecondaryHandler_(AsyncWebServer& server) {
+  server.on(
+      "/api/wifi/secondary",
+      HTTP_POST,
+      [](AsyncWebServerRequest* request) {
+        // The actual response will be sent after body parsed.
+      },
+      NULL,
+      [](AsyncWebServerRequest* request, uint8_t* data, size_t len, size_t index, size_t total) {
+        auto** buf_ptr = reinterpret_cast<std::string**>(&request->_tempObject);
+        if (index == 0) {
+          *buf_ptr = new std::string();
+          (*buf_ptr)->reserve(total);
+        }
+        if (*buf_ptr) {
+          (*buf_ptr)->append(reinterpret_cast<const char*>(data), len);
+        }
+        if (index + len == total) {
+          String ssid;
+          String pass;
+          bool ok = false;
+          if (*buf_ptr) {
+            JsonDocument doc;
+            auto err = deserializeJson(doc, **buf_ptr);
+            if (!err && doc.is<JsonObject>()) {
+              JsonObject obj = doc.as<JsonObject>();
+              const char* ssid_c = obj["ssid"].as<const char*>();
+              if (ssid_c) {
+                ssid = String(ssid_c);
+                const char* pass_c = obj["pass"].as<const char*>();
+                if (pass_c)
+                  pass = String(pass_c);
+                ok = true;
+              }
+            }
+          }
+          delete *buf_ptr;
+          *buf_ptr = nullptr;
+          if (!ok) {
+            sendJsonError_(request, 400, "invalid-payload");
+            return;
+          }
+          handleApiWifiSecondaryLogic_(request, ssid, pass);
+        }
+      });
+}
+
+static void handleApiClearSecondary_(AsyncWebServerRequest* request) {
+  if (!g_portal_net) {
+    sendJsonError_(request, 503, "net-unavailable");
+    return;
+  }
+  g_portal_net->clearSecondaryCredentials();
+  JsonDocument doc;
+  JsonObject root = doc.to<JsonObject>();
+  root["status"] = "cleared";
+  root["slot"] = "secondary";
+  std::string out;
+  serializeJson(doc, out);
+  request->send(200, "application/json", out.c_str());
+}
+
 static void handleNotFound_(AsyncWebServerRequest* request) {
   String uri = request->url();
   if (uri.startsWith("/api/")) {
@@ -241,8 +367,11 @@ static void ensurePortalServer_(NetOnboarding& net) {
     }
   }
   g_portal_server.on("/api/status", HTTP_GET, handleApiStatus_);
+  g_portal_server.on("/api/config", HTTP_GET, handleApiConfig_);
   g_portal_server.on("/api/scan", HTTP_GET, handleApiScan_);
   registerWifiHandler_(g_portal_server);
+  registerWifiSecondaryHandler_(g_portal_server);
+  g_portal_server.on("/api/wifi/secondary/clear", HTTP_POST, handleApiClearSecondary_);
   g_portal_server.on("/api/reset", HTTP_POST, handleApiReset_);
   g_portal_server.onNotFound(handleNotFound_);
   auto& root_handler = g_portal_server.serveStatic("/", LittleFS, "/");
@@ -288,10 +417,21 @@ uint32_t NetOnboarding::nowMs_() const {
 void NetOnboarding::begin(uint32_t connect_timeout_ms) {
   connect_timeout_ms_ = connect_timeout_ms;
 
-#if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
-  if (!nvs_)
-    nvs_ = MakeNvs();
-#endif
+  // Initialize credentials store
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
+  }
+  creds_store_->load();
+
+  // Initialize connection sequence with per-network timeout
+  // Each network gets (connect_timeout_ms / 2) or 5s whichever is configured
+  uint32_t per_network_timeout = connect_timeout_ms / 2;
+  if (!connection_seq_) {
+    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(per_network_timeout));
+  } else {
+    connection_seq_->setTimeoutPerNetworkMs(per_network_timeout);
+  }
+
   if (!wifi_)
     wifi_ = MakeWifi();
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
@@ -302,10 +442,20 @@ void NetOnboarding::begin(uint32_t connect_timeout_ms) {
     wifi_->setModeSta();
   }
 
-  std::string ssid, pass;
-  bool have = loadCredentials(ssid, pass);
-  if (have && !ssid.empty()) {
-    enterConnecting_(ssid.c_str(), pass.c_str());
+  // Start connection sequence with loaded credentials
+  const WifiCredentials& primary = creds_store_->get(CredentialSlot::PRIMARY);
+  const WifiCredentials& secondary = creds_store_->get(CredentialSlot::SECONDARY);
+
+  if (primary.isValid() || secondary.isValid()) {
+    // Set last connected slot from NVS before begin() so we try that network first
+    connection_seq_->setLastConnectedSlot(creds_store_->lastConnectedSlot());
+    connection_seq_->begin(primary, secondary, nowMs_());
+    const WifiCredentials* current = connection_seq_->currentCredentials();
+    if (current && current->isValid()) {
+      enterConnecting_(current->ssid.c_str(), current->password.c_str());
+    } else {
+      enterApMode_();
+    }
   } else {
     enterApMode_();
   }
@@ -328,13 +478,28 @@ void NetOnboarding::loop() {
   }
 #endif
 
-  if (st_.state == State::CONNECTING) {
+  if (st_.state == State::CONNECTING && connection_seq_) {
     uint32_t now = nowMs_();
-    if (now - connecting_since_ms_ >= connect_timeout_ms_) {
-      enterApMode_();
+
+    // Check if current network attempt timed out
+    if (connection_seq_->checkTimeout(now)) {
+      // Advanced to next network (or exhausted)
+      if (connection_seq_->state() == ConnectionSequence::State::EXHAUSTED) {
+        enterApMode_();
+        return;
+      }
+
+      // Try next network
+      const WifiCredentials* next = connection_seq_->currentCredentials();
+      if (next && next->isValid()) {
+        enterConnecting_(next->ssid.c_str(), next->password.c_str());
+      } else {
+        enterApMode_();
+      }
       return;
     }
 
+    // Check if connected
     if (wifi_ && wifi_->staConnected()) {
       enterConnected_();
       return;
@@ -344,7 +509,18 @@ void NetOnboarding::loop() {
   if (st_.state == State::CONNECTED) {
 #if !defined(USE_STUB_BACKEND)
     if (!(wifi_ && wifi_->staConnected())) {
-      enterApMode_();
+      // Lost connection - start reconnection sequence
+      if (connection_seq_) {
+        connection_seq_->onDisconnect(nowMs_());
+        const WifiCredentials* creds = connection_seq_->currentCredentials();
+        if (creds && creds->isValid()) {
+          enterConnecting_(creds->ssid.c_str(), creds->password.c_str());
+        } else {
+          enterApMode_();
+        }
+      } else {
+        enterApMode_();
+      }
     }
 #endif
   }
@@ -369,17 +545,93 @@ void NetOnboarding::configureStatusLed(int pin, bool active_low) {
 }
 
 bool NetOnboarding::setCredentials(const char* ssid, const char* pass) {
-  if (!ssid || !pass)
+  return setPrimaryCredentials(ssid, pass);
+}
+
+bool NetOnboarding::setPrimaryCredentials(const char* ssid, const char* pass) {
+  if (!ssid)
     return false;
-  if (!saveCredentials(ssid, pass))
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
+    creds_store_->load();
+  }
+
+  WifiCredentials creds;
+  creds.ssid = ssid;
+  creds.password = pass ? pass : "";
+
+  if (!creds_store_->save(CredentialSlot::PRIMARY, creds))
     return false;
-  enterConnecting_(ssid, pass);
+
+  // Start connection sequence with updated credentials
+  if (!connection_seq_) {
+    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(connect_timeout_ms_ / 2));
+  }
+  connection_seq_->begin(
+      creds_store_->get(CredentialSlot::PRIMARY),
+      creds_store_->get(CredentialSlot::SECONDARY),
+      nowMs_());
+
+  const WifiCredentials* current = connection_seq_->currentCredentials();
+  if (current && current->isValid()) {
+    enterConnecting_(current->ssid.c_str(), current->password.c_str());
+  }
+  return true;
+}
+
+bool NetOnboarding::setSecondaryCredentials(const char* ssid, const char* pass) {
+  if (!ssid)
+    return false;
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
+    creds_store_->load();
+  }
+
+  WifiCredentials creds;
+  creds.ssid = ssid;
+  creds.password = pass ? pass : "";
+
+  bool ok = creds_store_->save(CredentialSlot::SECONDARY, creds);
+  if (ok && connection_seq_) {
+    // Update connection sequence so secondary is available for reconnection
+    connection_seq_->updateSecondary(creds);
+  }
+  return ok;
+}
+
+bool NetOnboarding::getPrimaryCredentials(std::string& out_ssid, std::string& out_pass) const {
+  if (!creds_store_)
+    return false;
+  const WifiCredentials& creds = creds_store_->get(CredentialSlot::PRIMARY);
+  if (!creds.isValid())
+    return false;
+  out_ssid = creds.ssid;
+  out_pass = creds.password;
+  return true;
+}
+
+bool NetOnboarding::getSecondaryCredentials(std::string& out_ssid, std::string& out_pass) const {
+  if (!creds_store_)
+    return false;
+  const WifiCredentials& creds = creds_store_->get(CredentialSlot::SECONDARY);
+  if (!creds.isValid())
+    return false;
+  out_ssid = creds.ssid;
+  out_pass = creds.password;
   return true;
 }
 
 void NetOnboarding::resetCredentials() {
-  clearCredentials();
+  if (creds_store_) {
+    creds_store_->clearAll();
+  }
   enterApMode_();
+}
+
+void NetOnboarding::clearSecondaryCredentials() {
+  if (creds_store_) {
+    creds_store_->clear(CredentialSlot::SECONDARY);
+  }
 }
 
 Status NetOnboarding::status() const {
@@ -417,42 +669,40 @@ int NetOnboarding::scanNetworks(std::vector<WifiScanResult>& out,
   return wifi_->scanNetworks(out, max_results, include_hidden);
 }
 
-// NVS persistence ----------------------------------------------------------
+// NVS persistence (legacy API - delegates to WifiCredentialsStore) ----------
 
 bool NetOnboarding::saveCredentials(const char* ssid, const char* pass) {
-  if (!nvs_)
-    nvs_ = MakeNvs();
-  if (!nvs_->begin("net", false))
-    return false;
-  bool ok1 = nvs_->putString("ssid", ssid ? ssid : "");
-  bool ok2 = nvs_->putString("psk", pass ? pass : "");
-  nvs_->end();
-  if (ok1) {
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
+    creds_store_->load();
+  }
+  WifiCredentials creds;
+  creds.ssid = ssid ? ssid : "";
+  creds.password = pass ? pass : "";
+  bool ok = creds_store_->save(CredentialSlot::PRIMARY, creds);
+  if (ok) {
     last_ssid_ = ssid ? ssid : "";
   }
-  return ok1 && ok2;
+  return ok;
 }
 
 bool NetOnboarding::loadCredentials(std::string& out_ssid, std::string& out_pass) {
-  if (!nvs_)
-    nvs_ = MakeNvs();
-  if (!nvs_->begin("net", true))
-    return false;
-  out_ssid = nvs_->getString("ssid", "");
-  out_pass = nvs_->getString("psk", "");
-  nvs_->end();
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
+    creds_store_->load();
+  }
+  const WifiCredentials& creds = creds_store_->get(CredentialSlot::PRIMARY);
+  out_ssid = creds.ssid;
+  out_pass = creds.password;
   last_ssid_ = out_ssid;
-  return !out_ssid.empty();
+  return creds.isValid();
 }
 
 void NetOnboarding::clearCredentials() {
-  if (!nvs_)
-    nvs_ = MakeNvs();
-  if (nvs_->begin("net", false)) {
-    nvs_->remove("ssid");
-    nvs_->remove("psk");
-    nvs_->end();
+  if (!creds_store_) {
+    creds_store_ = std::unique_ptr<WifiCredentialsStore>(new WifiCredentialsStore(MakeNvs()));
   }
+  creds_store_->clearAll();
   last_ssid_.clear();
 }
 
@@ -521,6 +771,18 @@ void NetOnboarding::enterConnected_() {
     st_.rssi_dbm = wifi_->staRssi();
     wifi_->staLocalIp(st_.ip);
     // stop AP if any (implicit when STA only)
+  }
+
+  // Track which slot we connected to
+  if (connection_seq_) {
+    st_.connected_slot = connection_seq_->currentSlot();
+    connection_seq_->markConnected(st_.connected_slot);
+    // Persist last connected slot to NVS (only writes if changed)
+    if (creds_store_) {
+      creds_store_->setLastConnectedSlot(st_.connected_slot);
+    }
+  } else {
+    st_.connected_slot = CredentialSlot::PRIMARY;
   }
 
   updateIdentity_();

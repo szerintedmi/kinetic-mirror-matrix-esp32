@@ -892,7 +892,8 @@ bool MqttCommandServer::buildNetCommand(const std::string& action,
                                         std::string& error,
                                         bool& unsupported) const {
   std::string sub = action.substr(4);
-  if (sub == "STATUS" || sub == "RESET" || sub == "LIST") {
+  if (sub == "STATUS" || sub == "RESET" || sub == "LIST" || sub == "GET_CONFIG" ||
+      sub == "CLEAR_SECONDARY") {
     if (!params.isNull() && params.size() > 0) {
       error = "params must be empty";
       return false;
@@ -900,7 +901,7 @@ bool MqttCommandServer::buildNetCommand(const std::string& action,
     out = action;
     return true;
   }
-  if (sub == "SET") {
+  if (sub == "SET" || sub == "SET_PRIMARY" || sub == "SET_SECONDARY") {
     if (!params.is<ArduinoJson::JsonObjectConst>()) {
       error = "params must be object";
       return false;

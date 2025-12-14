@@ -97,6 +97,81 @@ header > .lead {
   background: var(--status-connected);
 }
 
+.config-card {
+  margin-top: 1.5rem;
+  padding: 1.5rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-card-background-color);
+}
+
+.config-card h2 {
+  font-size: 1.1rem;
+  margin: 0 0 1rem 0;
+}
+
+.network-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+}
+
+.network-slot {
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--pico-muted-border-color);
+  border-radius: var(--pico-border-radius);
+  background: var(--pico-background-color);
+}
+
+.network-slot.active {
+  border-color: var(--status-connected);
+  background: rgba(46, 125, 50, 0.05);
+}
+
+.slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.slot-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--pico-muted-color);
+}
+
+.slot-status {
+  font-size: 0.75rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--status-connected);
+  color: var(--status-text);
+  font-weight: 600;
+}
+
+.slot-ssid {
+  font-weight: 500;
+  word-break: break-word;
+}
+
+.clear-btn {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  margin: 0;
+  background: transparent;
+  border: 1px solid var(--pico-muted-border-color);
+  color: var(--pico-muted-color);
+  cursor: pointer;
+}
+
+.clear-btn:hover {
+  border-color: #c62828;
+  color: #c62828;
+}
+
 .notice {
   border-radius: var(--pico-border-radius);
   border: 1px solid currentColor;

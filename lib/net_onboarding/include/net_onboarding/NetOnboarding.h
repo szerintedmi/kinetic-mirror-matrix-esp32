@@ -8,7 +8,10 @@
 #include <stdint.h>
 
 #if defined(__cplusplus)
+#include "net_onboarding/ConnectionSequence.h"
 #include "net_onboarding/Platform.h"
+#include "net_onboarding/WifiCredentials.h"
+#include "net_onboarding/WifiCredentialsStore.h"
 
 #include <array>
 #include <memory>
@@ -32,6 +35,7 @@ struct Status {
   std::array<char, 33> ssid;  // up to 32 chars + NUL
   std::array<char, 18> mac;   // XX:XX:XX:XX:XX:XX + NUL
   std::array<char, 32> ap_ssid;
+  CredentialSlot connected_slot;  // Which slot we're connected to (valid when CONNECTED)
 };
 
 class NetOnboarding {
@@ -47,12 +51,25 @@ public:
   // drives the pin low). Call before begin(); optional.
   void configureStatusLed(int pin, bool active_low);
 
-  // Save credentials and immediately attempt to connect in STA mode.
+  // Save primary credentials and immediately attempt to connect in STA mode.
   // Returns true if credentials persisted successfully.
+  // This is the backward-compatible API (equivalent to setPrimaryCredentials).
   bool setCredentials(const char* ssid, const char* pass);
 
-  // Clear credentials and switch to AP mode.
+  // Save credentials for a specific slot.
+  bool setPrimaryCredentials(const char* ssid, const char* pass);
+  bool setSecondaryCredentials(const char* ssid, const char* pass);
+
+  // Get credentials for a specific slot (for NET:GET_CONFIG).
+  // Returns true if slot has valid credentials.
+  bool getPrimaryCredentials(std::string& out_ssid, std::string& out_pass) const;
+  bool getSecondaryCredentials(std::string& out_ssid, std::string& out_pass) const;
+
+  // Clear primary credentials and switch to AP mode (clears both slots).
   void resetCredentials();
+
+  // Clear only secondary credentials (keeps primary).
+  void clearSecondaryCredentials();
 
   // Snapshot of current state, RSSI, and IP (connected only).
   Status status() const;
@@ -102,13 +119,16 @@ private:
   void applyLedState_(bool on);
 
 private:
-  Status st_{State::AP_ACTIVE, 0, {'0', '.', '0', '.', '0', '.', '0', '\0'}, {}, {}, {}};
+  Status st_{State::AP_ACTIVE, 0, {'0', '.', '0', '.', '0', '.', '0', '\0'}, {}, {}, {}, CredentialSlot::PRIMARY};
   uint32_t connect_timeout_ms_{10000};
   uint32_t connecting_since_ms_{0};
 
   // Platform adapters (ESP32 or stub)
   std::unique_ptr<IWifi> wifi_;
-  std::unique_ptr<INvs> nvs_;
+
+  // Multi-network support
+  std::unique_ptr<WifiCredentialsStore> creds_store_;
+  std::unique_ptr<ConnectionSequence> connection_seq_;
   std::string last_ssid_;
 
   enum class LedPattern : uint8_t { OFF, SOLID, BLINK_SLOW, BLINK_FAST };

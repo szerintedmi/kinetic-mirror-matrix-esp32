@@ -54,6 +54,33 @@
         </dl>
       </section>
 
+      <section class="config-card" x-cloak x-show="config.primary.configured || config.secondary.configured">
+        <h2>Configured Networks</h2>
+        <div class="network-slots">
+          <div class="network-slot" :class="{'active': config.connected_to === 'primary'}">
+            <div class="slot-header">
+              <span class="slot-label">Primary</span>
+              <span class="slot-status" x-show="config.connected_to === 'primary'">Connected</span>
+            </div>
+            <div class="slot-ssid" x-text="config.primary.configured ? config.primary.ssid : 'Not configured'"></div>
+          </div>
+          <div class="network-slot" :class="{'active': config.connected_to === 'secondary'}">
+            <div class="slot-header">
+              <span class="slot-label">Secondary</span>
+              <span class="slot-status" x-show="config.connected_to === 'secondary'">Connected</span>
+              <button
+                type="button"
+                class="clear-btn"
+                x-show="config.secondary.configured"
+                @click="clearSecondary"
+                :disabled="busy"
+              >Clear</button>
+            </div>
+            <div class="slot-ssid" x-text="config.secondary.configured ? config.secondary.ssid : 'Not configured'"></div>
+          </div>
+        </div>
+      </section>
+
       <template x-if="message.text">
         <section class="notice" :class="message.kind">
           <strong x-text="message.heading"></strong>
@@ -77,7 +104,7 @@
           <p class="hint" x-text="networkHint()" x-cloak></p>
           <ul>
             <template x-if="!hasScanned">
-              <li class="empty">Click Refresh to scan Wi‑Fi networks.</li>
+              <li class="empty">Click Refresh to scan Wi-Fi networks.</li>
             </template>
             <template x-if="hasScanned && networks.length === 0">
               <li class="empty">No networks found yet.</li>
@@ -130,6 +157,17 @@
                 placeholder="Leave blank for open networks"
               />
             </label>
+            <fieldset>
+              <legend>Save as</legend>
+              <label>
+                <input type="radio" name="slot" value="primary" x-model="form.slot" :disabled="busy" />
+                Primary (home network)
+              </label>
+              <label>
+                <input type="radio" name="slot" value="secondary" x-model="form.slot" :disabled="busy" />
+                Secondary (backup/portable)
+              </label>
+            </fieldset>
             <div class="form-actions">
               <button type="submit" :disabled="busy || !canSubmit()" x-text="submitLabel()"></button>
               <button
@@ -140,7 +178,7 @@
                 @click="resetToAp"
                 :disabled="busy"
               >
-                Reset Wi-Fi Settings
+                Reset All Wi-Fi
               </button>
             </div>
             <p class="hint">

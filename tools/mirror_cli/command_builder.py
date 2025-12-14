@@ -130,7 +130,7 @@ def parse_serial_command(command: str) -> CommandRequest:
         remainder = rest[len(sub_token) :]
         if remainder.startswith(","):
             remainder = remainder[1:]
-        if action in {"NET:STATUS", "NET:RESET", "NET:LIST"}:
+        if action in {"NET:STATUS", "NET:RESET", "NET:LIST", "NET:GET_CONFIG", "NET:CLEAR_SECONDARY"}:
             if remainder.strip():
                 raise CommandParseError(f"{action} does not accept arguments")
             return CommandRequest(action=action, params={}, raw=raw)
@@ -138,6 +138,34 @@ def parse_serial_command(command: str) -> CommandRequest:
             args = _parse_csv_arguments(remainder)
             if len(args) < 2:
                 raise CommandParseError("NET:SET requires ssid and pass")
+            ssid = args[0]
+            password = args[1]
+            return CommandRequest(
+                action=action,
+                params={
+                    "ssid": ssid,
+                    "pass": password,
+                },
+                raw=raw,
+            )
+        if action == "NET:SET_PRIMARY":
+            args = _parse_csv_arguments(remainder)
+            if len(args) < 2:
+                raise CommandParseError("NET:SET_PRIMARY requires ssid and pass")
+            ssid = args[0]
+            password = args[1]
+            return CommandRequest(
+                action=action,
+                params={
+                    "ssid": ssid,
+                    "pass": password,
+                },
+                raw=raw,
+            )
+        if action == "NET:SET_SECONDARY":
+            args = _parse_csv_arguments(remainder)
+            if len(args) < 2:
+                raise CommandParseError("NET:SET_SECONDARY requires ssid and pass")
             ssid = args[0]
             password = args[1]
             return CommandRequest(

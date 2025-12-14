@@ -677,7 +677,6 @@ class TextualUI(BaseUI):
                     filtered_motors = len(data)
                     truncated = filtered_motors > self.MAX_MOTOR_ROWS
                     display_data = data[: self.MAX_MOTOR_ROWS] if truncated else data
-                    num_visible_devices = len(visible_devices)
 
                     # Only update table if data changed
                     if display_data != self._last_table_data:

@@ -91,6 +91,7 @@ public:
   bool putString(const char* key, const char* value) override {
     if (!key)
       return false;
+    // Legacy keys (for migration testing)
     if (std::strcmp(key, "ssid") == 0) {
       std::strncpy(ssid_, value ? value : "", sizeof(ssid_) - 1);
       ssid_[sizeof(ssid_) - 1] = '\0';
@@ -101,32 +102,100 @@ public:
       psk_[sizeof(psk_) - 1] = '\0';
       return true;
     }
+    // New multi-slot keys
+    if (std::strcmp(key, "ssid_0") == 0) {
+      std::strncpy(ssid_0_, value ? value : "", sizeof(ssid_0_) - 1);
+      ssid_0_[sizeof(ssid_0_) - 1] = '\0';
+      return true;
+    }
+    if (std::strcmp(key, "psk_0") == 0) {
+      std::strncpy(psk_0_, value ? value : "", sizeof(psk_0_) - 1);
+      psk_0_[sizeof(psk_0_) - 1] = '\0';
+      return true;
+    }
+    if (std::strcmp(key, "ssid_1") == 0) {
+      std::strncpy(ssid_1_, value ? value : "", sizeof(ssid_1_) - 1);
+      ssid_1_[sizeof(ssid_1_) - 1] = '\0';
+      return true;
+    }
+    if (std::strcmp(key, "psk_1") == 0) {
+      std::strncpy(psk_1_, value ? value : "", sizeof(psk_1_) - 1);
+      psk_1_[sizeof(psk_1_) - 1] = '\0';
+      return true;
+    }
+    // Last connected slot
+    if (std::strcmp(key, "last_slot") == 0) {
+      last_slot_ = value ? (uint8_t)std::atoi(value) : 0;
+      return true;
+    }
     return false;
   }
   std::string getString(const char* key, const char* def) override {
     if (!key)
       return def ? def : "";
+    // Legacy keys
     if (std::strcmp(key, "ssid") == 0)
       return std::string(ssid_);
     if (std::strcmp(key, "psk") == 0)
       return std::string(psk_);
+    // New multi-slot keys
+    if (std::strcmp(key, "ssid_0") == 0)
+      return std::string(ssid_0_);
+    if (std::strcmp(key, "psk_0") == 0)
+      return std::string(psk_0_);
+    if (std::strcmp(key, "ssid_1") == 0)
+      return std::string(ssid_1_);
+    if (std::strcmp(key, "psk_1") == 0)
+      return std::string(psk_1_);
+    // Last connected slot
+    if (std::strcmp(key, "last_slot") == 0) {
+      char buf[4];
+      std::snprintf(buf, sizeof(buf), "%d", last_slot_);
+      return std::string(buf);
+    }
     return def ? def : "";
   }
   void remove(const char* key) override {
     if (!key)
       return;
+    // Legacy keys
     if (std::strcmp(key, "ssid") == 0) {
       ssid_[0] = '\0';
     }
     if (std::strcmp(key, "psk") == 0) {
       psk_[0] = '\0';
     }
+    // New multi-slot keys
+    if (std::strcmp(key, "ssid_0") == 0) {
+      ssid_0_[0] = '\0';
+    }
+    if (std::strcmp(key, "psk_0") == 0) {
+      psk_0_[0] = '\0';
+    }
+    if (std::strcmp(key, "ssid_1") == 0) {
+      ssid_1_[0] = '\0';
+    }
+    if (std::strcmp(key, "psk_1") == 0) {
+      psk_1_[0] = '\0';
+    }
+    // Last connected slot
+    if (std::strcmp(key, "last_slot") == 0) {
+      last_slot_ = 0;
+    }
   }
   void end() override {}
 
 private:
+  // Legacy keys (for migration testing)
   char ssid_[33] = {0};
   char psk_[65] = {0};
+  // New multi-slot keys
+  char ssid_0_[33] = {0};
+  char psk_0_[65] = {0};
+  char ssid_1_[33] = {0};
+  char psk_1_[65] = {0};
+  // Last connected slot
+  uint8_t last_slot_ = 0;
 };
 
 std::unique_ptr<IWifi> MakeWifi() {

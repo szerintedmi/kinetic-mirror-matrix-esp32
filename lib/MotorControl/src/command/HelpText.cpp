@@ -13,9 +13,13 @@ const std::string& HelpText() {
     os << "HELP\n";
     os << "MOVE:<id|ALL>,<abs_steps>\n";
     os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
-    os << "NET:RESET\n";
+    os << "NET:RESET (clear all networks, enter AP mode)\n";
     os << "NET:STATUS\n";
-    os << "NET:SET,\"<ssid>\",\"<pass>\" (quote to allow commas/spaces; escape \\\" and \\\\)\n";
+    os << "NET:GET_CONFIG (show configured primary/secondary SSIDs)\n";
+    os << "NET:SET,\"<ssid>\",\"<pass>\" (set primary network, same as SET_PRIMARY)\n";
+    os << "NET:SET_PRIMARY,\"<ssid>\",\"<pass>\" (set primary/home network)\n";
+    os << "NET:SET_SECONDARY,\"<ssid>\",\"<pass>\" (set secondary/backup network)\n";
+    os << "NET:CLEAR_SECONDARY (remove secondary network only)\n";
     os << "NET:LIST (scan nearby SSIDs; AP mode only)\n";
     os << "MQTT:GET_CONFIG\n";
     os << "MQTT:SET_CONFIG host=<host> port=<port> user=<user> pass=\\\"<pass>\\\"\n";

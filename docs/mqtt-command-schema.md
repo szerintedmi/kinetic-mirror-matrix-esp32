@@ -369,20 +369,47 @@ Get current network status.
     "state": "CONNECTED",
     "rssi": -55,
     "ssid": "\"HomeNetwork\"",
-    "ip": "192.168.1.8"
+    "ip": "192.168.1.8",
+    "connected_slot": "primary"
   }
 }
 ```
 
-### NET:SET
+### NET:GET_CONFIG
 
-Set Wi-Fi credentials and connect.
+Get configured network credentials (SSIDs only, not passwords).
+
+**Request:**
+
+```json
+{ "action": "NET:GET_CONFIG" }
+```
+
+**Completion:**
+
+```json
+{
+  "cmd_id": "...",
+  "action": "NET:GET_CONFIG",
+  "status": "done",
+  "result": {
+    "sub_action": "GET_CONFIG",
+    "primary": { "ssid": "HomeNetwork", "configured": true },
+    "secondary": { "ssid": "MobileHotspot", "configured": true },
+    "connected_to": "primary"
+  }
+}
+```
+
+### NET:SET / NET:SET_PRIMARY
+
+Set primary Wi-Fi credentials and connect. `NET:SET` is an alias for `NET:SET_PRIMARY`.
 
 **Request:**
 
 ```json
 {
-  "action": "NET:SET",
+  "action": "NET:SET_PRIMARY",
   "params": {
     "ssid": "MyNetwork",
     "pass": "password123"
@@ -395,9 +422,57 @@ Set Wi-Fi credentials and connect.
 ```json
 {
   "cmd_id": "...",
-  "action": "NET:SET",
+  "action": "NET:SET_PRIMARY",
   "status": "done",
-  "result": { "sub_action": "SET" }
+  "result": { "sub_action": "SET_PRIMARY" }
+}
+```
+
+### NET:SET_SECONDARY
+
+Set secondary (fallback) Wi-Fi credentials.
+
+**Request:**
+
+```json
+{
+  "action": "NET:SET_SECONDARY",
+  "params": {
+    "ssid": "MobileHotspot",
+    "pass": "password456"
+  }
+}
+```
+
+**Completion:**
+
+```json
+{
+  "cmd_id": "...",
+  "action": "NET:SET_SECONDARY",
+  "status": "done",
+  "result": { "sub_action": "SET_SECONDARY" }
+}
+```
+
+### NET:CLEAR_SECONDARY
+
+Clear secondary credentials (keeps primary).
+
+**Request:**
+
+```json
+{ "action": "NET:CLEAR_SECONDARY" }
+```
+
+**Completion:**
+
+```json
+{
+  "cmd_id": "...",
+  "action": "NET:CLEAR_SECONDARY",
+  "status": "done",
+  "result": { "sub_action": "CLEAR_SECONDARY" }
 }
 ```
 
@@ -620,22 +695,26 @@ CTRL:WARN msg_id=<id> <code> <fields...>
 
 ### Serial Command Mapping
 
-| Serial                                              | MQTT Action     | Notes                                  |
-| --------------------------------------------------- | --------------- | -------------------------------------- |
-| `MOVE:<id>,<pos>[,<speed>,<accel>]`                 | MOVE            | Position and optional overrides        |
-| `HOME:<id>[,<over>,<back>,<speed>,<accel>,<range>]` | HOME            | All params optional except target      |
-| `WAKE:<id>`                                         | WAKE            |                                        |
-| `SLEEP:<id>`                                        | SLEEP           |                                        |
-| `STATUS`                                            | -               | Serial only; MQTT uses telemetry topic |
-| `GET [resource]`                                    | GET             |                                        |
-| `SET <key>=<value>`                                 | SET             |                                        |
-| `NET:STATUS`                                        | NET:STATUS      |                                        |
-| `NET:SET,"<ssid>","<pass>"`                         | NET:SET         | Quoted strings                         |
-| `NET:RESET`                                         | NET:RESET       |                                        |
-| `NET:LIST`                                          | NET:LIST        |                                        |
-| `MQTT:GET_CONFIG`                                   | MQTT:GET_CONFIG |                                        |
-| `MQTT:SET_CONFIG <key>=<val>...`                    | MQTT:SET_CONFIG |                                        |
-| `HELP`                                              | HELP            |                                        |
+| Serial                                              | MQTT Action        | Notes                                  |
+| --------------------------------------------------- | ------------------ | -------------------------------------- |
+| `MOVE:<id>,<pos>[,<speed>,<accel>]`                 | MOVE               | Position and optional overrides        |
+| `HOME:<id>[,<over>,<back>,<speed>,<accel>,<range>]` | HOME               | All params optional except target      |
+| `WAKE:<id>`                                         | WAKE               |                                        |
+| `SLEEP:<id>`                                        | SLEEP              |                                        |
+| `STATUS`                                            | -                  | Serial only; MQTT uses telemetry topic |
+| `GET [resource]`                                    | GET                |                                        |
+| `SET <key>=<value>`                                 | SET                |                                        |
+| `NET:STATUS`                                        | NET:STATUS         |                                        |
+| `NET:GET_CONFIG`                                    | NET:GET_CONFIG     | Show configured SSIDs                  |
+| `NET:SET,"<ssid>","<pass>"`                         | NET:SET            | Alias for SET_PRIMARY                  |
+| `NET:SET_PRIMARY,"<ssid>","<pass>"`                 | NET:SET_PRIMARY    | Set primary credentials                |
+| `NET:SET_SECONDARY,"<ssid>","<pass>"`               | NET:SET_SECONDARY  | Set secondary credentials              |
+| `NET:CLEAR_SECONDARY`                               | NET:CLEAR_SECONDARY| Remove secondary credentials           |
+| `NET:RESET`                                         | NET:RESET          |                                        |
+| `NET:LIST`                                          | NET:LIST           |                                        |
+| `MQTT:GET_CONFIG`                                   | MQTT:GET_CONFIG    |                                        |
+| `MQTT:SET_CONFIG <key>=<val>...`                    | MQTT:SET_CONFIG    |                                        |
+| `HELP`                                              | HELP               |                                        |
 
 ### Serial Shortcuts
 

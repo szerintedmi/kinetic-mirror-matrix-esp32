@@ -1232,6 +1232,12 @@ CommandResult NetCommandHandler::execute(const ParsedCommand& command,
     } else {
       fields.push_back({"pass", QuoteString("********")});
     }
+    // Add slot information when connected
+    if (s.state == State::CONNECTED) {
+      using net_onboarding::CredentialSlot;
+      const char* slot_name = (s.connected_slot == CredentialSlot::PRIMARY) ? "PRIMARY" : "SECONDARY";
+      fields.push_back({"slot", slot_name});
+    }
     return MakeDoneResult(kAction, msg_id, fields);
   }
 
@@ -1274,6 +1280,117 @@ CommandResult NetCommandHandler::execute(const ParsedCommand& command,
     }
     auto ack_line = transport::command::MakeAckLine(msg_id, {sub_field("SET")});
     return MakeResultWithLine(kAction, ack_line);
+  }
+
+  // SET_PRIMARY - set primary network credentials
+  if (sub == "SET_PRIMARY") {
+    std::string msg_id = context.nextMsgId();
+    if (context.net().status().state == State::CONNECTING) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("SET_PRIMARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    auto toks = ParseCsvQuoted(a);
+    if (toks.size() != 3) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_PRIMARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    const std::string& ssid = toks[1];
+    const std::string& pass = toks[2];
+    if (ssid.empty() || ssid.size() > 32) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_PRIMARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
+      if (pass.size() > 0 && pass.size() < 8) {
+        auto err_line = transport::command::MakeErrorLine(
+            msg_id, "NET_BAD_PARAM", "PASS_TOO_SHORT", {sub_field("SET_PRIMARY")});
+        return MakeResultWithLine(kAction, err_line);
+      }
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_PRIMARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.setActiveMsgId(msg_id);
+    bool ok = context.net().setPrimaryCredentials(ssid.c_str(), pass.c_str());
+    if (!ok) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_SAVE_FAILED", "", {sub_field("SET_PRIMARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    auto ack_line = transport::command::MakeAckLine(msg_id, {sub_field("SET_PRIMARY")});
+    return MakeResultWithLine(kAction, ack_line);
+  }
+
+  // SET_SECONDARY - set secondary/backup network credentials
+  if (sub == "SET_SECONDARY") {
+    std::string msg_id = context.nextMsgId();
+    if (context.net().status().state == State::CONNECTING) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BUSY_CONNECTING", "", {sub_field("SET_SECONDARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    auto toks = ParseCsvQuoted(a);
+    if (toks.size() != 3) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_SECONDARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    const std::string& ssid = toks[1];
+    const std::string& pass = toks[2];
+    if (ssid.empty() || ssid.size() > 32) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_SECONDARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    if (!(pass.size() == 0 || (pass.size() >= 8 && pass.size() <= 63))) {
+      if (pass.size() > 0 && pass.size() < 8) {
+        auto err_line = transport::command::MakeErrorLine(
+            msg_id, "NET_BAD_PARAM", "PASS_TOO_SHORT", {sub_field("SET_SECONDARY")});
+        return MakeResultWithLine(kAction, err_line);
+      }
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_BAD_PARAM", "", {sub_field("SET_SECONDARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    bool ok = context.net().setSecondaryCredentials(ssid.c_str(), pass.c_str());
+    if (!ok) {
+      auto err_line =
+          transport::command::MakeErrorLine(msg_id, "NET_SAVE_FAILED", "", {sub_field("SET_SECONDARY")});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    return MakeDoneResult(kAction, msg_id, {sub_field("SET_SECONDARY")});
+  }
+
+  // GET_CONFIG - get configured networks (without passwords)
+  if (sub == "GET_CONFIG") {
+    std::string msg_id = context.nextMsgId();
+    std::string primary_ssid, primary_pass;
+    std::string secondary_ssid, secondary_pass;
+    bool has_primary = context.net().getPrimaryCredentials(primary_ssid, primary_pass);
+    bool has_secondary = context.net().getSecondaryCredentials(secondary_ssid, secondary_pass);
+
+    std::vector<transport::command::Field> fields = {sub_field("GET_CONFIG")};
+    fields.push_back({"primary_ssid", has_primary ? QuoteString(primary_ssid) : "NA"});
+    fields.push_back({"secondary_ssid", has_secondary ? QuoteString(secondary_ssid) : "NA"});
+
+    auto s = context.net().status();
+    if (s.state == State::CONNECTED) {
+      using net_onboarding::CredentialSlot;
+      const char* slot_name = (s.connected_slot == CredentialSlot::PRIMARY) ? "PRIMARY" : "SECONDARY";
+      fields.push_back({"connected_to", slot_name});
+    }
+
+    return MakeDoneResult(kAction, msg_id, fields);
+  }
+
+  // CLEAR_SECONDARY - clear only secondary network
+  if (sub == "CLEAR_SECONDARY") {
+    std::string msg_id = context.nextMsgId();
+    context.net().clearSecondaryCredentials();
+    return MakeDoneResult(kAction, msg_id, {sub_field("CLEAR_SECONDARY")});
   }
 
   if (sub == "LIST") {

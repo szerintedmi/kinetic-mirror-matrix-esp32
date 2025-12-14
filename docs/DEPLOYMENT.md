@@ -223,20 +223,33 @@ ESP32 bootloader automatically reverts to previous firmware if new firmware fail
 
 ## Wi-Fi Onboarding
 
+### Dual-Network Support
+
+Each device stores **primary** and **secondary** Wi-Fi credentials with automatic failover:
+
+- **Primary**: Home/studio network for normal operation
+- **Secondary**: Mobile hotspot for field deployments or fallback
+
+On boot or disconnect, the device tries the last successful network first, then falls back to the other. This enables safe credential updates across multiple controllers via MQTT (`NET:SET_PRIMARY` or `NET:SET_SECONDARY`) without risking loss of connectivity from misconfiguration.
+
 ### SoftAP Portal
 
 1. Power device with no credentials (hold BOOT 5s to clear existing)
 2. Join `SOFT_AP_SSID_PREFIX + MAC` using password from `include/secrets.h`
 3. Browse to `http://192.168.4.1/`
-4. Select network and enter credentials
+4. Select network, choose slot (primary/secondary), enter credentials
 
-### Serial Commands
+### Serial/MQTT Commands
 
 ```
-NET:STATUS                                 # Current state, IP, RSSI
+NET:STATUS                                 # Current state, IP, RSSI, connected slot
+NET:GET_CONFIG                             # Show configured primary/secondary SSIDs
 NET:LIST                                   # Scan nearby SSIDs (SoftAP only)
-NET:SET,"ssid","pass"                      # Set credentials
-NET:RESET                                  # Clear credentials, enter SoftAP
+NET:SET,"ssid","pass"                      # Set primary and connect (legacy)
+NET:SET_PRIMARY,"ssid","pass"              # Set primary credentials
+NET:SET_SECONDARY,"ssid","pass"            # Set secondary credentials
+NET:CLEAR_SECONDARY                        # Remove secondary credentials
+NET:RESET                                  # Clear all credentials, enter SoftAP
 ```
 
 ### Status LED (GPIO2, active-low)
@@ -250,8 +263,12 @@ NET:RESET                                  # Clear credentials, enter SoftAP
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/api/status` | GET | Onboarding state, SSID, IP, RSSI, firmware version |
+| `/api/config` | GET | Configured networks (`primary`, `secondary`, `connected_to`) |
 | `/api/scan` | GET | Nearby networks (ssid, rssi, secure, channel) |
-| `/api/wifi` | POST | `{"ssid":"...","pass":"..."}` to connect |
+| `/api/wifi` | POST | `{"ssid":"...","pass":"..."}` set primary and connect |
+| `/api/wifi/secondary` | POST | `{"ssid":"...","pass":"..."}` set secondary |
+| `/api/wifi/secondary/clear` | POST | Clear secondary credentials |
+| `/api/reset` | POST | Clear all credentials, enter SoftAP |
 
 ## Testing
 

@@ -535,8 +535,59 @@ After this command, the config topic is republished:
     "state": "CONNECTED",
     "rssi": -55,
     "ssid": "\"HomeNetwork\"",
-    "ip": "192.168.1.8"
+    "ip": "192.168.1.8",
+    "connected_slot": "primary"
   }
+}
+```
+
+## NET:GET_CONFIG
+
+`devices/8857212316bc/cmd`
+
+```json
+{
+  "action": "NET:GET_CONFIG",
+  "cmd_id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"
+}
+```
+
+`devices/8857212316bc/cmd/resp`
+
+```json
+{
+  "cmd_id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+  "action": "NET:GET_CONFIG",
+  "status": "done",
+  "result": {
+    "sub_action": "GET_CONFIG",
+    "primary": { "ssid": "HomeNetwork", "configured": true },
+    "secondary": { "ssid": "MobileHotspot", "configured": true },
+    "connected_to": "primary"
+  }
+}
+```
+
+## NET:SET_SECONDARY
+
+`devices/8857212316bc/cmd`
+
+```json
+{
+  "action": "NET:SET_SECONDARY",
+  "params": { "ssid": "MobileHotspot", "pass": "password123" },
+  "cmd_id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e"
+}
+```
+
+`devices/8857212316bc/cmd/resp`
+
+```json
+{
+  "cmd_id": "2b3c4d5e-6f7a-8b9c-0d1e-2f3a4b5c6d7e",
+  "action": "NET:SET_SECONDARY",
+  "status": "done",
+  "result": { "sub_action": "SET_SECONDARY" }
 }
 ```
 
