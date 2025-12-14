@@ -9,6 +9,10 @@ namespace net_onboarding {
 /// Default timeout per network attempt (10 seconds).
 constexpr uint32_t kDefaultTimeoutPerNetworkMs = 10000;
 
+/// Max startup delay for staggering multi-device connections (2 seconds).
+/// Each device gets a deterministic delay based on its MAC address.
+constexpr uint32_t kMaxStartupDelayMs = 2000;
+
 /// Manages the connection attempt sequence: primary → secondary → exhausted.
 ///
 /// This class encapsulates the retry logic for multi-network failover:

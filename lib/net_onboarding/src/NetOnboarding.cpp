@@ -440,6 +440,17 @@ void NetOnboarding::begin(uint32_t timeout_per_network_ms) {
     wifi_->setModeSta();
   }
 
+  // Stagger connection attempts to avoid channel congestion when many devices boot together.
+  // Use last byte of MAC for deterministic, evenly-distributed delay (0 to kMaxStartupDelayMs).
+#if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
+  {
+    uint8_t mac[6];
+    WiFi.macAddress(mac);
+    uint32_t startup_delay_ms = (mac[5] * kMaxStartupDelayMs) / 255;
+    delay(startup_delay_ms);
+  }
+#endif
+
   // Start connection sequence with loaded credentials
   const WifiCredentials& primary = creds_store_->get(CredentialSlot::PRIMARY);
   const WifiCredentials& secondary = creds_store_->get(CredentialSlot::SECONDARY);
