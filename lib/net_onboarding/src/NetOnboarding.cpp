@@ -414,8 +414,8 @@ uint32_t NetOnboarding::nowMs_() const {
 #endif
 }
 
-void NetOnboarding::begin(uint32_t connect_timeout_ms) {
-  connect_timeout_ms_ = connect_timeout_ms;
+void NetOnboarding::begin(uint32_t timeout_per_network_ms) {
+  timeout_per_network_ms_ = timeout_per_network_ms;
 
   // Initialize credentials store
   if (!creds_store_) {
@@ -424,12 +424,10 @@ void NetOnboarding::begin(uint32_t connect_timeout_ms) {
   creds_store_->load();
 
   // Initialize connection sequence with per-network timeout
-  // Each network gets (connect_timeout_ms / 2) or 5s whichever is configured
-  uint32_t per_network_timeout = connect_timeout_ms / 2;
   if (!connection_seq_) {
-    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(per_network_timeout));
+    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(timeout_per_network_ms));
   } else {
-    connection_seq_->setTimeoutPerNetworkMs(per_network_timeout);
+    connection_seq_->setTimeoutPerNetworkMs(timeout_per_network_ms);
   }
 
   if (!wifi_)
@@ -565,7 +563,7 @@ bool NetOnboarding::setPrimaryCredentials(const char* ssid, const char* pass) {
 
   // Start connection sequence with updated credentials
   if (!connection_seq_) {
-    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(connect_timeout_ms_ / 2));
+    connection_seq_ = std::unique_ptr<ConnectionSequence>(new ConnectionSequence(timeout_per_network_ms_));
   }
   connection_seq_->begin(
       creds_store_->get(CredentialSlot::PRIMARY),

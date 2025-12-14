@@ -41,8 +41,8 @@ struct Status {
 class NetOnboarding {
 public:
   // Begin the library. Attempts STA if credentials exist; otherwise starts AP.
-  // `connect_timeout_ms` controls how long to wait for STA before falling back to AP.
-  void begin(uint32_t connect_timeout_ms = 10000);
+  // `timeout_per_network_ms` is how long to wait for each network before trying the next.
+  void begin(uint32_t timeout_per_network_ms = kDefaultTimeoutPerNetworkMs);
 
   // Non-blocking maintenance. Call from Arduino loop() frequently.
   void loop();
@@ -86,9 +86,9 @@ public:
   bool loadCredentials(std::string& out_ssid, std::string& out_pass);
   void clearCredentials();
 
-  // Optional: override connect timeout at runtime
-  void setConnectTimeoutMs(uint32_t ms) {
-    connect_timeout_ms_ = ms;
+  // Optional: override timeout per network at runtime
+  void setTimeoutPerNetworkMs(uint32_t ms) {
+    timeout_per_network_ms_ = ms;
   }
 
 #if defined(USE_STUB_BACKEND)
@@ -120,7 +120,7 @@ private:
 
 private:
   Status st_{State::AP_ACTIVE, 0, {'0', '.', '0', '.', '0', '.', '0', '\0'}, {}, {}, {}, CredentialSlot::PRIMARY};
-  uint32_t connect_timeout_ms_{10000};
+  uint32_t timeout_per_network_ms_{kDefaultTimeoutPerNetworkMs};
   uint32_t connecting_since_ms_{0};
 
   // Platform adapters (ESP32 or stub)

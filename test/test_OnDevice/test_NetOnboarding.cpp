@@ -36,7 +36,7 @@ void test_net_connect_timeout_to_ap() {
   NetOnboarding n;
   n.clearCredentials();
   delay(50);
-  n.setConnectTimeoutMs(1500);
+  n.setTimeoutPerNetworkMs(1500);
   n.begin(1500);
   // Intentionally invalid credentials
   TEST_ASSERT_TRUE(n.setCredentials("__invalid__", "__invalid__"));
@@ -50,7 +50,7 @@ void test_net_happy_path_if_seeded() {
   NetOnboarding n;
   // Seed and attempt connect
   TEST_ASSERT_TRUE(n.saveCredentials(TEST_STA_SSID, TEST_STA_PASS));
-  n.setConnectTimeoutMs(8000);
+  n.setTimeoutPerNetworkMs(8000);
   n.begin(8000);
   // Wait up to 12s for association
   uint32_t start = millis();

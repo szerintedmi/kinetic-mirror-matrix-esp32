@@ -23,7 +23,7 @@ void test_begin_no_creds_enters_ap() {
 void test_set_creds_connect_timeout_falls_back_to_ap() {
   NetOnboarding n;
   n.configureStatusLed(14, false);
-  n.setConnectTimeoutMs(150);
+  n.setTimeoutPerNetworkMs(150);
   n.begin(150);
   // Simulate a connection attempt that never succeeds in native
   TEST_ASSERT_TRUE(n.setCredentials("ssid", "pass"));
@@ -62,7 +62,7 @@ void test_led_fast_blink_toggles_in_ap() {
 void test_led_slow_blink_when_connecting() {
   NetOnboarding n;
   n.configureStatusLed(11, false);
-  n.setConnectTimeoutMs(600);
+  n.setTimeoutPerNetworkMs(600);
   n.begin(600);
   TEST_ASSERT_TRUE(n.setCredentials("ssid", "pass"));
   TEST_ASSERT_EQUAL_UINT8(2, n.debugLedPattern());
@@ -83,7 +83,7 @@ void test_led_slow_blink_when_connecting() {
 void test_led_solid_when_connected() {
   NetOnboarding n;
   n.configureStatusLed(10, false);
-  n.setConnectTimeoutMs(200);
+  n.setTimeoutPerNetworkMs(200);
   n.begin(200);
   n.setTestSimulation(true, 20);
   TEST_ASSERT_TRUE(n.setCredentials("ssid", "pass"));
@@ -173,7 +173,7 @@ void test_reset_credentials_clears_both_slots() {
 
 void test_status_shows_connected_slot_primary() {
   NetOnboarding n;
-  n.setConnectTimeoutMs(200);
+  n.setTimeoutPerNetworkMs(200);
   n.begin(200);
   n.setTestSimulation(true, 20);
   TEST_ASSERT_TRUE(n.setPrimaryCredentials("primary_net", "pass123"));

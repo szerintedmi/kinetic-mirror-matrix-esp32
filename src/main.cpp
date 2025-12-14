@@ -35,7 +35,6 @@ ota::OtaManager& Ota() {
 }
 }  // namespace
 constexpr uint32_t kResetHoldMs = 5000;
-constexpr uint32_t kConnectTimeoutMs = 8000;
 
 static void EmitNetEvent(transport::response::EventType type,
                          const std::string& cmd_id,
@@ -136,12 +135,11 @@ void setup() {
 
   // Configure Wi‑Fi onboarding
   Net().configureStatusLed(STATUS_LED_PIN, STATUS_LED_ACTIVE_LOW);
-  Net().setConnectTimeoutMs(kConnectTimeoutMs);
 #ifdef SEED_NVS_CLEAR
   // Optional one-time build flag to force AP path
   Net().clearCredentials();
 #endif
-  Net().begin(kConnectTimeoutMs);
+  Net().begin();  // Uses default 10s timeout per network
   last_state = Net().status().state;
   ResetButtonSetup();
 

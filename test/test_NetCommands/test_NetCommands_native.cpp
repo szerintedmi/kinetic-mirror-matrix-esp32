@@ -16,7 +16,7 @@ void setUp() {
   // Ensure a clean singleton state for each test
   // Start in AP mode with no creds
   Net().clearCredentials();
-  Net().setConnectTimeoutMs(200);
+  Net().setTimeoutPerNetworkMs(200);
   Net().begin(200);
 }
 

@@ -6,10 +6,13 @@
 
 namespace net_onboarding {
 
+/// Default timeout per network attempt (10 seconds).
+constexpr uint32_t kDefaultTimeoutPerNetworkMs = 10000;
+
 /// Manages the connection attempt sequence: primary → secondary → exhausted.
 ///
 /// This class encapsulates the retry logic for multi-network failover:
-/// - On boot: try primary (5s), then secondary (5s), then give up
+/// - On boot: try last-connected (10s), then other (10s), then give up
 /// - On disconnect: retry current network first, then try other, then give up
 ///
 /// The "stay on secondary until reboot" policy is enforced by markConnected().
@@ -22,8 +25,8 @@ public:
     EXHAUSTED         // All attempts failed, should enter AP mode
   };
 
-  /// Construct with timeout per network (default 5000ms).
-  explicit ConnectionSequence(uint32_t timeout_per_network_ms = 5000);
+  /// Construct with timeout per network.
+  explicit ConnectionSequence(uint32_t timeout_per_network_ms = kDefaultTimeoutPerNetworkMs);
 
   /// Start connection sequence with available credentials.
   /// Starts with last_connected_slot if that slot is valid; otherwise tries primary first.
