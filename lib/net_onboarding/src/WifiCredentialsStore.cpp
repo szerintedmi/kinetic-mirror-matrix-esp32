@@ -7,8 +7,6 @@ namespace net_onboarding {
 
 namespace {
 constexpr const char* kNamespace = "net";
-constexpr const char* kLegacySsidKey = "ssid";
-constexpr const char* kLegacyPskKey = "psk";
 constexpr const char* kLastSlotKey = "last_slot";
 }  // namespace
 
@@ -17,66 +15,28 @@ WifiCredentialsStore::WifiCredentialsStore(std::unique_ptr<INvs> nvs) : nvs_(std
 const char* WifiCredentialsStore::ssidKey_(CredentialSlot slot) {
   switch (slot) {
   case CredentialSlot::PRIMARY:
-    return "ssid_0";
+    return "ssid";  // Use legacy key for backward compatibility
   case CredentialSlot::SECONDARY:
     return "ssid_1";
   default:
-    return "ssid_0";
+    return "ssid";
   }
 }
 
 const char* WifiCredentialsStore::pskKey_(CredentialSlot slot) {
   switch (slot) {
   case CredentialSlot::PRIMARY:
-    return "psk_0";
+    return "psk";  // Use legacy key for backward compatibility
   case CredentialSlot::SECONDARY:
     return "psk_1";
   default:
-    return "psk_0";
+    return "psk";
   }
-}
-
-void WifiCredentialsStore::migrateLegacySchema_() {
-  if (!nvs_ || !nvs_->begin(kNamespace, true))
-    return;
-
-  // Check if new schema already exists
-  std::string new_ssid = nvs_->getString(ssidKey_(CredentialSlot::PRIMARY), "");
-  if (!new_ssid.empty()) {
-    // New schema exists, no migration needed
-    nvs_->end();
-    return;
-  }
-
-  // Check for legacy schema
-  std::string legacy_ssid = nvs_->getString(kLegacySsidKey, "");
-  std::string legacy_psk = nvs_->getString(kLegacyPskKey, "");
-  nvs_->end();
-
-  if (legacy_ssid.empty()) {
-    // No legacy data to migrate
-    return;
-  }
-
-  // Migrate: write to new keys
-  if (!nvs_->begin(kNamespace, false))
-    return;
-
-  nvs_->putString(ssidKey_(CredentialSlot::PRIMARY), legacy_ssid.c_str());
-  nvs_->putString(pskKey_(CredentialSlot::PRIMARY), legacy_psk.c_str());
-
-  // Remove legacy keys after successful migration
-  nvs_->remove(kLegacySsidKey);
-  nvs_->remove(kLegacyPskKey);
-  nvs_->end();
 }
 
 bool WifiCredentialsStore::load() {
   if (!nvs_)
     return false;
-
-  // Migrate legacy schema if needed
-  migrateLegacySchema_();
 
   if (!nvs_->begin(kNamespace, true))
     return false;
@@ -157,10 +117,6 @@ void WifiCredentialsStore::clearAll() {
     nvs_->remove(pskKey_(slot));
     credentials_[i].clear();
   }
-
-  // Also remove legacy keys if they exist
-  nvs_->remove(kLegacySsidKey);
-  nvs_->remove(kLegacyPskKey);
 
   nvs_->end();
 }

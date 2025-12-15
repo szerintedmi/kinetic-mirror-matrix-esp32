@@ -8,18 +8,17 @@
 
 namespace net_onboarding {
 
-/// Multi-slot credential persistence with automatic migration from legacy single-SSID schema.
+/// Multi-slot credential persistence.
 ///
 /// NVS Schema (namespace: "net"):
-///   Legacy keys: "ssid", "psk" (migrated to slot 0 on first load)
-///   New keys: "ssid_0", "psk_0" (primary), "ssid_1", "psk_1" (secondary)
+///   Primary: "ssid", "psk" (backward compatible with legacy single-SSID schema)
+///   Secondary: "ssid_1", "psk_1"
 class WifiCredentialsStore {
 public:
   /// Construct with NVS adapter. Typically pass MakeNvs().
   explicit WifiCredentialsStore(std::unique_ptr<INvs> nvs);
 
   /// Load all credentials from NVS. Returns true if at least primary exists.
-  /// Automatically migrates legacy "ssid"/"psk" keys to slot 0.
   bool load();
 
   /// Save credentials to a specific slot.
@@ -51,9 +50,6 @@ private:
   std::array<WifiCredentials, static_cast<size_t>(CredentialSlot::COUNT)> credentials_;
   bool loaded_ = false;
   CredentialSlot last_connected_slot_ = CredentialSlot::PRIMARY;
-
-  /// Migrate legacy "ssid"/"psk" to "ssid_0"/"psk_0" if new schema doesn't exist.
-  void migrateLegacySchema_();
 
   /// Get NVS keys for a slot.
   static const char* ssidKey_(CredentialSlot slot);
