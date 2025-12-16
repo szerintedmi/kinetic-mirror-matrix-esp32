@@ -9,9 +9,9 @@ namespace net_onboarding {
 /// Default timeout per network attempt (10 seconds).
 constexpr uint32_t kDefaultTimeoutPerNetworkMs = 10000;
 
-/// Max startup delay for staggering multi-device connections (2 seconds).
+/// Max startup delay for staggering multi-device connections to avoid overloading slower routers.
 /// Each device gets a deterministic delay based on its MAC address.
-constexpr uint32_t kMaxStartupDelayMs = 2000;
+constexpr uint32_t kMaxStartupDelayMs = 1000;
 
 /// Manages the connection attempt sequence: primary → secondary → exhausted.
 ///
@@ -23,10 +23,10 @@ constexpr uint32_t kMaxStartupDelayMs = 2000;
 class ConnectionSequence {
 public:
   enum class State : uint8_t {
-    IDLE,             // Not attempting connection
-    TRYING_PRIMARY,   // Currently trying primary network
-    TRYING_SECONDARY, // Currently trying secondary network
-    EXHAUSTED         // All attempts failed, should enter AP mode
+    IDLE,              // Not attempting connection
+    TRYING_PRIMARY,    // Currently trying primary network
+    TRYING_SECONDARY,  // Currently trying secondary network
+    EXHAUSTED          // All attempts failed, should enter AP mode
   };
 
   /// Construct with timeout per network.
@@ -42,7 +42,9 @@ public:
   bool checkTimeout(uint32_t now_ms);
 
   /// Get current state.
-  State state() const { return state_; }
+  State state() const {
+    return state_;
+  }
 
   /// Get credentials for current attempt. Returns nullptr if IDLE or EXHAUSTED.
   const WifiCredentials* currentCredentials() const;
@@ -54,11 +56,15 @@ public:
   void markConnected(CredentialSlot slot);
 
   /// Get the slot that was last successfully connected.
-  CredentialSlot lastConnectedSlot() const { return last_connected_slot_; }
+  CredentialSlot lastConnectedSlot() const {
+    return last_connected_slot_;
+  }
 
   /// Set the last connected slot (typically loaded from NVS on boot).
   /// Call before begin() to influence which network is tried first.
-  void setLastConnectedSlot(CredentialSlot slot) { last_connected_slot_ = slot; }
+  void setLastConnectedSlot(CredentialSlot slot) {
+    last_connected_slot_ = slot;
+  }
 
   /// Handle disconnect event. Sets up retry sequence:
   /// 1. Retry current network first
@@ -74,10 +80,14 @@ public:
   void reset();
 
   /// Get timeout per network in ms.
-  uint32_t timeoutPerNetworkMs() const { return timeout_per_network_ms_; }
+  uint32_t timeoutPerNetworkMs() const {
+    return timeout_per_network_ms_;
+  }
 
   /// Set timeout per network in ms.
-  void setTimeoutPerNetworkMs(uint32_t ms) { timeout_per_network_ms_ = ms; }
+  void setTimeoutPerNetworkMs(uint32_t ms) {
+    timeout_per_network_ms_ = ms;
+  }
 
 private:
   State state_ = State::IDLE;
