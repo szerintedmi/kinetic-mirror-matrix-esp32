@@ -9,7 +9,7 @@ import uuid
 from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Deque, Dict, List, Optional, Sequence, Set, Tuple
+from typing import Callable, Deque, Dict, List, Optional, Sequence, Tuple
 
 try:
     import paho.mqtt.client as mqtt  # type: ignore
@@ -145,8 +145,6 @@ class MqttWorker(threading.Thread):
         self._help_text: str = ""
         self._cmd_id_factory: Callable[[], str] = cmd_id_factory or _default_cmd_id
         self._selected_device: Optional[str] = None
-        # Device visibility filter: empty set = all devices visible (default)
-        self._visible_devices: Set[str] = set()
 
         if client_factory is not None:
             self._client_factory = client_factory
@@ -387,13 +385,17 @@ class MqttWorker(threading.Thread):
         with self._lock:
             now = time.time()
             rows = []
-            for device, data in self._devices.items():
+            selected, selected_index, devices_ordered = self._resolve_selected_device_locked()
+
+            # Only include motors from the selected device (direct lookup for efficiency)
+            if selected and selected in self._devices:
+                data = self._devices[selected]
                 last_seen = float(data.get("last_seen", 0.0))
                 age_s = max(0.0, now - last_seen) if last_seen else 0.0
                 motors = data.get("motors", {})
                 for _motor_id, motor in motors.items():
                     row = dict(motor)
-                    row["device"] = device
+                    row["device"] = selected
                     row["node_state"] = data.get("node_state", "")
                     row["ip"] = data.get("ip", "")
                     row["last_seen"] = last_seen
@@ -407,7 +409,6 @@ class MqttWorker(threading.Thread):
                     return str(value)
 
             rows.sort(key=lambda r: (str(r.get("device", "")), _id_key(r.get("id", ""))))
-            selected, selected_index, devices_ordered = self._resolve_selected_device_locked()
 
             net = {
                 "transport": "mqtt",
@@ -915,28 +916,11 @@ class MqttWorker(threading.Thread):
                 }
             return summaries
 
-    def get_visible_devices(self) -> Set[str]:
-        """Get set of visible device MACs. Empty set means all devices visible."""
+    def get_selected_device(self) -> Optional[str]:
+        """Get currently selected device MAC."""
         with self._lock:
-            return set(self._visible_devices)
-
-    def set_visible_devices(self, device_macs: Set[str]) -> None:
-        """Set which devices are visible. Empty set means all devices visible."""
-        with self._lock:
-            self._visible_devices = set(device_macs)
-            if device_macs:
-                self._push_log_locked(
-                    f"[ui] device filter: {len(device_macs)} of {len(self._devices)} selected"
-                )
-            else:
-                self._push_log_locked("[ui] device filter: all devices visible")
-
-    def is_device_visible(self, device_mac: str) -> bool:
-        """Check if a device should be shown. Empty filter = all visible."""
-        with self._lock:
-            if not self._visible_devices:
-                return True  # No filter = all visible
-            return device_mac in self._visible_devices
+            selected, _, _ = self._resolve_selected_device_locked()
+            return selected
 
     def get_device_details(self) -> Dict[str, Dict[str, object]]:
         """Get detailed device info for device view.

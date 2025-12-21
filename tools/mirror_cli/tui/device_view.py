@@ -93,7 +93,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
 
     # Device table columns: (key, label, width)
     DEVICE_COLS: List[Tuple[str, str, int]] = [
-        ("sel", "✓", 3),
+        ("sel", "", 3),
         ("idx", "#", 3),
         ("mac", "MAC", 14),
         ("ip", "IP", 15),
@@ -106,11 +106,11 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
         ("uptime", "Uptime", 8),
     ]
 
-    class DeviceViewScreen(ModalScreen[Optional[Set[str]]]):
-        """Modal screen for viewing and filtering devices.
+    class DeviceViewScreen(ModalScreen[Optional[str]]):
+        """Modal screen for selecting active controller (single-select).
 
         Returns:
-            Set[str] of selected device MACs on Apply, or None on Cancel.
+            str of selected device MAC on Apply, or None on Cancel.
         """
 
         CSS = """
@@ -150,34 +150,33 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
         BINDINGS: ClassVar = [
             Binding("escape", "cancel", "Cancel"),
             Binding("enter", "apply", "Apply"),
-            Binding("space", "toggle_row", "Toggle", show=False),
-            Binding("a", "select_all", "Select All", show=False),
-            Binding("n", "select_none", "Select None", show=False),
         ]
 
         def __init__(self) -> None:
             super().__init__()
             self._worker = worker
             self._notify = notify_callback
-            # Track which devices are selected (checked)
-            self._selected: Set[str] = set()
+            # Track which device is selected (single selection)
+            self._selected: Optional[str] = None
             # Ordered list of device MACs for index lookup
             self._devices_ordered: List[str] = []
             # Cache device details
             self._device_details: Dict[str, Dict[str, object]] = {}
             # Track if initial auto-select has been done
             self._initial_select_done: bool = False
+            # Track if cursor has been positioned on selected device
+            self._cursor_initialized: bool = False
 
         def compose(self) -> ComposeResult:
             yield Vertical(
-                Static("Device Manager", id="device-header"),
+                Static("Select Controller", id="device-header"),
                 Vertical(
                     DataTable(id="device-table", cursor_type="row"),
                     id="device-table-container",
                 ),
                 Static("", id="device-warnings"),
                 Static(
-                    "Space=Toggle  a=All  n=None  Enter=Apply  Esc=Cancel",
+                    "Enter=Select  Esc=Cancel",
                     id="device-help",
                 ),
             )
@@ -195,24 +194,19 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             except Exception:
                 pass
 
-            # Load initial selection from worker
-            # Empty worker filter means "all visible", so we need to get the actual device list
-            if hasattr(self._worker, "get_device_details"):
-                details = self._worker.get_device_details()
-                all_devices = set(details.keys())
+            # Load initial selection from worker (single-select)
+            if hasattr(self._worker, "get_selected_device"):
+                try:
+                    self._selected = self._worker.get_selected_device()
+                    self._initial_select_done = True
+                except Exception:
+                    pass
 
-                if hasattr(self._worker, "get_visible_devices"):
-                    current = self._worker.get_visible_devices()
-                    if current:
-                        # Explicit filter - use it (filter out sentinel)
-                        self._selected = set(current) - {"__none__"}
-                        self._initial_select_done = True
-                    else:
-                        # Empty means all visible - select all current devices
-                        self._selected = set(all_devices)
-                        self._initial_select_done = True
-                else:
-                    self._selected = set(all_devices)
+            # Auto-select first device if none selected
+            if not self._selected and hasattr(self._worker, "get_device_details"):
+                details = self._worker.get_device_details()
+                if details:
+                    self._selected = sorted(details.keys())[0]
                     self._initial_select_done = True
 
             # Start refresh timer (data comes from config topic, no polling needed)
@@ -227,9 +221,9 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             self._device_details = self._worker.get_device_details()
             self._devices_ordered = sorted(self._device_details.keys())
 
-            # Auto-select all devices only on initial load (not after user clears selection)
+            # Auto-select first device only on initial load
             if not self._initial_select_done and self._devices_ordered:
-                self._selected = set(self._devices_ordered)
+                self._selected = self._devices_ordered[0]
                 self._initial_select_done = True
 
             table = self.query_one("#device-table", DataTable)
@@ -238,10 +232,10 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             rows: List[Tuple[str, List[str]]] = []
             for idx, mac in enumerate(self._devices_ordered, start=1):
                 details = self._device_details.get(mac, {})
-                is_selected = mac in self._selected
+                is_selected = (mac == self._selected)
 
-                # Format checkbox (backslash escapes brackets in Rich)
-                checkbox = r"\[x]" if is_selected else r"\[ ]"
+                # Format radio button (single-select indicator)
+                radio = "●" if is_selected else "○"
 
                 # Format state with color
                 state = str(details.get("node_state", "") or "")
@@ -279,7 +273,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 fw_date_fmt = _format_firmware_date(fw_date)
 
                 row_data = [
-                    checkbox,
+                    radio,
                     str(idx),
                     mac_short,
                     str(details.get("ip", "") or "-"),
@@ -293,15 +287,24 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 ]
                 rows.append((mac, row_data))
 
-            # Update table - always rebuild to ensure checkbox state is correct
+            # Update table - always rebuild to ensure radio button state is correct
             try:
-                # Save cursor position
+                # Save cursor position for subsequent refreshes
                 cursor_row = table.cursor_row if table.row_count > 0 else 0
                 table.clear()
                 for mac, row_data in rows:
                     table.add_row(*row_data, key=mac)
-                # Restore cursor position
-                if rows and cursor_row < len(rows):
+
+                # Position cursor on selected device on first load
+                if not self._cursor_initialized and self._selected and rows:
+                    try:
+                        selected_idx = self._devices_ordered.index(self._selected)
+                        table.move_cursor(row=selected_idx)
+                    except ValueError:
+                        pass  # Selected device not in list
+                    self._cursor_initialized = True
+                elif rows and cursor_row < len(rows):
+                    # Restore cursor position on subsequent refreshes
                     table.move_cursor(row=cursor_row)
             except Exception:
                 pass
@@ -370,38 +373,9 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 pass
             return None
 
-        def action_toggle_row(self) -> None:
-            """Toggle selection for the current row."""
-            mac = self._get_cursor_device()
-            if mac:
-                if mac in self._selected:
-                    self._selected.discard(mac)
-                else:
-                    self._selected.add(mac)
-                self._refresh_table()
-
-        def action_select_all(self) -> None:
-            """Select all devices."""
-            self._selected = set(self._devices_ordered)
-            self._refresh_table()
-
-        def action_select_none(self) -> None:
-            """Deselect all devices."""
-            self._selected.clear()
-            self._refresh_table()
-
         def action_apply(self) -> None:
             """Apply selection and close."""
-            # Worker semantics: empty set = all visible
-            # If all current devices selected, return empty set
-            if self._selected == set(self._devices_ordered):
-                self.dismiss(set())  # All visible
-            elif not self._selected:
-                # None selected - return a sentinel that won't match any device
-                # This effectively hides all motors (empty list)
-                self.dismiss({"__none__"})
-            else:
-                self.dismiss(set(self._selected))
+            self.dismiss(self._selected)
 
         def action_cancel(self) -> None:
             """Cancel and close without changes."""
@@ -409,20 +383,11 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
 
         def on_key(self, event) -> None:
             """Handle keys that DataTable would otherwise capture."""
-            key = event.key
-            if key == "space":
-                self.action_toggle_row()
-                event.stop()
-                event.prevent_default()
-            elif key == "a":
-                self.action_select_all()
-                event.stop()
-                event.prevent_default()
-            elif key == "n":
-                self.action_select_none()
-                event.stop()
-                event.prevent_default()
-            elif key == "enter":
+            if event.key == "enter":
+                # Select current row and close
+                mac = self._get_cursor_device()
+                if mac:
+                    self._selected = mac
                 self.action_apply()
                 event.stop()
                 event.prevent_default()

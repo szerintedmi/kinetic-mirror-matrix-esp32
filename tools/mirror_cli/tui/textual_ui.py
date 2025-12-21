@@ -301,7 +301,7 @@ class TextualUI(BaseUI):
                     "Keys:",
                     "  Ctrl+Q = quit",
                     "  ? = help",
-                    "  Ctrl+L = device list (MQTT only)",
+                    "  Ctrl+L = select controller (MQTT only)",
                     "  d = toggle theme",
                     "  c = clear log",
                     "  PageUp/PageDown = scroll log",
@@ -319,10 +319,10 @@ class TextualUI(BaseUI):
                     "  /<n> <cmd>  Send cmd to device #n without switching",
                     "  /all <cmd>  Send cmd to ALL devices in parallel",
                     "",
-                    "Device list (Ctrl+L, MQTT only):",
-                    "  View all devices with status and metadata",
-                    "  Select which devices' motors to display",
-                    "  Space=Toggle  a=All  n=None  Enter=Apply  Esc=Cancel",
+                    "Controller selector (Ctrl+L, MQTT only):",
+                    "  View all controllers with status and metadata",
+                    "  Select active controller for commands and display",
+                    "  Enter=Select  Esc=Cancel",
                     "",
                     "Copy/paste:",
                     "  Tip: Hold Shift to select text in many terminals",
@@ -373,7 +373,7 @@ class TextualUI(BaseUI):
             #log_panel { height: 1fr; }
             #input_row { height: 1; layout: horizontal; background: $boost; }
             /* Ensure the "> " prompt is always visible: give it room and no side padding */
-            #prompt { width: 2; content-align: right middle; padding: 0 0; color: $text-muted; }
+            #prompt { width: auto; min-width: 2; content-align: right middle; padding: 0 1 0 0; color: $text-muted; }
             #cmd_input { width: 1fr; background: $panel; color: $text; border: none; }
             """
 
@@ -402,9 +402,10 @@ class TextualUI(BaseUI):
                 self._hist_buffer: Optional[str] = None
                 self._columns: List[Tuple[str, str, int]] = list(TABLE_COLS)
                 self._transport = base_transport
-                # Cache for table data and hint to avoid unnecessary updates
+                # Cache for table data, hint, and prompt to avoid unnecessary updates
                 self._last_table_data: List[List[str]] = []
                 self._last_hint: str = ""
+                self._last_prompt: str = ""
 
                 # Device command router for /N cmd and /all cmd syntax
                 def _notify_wrapper(msg: str, severity: str, timeout: float) -> None:
@@ -516,11 +517,16 @@ class TextualUI(BaseUI):
                     sev = "information" if severity == "info" else severity
                     self.notify(msg, severity=sev, timeout=timeout)
 
-                def _on_dismiss(result) -> None:
-                    if result is not None and hasattr(worker, "set_visible_devices"):
-                        worker.set_visible_devices(result)
-                        count = len(result) if result else len(summaries)
-                        self.notify(f"Showing {count} device(s)", timeout=2.0)
+                def _on_dismiss(selected_mac: Optional[str]) -> None:
+                    if selected_mac is not None:
+                        # Find index of selected MAC and switch to it
+                        devices = sorted(summaries.keys())
+                        if selected_mac in devices:
+                            index = devices.index(selected_mac) + 1
+                            worker.set_selected_device_by_index(index)
+                            # Short MAC for display
+                            mac_short = selected_mac[-6:] if len(selected_mac) > 6 else selected_mac
+                            self.notify(f"Selected controller {index}: {mac_short}", timeout=2.0)
 
                 try:
                     DeviceViewScreen = create_device_view_screen(worker, _notify_wrapper)
@@ -624,12 +630,31 @@ class TextualUI(BaseUI):
                     except Exception:
                         net = {}
 
+                # Update prompt with controller number
+                selected_index = 0
+                try:
+                    selected_index = int(net.get("selected_index") or 0)
+                except Exception:
+                    selected_index = 0
+
+                if selected_index > 0 and self._transport == "mqtt":
+                    new_prompt = f"{selected_index} > "
+                else:
+                    new_prompt = "> "
+
+                if new_prompt != self._last_prompt:
+                    try:
+                        self.query_one("#prompt", Label).update(new_prompt)
+                        self._last_prompt = new_prompt
+                    except Exception:
+                        pass  # Widget not ready yet
+
                 status_text = _render_status_line(rows, net, last_ts)
                 if err:
                     status_text += f"  error={err}"
                 self.query_one("#status_bar", Static).update(status_text.strip())
 
-                # Update table - filter by visible devices and populate dev column
+                # Update table - worker already filters to selected device
                 table = self.query_one("#status_table", DataTable)
                 try:
                     # Build device index lookup for "dev" column
@@ -645,20 +670,10 @@ class TextualUI(BaseUI):
                     }
                     total_devices = len(devices_ordered)
 
-                    # Track visible devices for hint
-                    visible_devices: set = set()
+                    # Build table data - worker already filters to selected device
                     data: List[List[str]] = []
                     for r in rows or []:
-                        # Filter by visible devices
                         device_mac = str(r.get("device", "") or "")
-                        if hasattr(worker, "is_device_visible"):
-                            try:
-                                if not worker.is_device_visible(device_mac):
-                                    continue
-                            except Exception:
-                                pass
-
-                        visible_devices.add(device_mac)
                         row: List[str] = []
                         for key, _label, _w in self._columns:
                             if key == "dev":
@@ -686,39 +701,14 @@ class TextualUI(BaseUI):
                             table.add_row(*rec)
                         self._last_table_data = [list(row) for row in display_data]
 
-                    # Update hint for truncated rows or active filter
-                    # Use worker's filter state directly for accurate count
+                    # Update hint - only show truncation message if needed
                     hint_widget = self.query_one("#table_hint", Static)
-                    filter_active = False
-                    filter_count = 0
-                    if hasattr(worker, "get_visible_devices"):
-                        try:
-                            visible_set = worker.get_visible_devices()
-                            # Non-empty set means filter is active
-                            # (empty set = all visible, no filter)
-                            if visible_set:
-                                filter_active = True
-                                # Exclude sentinel value
-                                filter_count = len(visible_set - {"__none__"})
-                        except Exception:
-                            pass
-
                     if truncated:
                         hidden = filtered_motors - self.MAX_MOTOR_ROWS
-                        if filter_active:
-                            new_hint = (
-                                f"[dim]... +{hidden} more motors - "
-                                f"{filter_count}/{total_devices} devices selected "
-                                f"^L to change[/dim]"
-                            )
-                        else:
-                            new_hint = f"[dim]... +{hidden} more motors ^L to filter devices[/dim]"
-                    elif filter_active and total_devices > 0:
-                        # Not truncated, but filter is active
-                        new_hint = (
-                            f"[dim]{filter_count}/{total_devices} devices selected "
-                            f"^L to change[/dim]"
-                        )
+                        new_hint = f"[dim]... +{hidden} more motors[/dim]"
+                    elif total_devices > 1 and self._transport == "mqtt":
+                        # Show hint about switching controllers
+                        new_hint = f"[dim]^L to switch controller ({total_devices} available)[/dim]"
                     else:
                         new_hint = ""
                     if self._last_hint != new_hint:
