@@ -288,22 +288,23 @@ void MqttCommandServer::processMessage(const std::string& topic,
   std::string parse_error;
   if (!parsePayload(payload, doc, parse_error)) {
     const std::string cmd_id = transport::message_id::Next();
-    respondWithError(
-        cmd_id, "UNKNOWN", MakeErrorLine("MQTT_BAD_PAYLOAD", "INVALID", parse_error), now_ms);
-    return;
-  }
-
-  const char* action_c = doc["action"].as<const char*>();
-  if (!action_c) {
-    const std::string cmd_id = transport::message_id::Next();
-    respondWithError(
-        cmd_id, "UNKNOWN", MakeErrorLine("MQTT_BAD_PAYLOAD", "MISSING_FIELDS"), now_ms);
+    std::string detail = parse_error;
+    detail.append(" payload=");
+    detail.append(payload);
+    respondWithError(cmd_id, "UNKNOWN", MakeErrorLine("MQTT_BAD_PAYLOAD", "INVALID", detail), now_ms);
     return;
   }
 
   const char* cmd_id_c = doc["cmd_id"].as<const char*>();
   std::string cmd_id =
       cmd_id_c && cmd_id_c[0] ? std::string(cmd_id_c) : transport::message_id::Next();
+
+  const char* action_c = doc["action"].as<const char*>();
+  if (!action_c) {
+    respondWithError(
+        cmd_id, "UNKNOWN", MakeErrorLine("MQTT_BAD_PAYLOAD", "MISSING_FIELDS"), now_ms);
+    return;
+  }
   std::string action = ToUpper(std::string(action_c));
 
   if (handleDuplicateCommand(cmd_id, now_ms)) {

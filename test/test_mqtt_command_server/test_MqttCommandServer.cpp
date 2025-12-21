@@ -341,6 +341,35 @@ void test_invalid_payload_rejected() {
   auto completion = h.parse(0);
   TEST_ASSERT_EQUAL_STRING("error", completion["status"]);
   TEST_ASSERT_TRUE(completion["errors"].is<JsonArray>());
+
+  // Verify the raw payload is included in the error message for debugging
+  auto errors = completion["errors"].as<ArduinoJson::JsonArray>();
+  const char* message = errors[0]["message"].as<const char*>();
+  TEST_ASSERT_NOT_NULL(message);
+  TEST_ASSERT_NOT_NULL_MESSAGE(strstr(message, "payload=not-json"),
+                               "Error message should include raw payload for debugging");
+}
+
+void test_missing_action_preserves_cmd_id() {
+  Harness h;
+  ArduinoJson::JsonDocument doc;
+  doc["cmd_id"] = "original-cmd-id-12345";
+  // Deliberately omit "action" field
+  std::string payload;
+  serializeJson(doc, payload);
+  h.send(payload);
+
+  TEST_ASSERT_EQUAL_UINT(1, h.messages.size());
+  auto completion = h.parse(0);
+  TEST_ASSERT_EQUAL_STRING("error", completion["status"]);
+  TEST_ASSERT_EQUAL_STRING("UNKNOWN", completion["action"]);
+
+  // The key assertion: cmd_id should match the original, not be a new generated UUID
+  TEST_ASSERT_EQUAL_STRING("original-cmd-id-12345", completion["cmd_id"]);
+
+  auto errors = completion["errors"].as<ArduinoJson::JsonArray>();
+  TEST_ASSERT_EQUAL_STRING("MQTT_BAD_PAYLOAD", errors[0]["code"]);
+  TEST_ASSERT_EQUAL_STRING("MISSING_FIELDS", errors[0]["reason"]);
 }
 
 void test_move_missing_param_reports_bad_payload() {
@@ -788,6 +817,7 @@ int main(int, char**) {
   UNITY_BEGIN();
   RUN_TEST(test_begin_requires_device_id);
   RUN_TEST(test_invalid_payload_rejected);
+  RUN_TEST(test_missing_action_preserves_cmd_id);
   RUN_TEST(test_move_missing_param_reports_bad_payload);
   RUN_TEST(test_move_command_success);
   RUN_TEST(test_home_command_success);
