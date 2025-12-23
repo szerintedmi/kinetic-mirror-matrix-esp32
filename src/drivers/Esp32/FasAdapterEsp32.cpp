@@ -9,6 +9,13 @@
 #include <array>
 #include <atomic>
 
+// Constants
+static constexpr uint8_t DIR_BASE = 0;     // virtual range [0..7]
+static constexpr uint8_t SLEEP_BASE = 32;  // virtual range [32..39]
+static constexpr uint8_t kMotorSlots = 8;
+static constexpr uint16_t kDirSetupDelayUs = 200;
+static constexpr uint16_t kAutoEnableDelayUs = 2000;
+
 // External pin integration state
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 static IShift595* g_shift = nullptr;
@@ -20,12 +27,8 @@ static std::atomic<bool> g_latch_dirty{false};
 // Shadow copies for main-loop latch (avoids repeated atomic loads)
 static uint8_t g_last_latched_dir{0};
 static uint8_t g_last_latched_sleep{0};
+
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-static constexpr uint8_t DIR_BASE = 0;     // virtual range [0..7]
-static constexpr uint8_t SLEEP_BASE = 32;  // virtual range [32..39]
-static constexpr uint8_t kMotorSlots = 8;
-static constexpr uint16_t kDirSetupDelayUs = 200;
-static constexpr uint16_t kAutoEnableDelayUs = 2000;
 
 // Concrete adapter using FastAccelStepper library, step pin only
 class FasAdapterEsp32Impl : public FasAdapterEsp32 {
@@ -91,6 +94,28 @@ public:
       stepper->setAcceleration(static_cast<int32_t>(accel));
       this->last_accel_[motor_id] = accel;
     }
+
+    // Pre-latch direction BEFORE moveTo().
+    // FAS defers the direction callback until ~5-7ms after moveTo() returns,
+    // which is way past the 200µs setup delay. By pre-calculating and latching
+    // direction here, we ensure the shift register has the correct value before
+    // the first step pulse.
+    long current = stepper->getCurrentPosition();
+    bool forward = (target > current);
+    const uint8_t mask = static_cast<uint8_t>(1U << motor_id);
+
+    // Only update if direction differs from what's currently latched
+    bool currently_forward = (g_last_latched_dir & mask) != 0;
+    if (target != current && forward != currently_forward) {
+      if (forward) {
+        g_dir_bits.fetch_or(mask, std::memory_order_relaxed);
+      } else {
+        g_dir_bits.fetch_and(static_cast<uint8_t>(~mask), std::memory_order_relaxed);
+      }
+      g_latch_dirty.store(true, std::memory_order_release);
+      FasAdapterEsp32::pollLatchStatic();  // SPI latch BEFORE motion starts
+    }
+
     return stepper->moveTo(target) == MOVE_OK;
   }
 
@@ -220,6 +245,7 @@ bool FasAdapterEsp32::externalPinHandler(
 {
   uint8_t pin_index = static_cast<uint8_t>(pin_identifier & ~PIN_EXTERNAL_FLAG);
   const bool is_high = (value != 0);
+
   if (pin_index >= SLEEP_BASE) {
     uint8_t motor_id = pin_index - SLEEP_BASE;
     const uint8_t mask = static_cast<uint8_t>(1U << motor_id);
@@ -245,20 +271,21 @@ bool FasAdapterEsp32::externalPinHandler(
 }
 
 void FasAdapterEsp32::pollLatchStatic() {
-  if (!g_latch_dirty.load(std::memory_order_acquire)) {
-    return;
-  }
-  uint8_t dir = g_dir_bits.load(std::memory_order_relaxed);
-  uint8_t sleep = g_sleep_bits.load(std::memory_order_relaxed);
-  // Only latch if bits actually changed (reduces SPI traffic)
-  if (dir != g_last_latched_dir || sleep != g_last_latched_sleep) {
-    if (g_shift != nullptr) {
-      g_shift->setDirSleep(dir, sleep);
+  // Use exchange loop to prevent dropped updates.
+  // If a callback sets dirty=true while we're latching, the exchange will
+  // return true on the next iteration and we'll re-latch the new values.
+  while (g_latch_dirty.exchange(false, std::memory_order_acq_rel)) {
+    uint8_t dir = g_dir_bits.load(std::memory_order_relaxed);
+    uint8_t sleep = g_sleep_bits.load(std::memory_order_relaxed);
+    // Only latch if bits actually changed (reduces SPI traffic)
+    if (dir != g_last_latched_dir || sleep != g_last_latched_sleep) {
+      if (g_shift != nullptr) {
+        g_shift->setDirSleep(dir, sleep);
+      }
+      g_last_latched_dir = dir;
+      g_last_latched_sleep = sleep;
     }
-    g_last_latched_dir = dir;
-    g_last_latched_sleep = sleep;
   }
-  g_latch_dirty.store(false, std::memory_order_release);
 }
 
 #endif
