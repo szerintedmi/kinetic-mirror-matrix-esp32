@@ -4,6 +4,8 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 
 **Quick Links:** [Build & Deployment](./docs/DEPLOYMENT.md) · [Wiring Guide](./docs/esp32-74hc595-wiring.md) · [Control UI](https://github.com/szerintedmi/mirror-matrix-control-ui) · [Tech Stack](./agent-os/product/tech-stack.md)
 
+[![Watch the video](https://img.youtube.com/vi/aJeB7yPpRAY/hqdefault.jpg)](https://www.youtube.com/embed/aJeB7yPpRAY)
+
 ## What It Does
 
 - **Multi-controller support via MQTT**: Control multiple ESP32 nodes from a single CLI/TUI session
