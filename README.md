@@ -6,6 +6,9 @@ Firmware + host tools to drive up to 8 stepper-driven mirrors from a single ESP3
 
 [![Watch the video](https://img.youtube.com/vi/aJeB7yPpRAY/hqdefault.jpg)](https://www.youtube.com/embed/aJeB7yPpRAY)
 
+[![Watch the video](https://img.youtube.com/vi/KHulZtR2Qkg/hqdefault.jpg)](https://www.youtube.com/embed/KHulZtR2Qkg)
+
+
 ## What It Does
 
 - **Multi-controller support via MQTT**: Control multiple ESP32 nodes from a single CLI/TUI session
