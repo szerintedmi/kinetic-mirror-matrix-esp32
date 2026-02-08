@@ -54,6 +54,8 @@ private:
 
   bool initialized_{false};
   bool updating_{false};
+  bool restart_pending_{false};
+  uint32_t restart_at_ms_{0};
   String last_error_;
   uint32_t last_progress_ms_{0};
   ProgressCallback progress_cb_;

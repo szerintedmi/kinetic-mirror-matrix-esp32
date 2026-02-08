@@ -331,49 +331,93 @@ class PioWrapper:
     ) -> AsyncIterator[int]:
         """Shared HTTP upload implementation for firmware and filesystem.
 
+        Streams the body in chunks and reports upload progress via a background
+        task so the caller sees real-time percentage updates.
+
         Yields:
             Progress percentage (0-100)
         """
         import aiohttp
 
         url = f"http://{ip}/api/ota?type={upload_type}"
+        firmware_data = image_path.read_bytes()
+        file_size = len(firmware_data)
+        chunk_size = 16 * 1024
+
+        # Shared progress counter read by the outer generator
+        bytes_sent = 0
+
+        async def body_generator() -> AsyncIterator[bytes]:
+            nonlocal bytes_sent
+            for offset in range(0, file_size, chunk_size):
+                chunk = firmware_data[offset : offset + chunk_size]
+                bytes_sent += len(chunk)
+                yield chunk
+
         headers = {
             "X-OTA-Password": self.ota_password,
             "Content-Type": "application/octet-stream",
+            "Content-Length": str(file_size),
         }
 
-        firmware_data = image_path.read_bytes()
-        file_size = len(firmware_data)
+        log_handle = open(log_file, "w")
+        log_handle.write(f"# HTTP POST {url}\n")
+        log_handle.write(f"# Started: {datetime.now().isoformat()}\n")
+        log_handle.write(f"# File: {image_path} ({file_size} bytes)\n\n")
+        log_handle.flush()
 
-        with open(log_file, "w") as log:
-            log.write(f"# HTTP POST {url}\n")
-            log.write(f"# Started: {datetime.now().isoformat()}\n")
-            log.write(f"# File: {image_path} ({file_size} bytes)\n\n")
-            log.flush()
+        # Result container populated by the background upload task
+        upload_result: dict[str, object] = {}
 
+        async def do_upload() -> None:
             try:
                 timeout = aiohttp.ClientTimeout(total=120, sock_connect=10)
                 async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.post(url, headers=headers, data=firmware_data) as resp:
+                    async with session.post(url, headers=headers, data=body_generator()) as resp:
                         body = await resp.text()
-                        log.write(f"HTTP {resp.status}\n{body}\n")
-                        log.flush()
-
-                        if resp.status != 200:
-                            error_msg = body
-                            try:
-                                data = json.loads(body)
-                                error_msg = data.get("message", body)
-                            except (json.JSONDecodeError, KeyError):
-                                pass
-                            raise RuntimeError(
-                                f"Upload failed (HTTP {resp.status}): {error_msg}\nLog: {log_file}"
-                            )
-
+                        log_handle.write(f"HTTP {resp.status}\n{body}\n")
+                        log_handle.flush()
+                        upload_result["status"] = resp.status
+                        upload_result["body"] = body
             except aiohttp.ClientError as e:
-                log.write(f"\nConnection error: {e}\n")
-                log.flush()
-                raise RuntimeError(f"Upload failed: {e}\nLog: {log_file}") from e
+                log_handle.write(f"\nConnection error: {e}\n")
+                log_handle.flush()
+                upload_result["error"] = e
+
+        task = asyncio.create_task(do_upload())
+
+        last_percent = 0
+        try:
+            while not task.done():
+                await asyncio.sleep(0.25)
+                if file_size > 0:
+                    percent = min((bytes_sent * 100) // file_size, 99)
+                    if percent > last_percent:
+                        last_percent = percent
+                        yield percent
+
+            # Propagate any unhandled exceptions from the task
+            task.result()
+
+            if "error" in upload_result:
+                raise RuntimeError(
+                    f"Upload failed: {upload_result['error']}\nLog: {log_file}"
+                )
+
+            status = upload_result["status"]
+            body = upload_result["body"]
+            if status != 200:
+                error_msg = str(body)
+                try:
+                    data = json.loads(str(body))
+                    error_msg = data.get("message", str(body))
+                except (json.JSONDecodeError, KeyError):
+                    pass
+                raise RuntimeError(
+                    f"Upload failed (HTTP {status}): {error_msg}\nLog: {log_file}"
+                )
+        finally:
+            log_handle.close()
 
         yield 100
 

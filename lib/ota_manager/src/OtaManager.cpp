@@ -50,6 +50,13 @@ void OtaManager::loop() {
   if (!initialized_)
     return;
   ArduinoOTA.handle();
+
+  // Deferred restart after HTTP OTA: gives the TCP stack time to flush the response
+  if (restart_pending_ && millis() >= restart_at_ms_) {
+    Serial.println("Restarting now...");
+    delay(50);
+    ESP.restart();
+  }
 }
 
 const char* OtaManager::commitHash() const {
@@ -154,6 +161,7 @@ static void sendOtaJson_(AsyncWebServerRequest* request, int status, const char*
 struct HttpOtaState {
   bool begun{false};
   bool failed{false};
+  int error_http_status{400};
   String error_msg;
 };
 
@@ -173,6 +181,7 @@ void registerHttpOtaRoute(AsyncWebServer& server, const char* password, OtaManag
         }
 
         bool ok = state->begun && !state->failed && !Update.hasError();
+        int error_status = state->error_http_status;
         String error = state->error_msg;
         delete state;
         request->_tempObject = nullptr;
@@ -182,13 +191,14 @@ void registerHttpOtaRoute(AsyncWebServer& server, const char* password, OtaManag
           s_mgr->emitState_("complete", "rebooting");
           Serial.println("\nHTTP OTA Complete - Rebooting...");
           sendOtaJson_(request, 200, "ok", "Update complete, rebooting");
-          delay(500);
-          ESP.restart();
+          // Defer restart so the TCP stack can flush the response
+          s_mgr->restart_pending_ = true;
+          s_mgr->restart_at_ms_ = millis() + 1000;
         } else {
           s_mgr->updating_ = false;
           s_mgr->emitState_("error", error.c_str());
           Serial.printf("\nHTTP OTA Error: %s\n", error.c_str());
-          sendOtaJson_(request, 400, "error", error.c_str());
+          sendOtaJson_(request, error_status, "error", error.c_str());
         }
       },
       nullptr, // no file upload handler
@@ -207,14 +217,16 @@ void registerHttpOtaRoute(AsyncWebServer& server, const char* password, OtaManag
           if (!request->hasHeader("X-OTA-Password") ||
               request->header("X-OTA-Password") != String(s_password)) {
             state->failed = true;
-            sendOtaJson_(request, 403, "error", "Forbidden");
+            state->error_http_status = 403;
+            state->error_msg = "Forbidden";
             return;
           }
 
           // Check for concurrent OTA
           if (s_mgr->isUpdating()) {
             state->failed = true;
-            sendOtaJson_(request, 409, "error", "OTA already in progress");
+            state->error_http_status = 409;
+            state->error_msg = "OTA already in progress";
             return;
           }
 
