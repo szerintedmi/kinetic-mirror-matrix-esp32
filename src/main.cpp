@@ -151,6 +151,9 @@ void setup() {
   Ota().begin(hostname.c_str(), OTA_PASSWORD);
   Ota().markFirmwareValid();  // Prevent rollback after successful boot
 
+  // Register HTTP OTA endpoint on portal web server
+  net_onboarding::registerHttpOtaOnPortal(Ota());
+
   // Emit initial state as control event
 #if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
   if (last_state == State::AP_ACTIVE) {

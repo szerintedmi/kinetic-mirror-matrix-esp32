@@ -86,6 +86,7 @@ class OtaDeployer:
         single_device: str | None = None,
         filesystem_only: bool = False,
         with_filesystem: bool = False,
+        method: str | None = None,
     ):
         self.config_path = config_path
         self.build = build
@@ -95,6 +96,7 @@ class OtaDeployer:
         self.single_device = single_device
         self.filesystem_only = filesystem_only
         self.with_filesystem = with_filesystem
+        self.method_override = method  # CLI override; resolved in run()
         self.console = Console()
         self.project_dir = Path.cwd()
         self.pio: PioWrapper | None = None  # Created after loading config
@@ -102,11 +104,11 @@ class OtaDeployer:
         self.log_dir.mkdir(parents=True, exist_ok=True)
         self.timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 
-    def _load_config(self) -> tuple[list[str], str]:
-        """Load device IPs and OTA password from config file.
+    def _load_config(self) -> tuple[list[str], str, str]:
+        """Load device IPs, OTA password, and method from config file.
 
         Returns:
-            Tuple of (list of IPs, OTA password)
+            Tuple of (list of IPs, OTA password, OTA method)
         """
         if not self.config_path.exists():
             self.console.print(f"[red]Config not found:[/] {self.config_path}")
@@ -121,10 +123,12 @@ class OtaDeployer:
                 if not ips:
                     self.console.print("[yellow]No devices configured in config file[/]")
                     sys.exit(1)
-                password = config.get("ota", {}).get("password", "")
+                ota_config = config.get("ota", {})
+                password = ota_config.get("password", "")
+                method = ota_config.get("method", "http")
                 if not password:
                     self.console.print("[yellow]Warning: No OTA password configured[/]")
-                return ips, password
+                return ips, password, method
         except tomllib.TOMLDecodeError as e:
             self.console.print(f"[red]Invalid TOML in config file:[/] {e}")
             sys.exit(1)
@@ -153,7 +157,7 @@ class OtaDeployer:
                 sys.exit(1)
 
         # Load from config file
-        ips, _ = self._load_config()
+        ips, _, _ = self._load_config()
         return ips
 
     async def run(self) -> int:
@@ -163,7 +167,8 @@ class OtaDeployer:
             Exit code (0 for success, 1 for failures)
         """
         # Load config and initialize PioWrapper with password
-        _, ota_password = self._load_config()
+        _, ota_password, config_method = self._load_config()
+        self.method = self.method_override or config_method
         self.pio = PioWrapper(PIO_ENV, self.project_dir, ota_password=ota_password)
 
         # Step 1: Build phase
@@ -294,11 +299,14 @@ class OtaDeployer:
             log_file = self.log_dir / f"{self.timestamp}_{device.ip}.log"
 
             try:
-                # Upload using espota.py directly (no rebuild)
                 device.status = "uploading"
                 progress.update(task_id, status="[yellow]Connecting...[/]")
 
-                async for percent in self.pio.upload(device.ip, log_file, firmware_info.path):
+                if self.method == "http":
+                    upload_iter = self.pio.upload_http(device.ip, log_file, firmware_info.path)
+                else:
+                    upload_iter = self.pio.upload(device.ip, log_file, firmware_info.path)
+                async for percent in upload_iter:
                     device.progress = percent
                     progress.update(
                         task_id, completed=percent, status=f"[yellow]Uploading {percent}%[/]"
@@ -369,7 +377,11 @@ class OtaDeployer:
                 progress.update(task_id, status="[yellow]Connecting...[/]")
 
                 assert self.pio is not None
-                async for percent in self.pio.upload_filesystem(device.ip, log_file, fs_path):
+                if self.method == "http":
+                    fs_iter = self.pio.upload_filesystem_http(device.ip, log_file, fs_path)
+                else:
+                    fs_iter = self.pio.upload_filesystem(device.ip, log_file, fs_path)
+                async for percent in fs_iter:
                     device.progress = percent
                     progress.update(
                         task_id, completed=percent, status=f"[yellow]Uploading {percent}%[/]"
@@ -541,6 +553,12 @@ Examples:
         action="store_true",
         help="Deploy both firmware and filesystem",
     )
+    parser.add_argument(
+        "--method",
+        choices=["http", "espota"],
+        default=None,
+        help="OTA upload method (default: from config, or 'http')",
+    )
 
     args = parser.parse_args()
 
@@ -559,6 +577,7 @@ Examples:
         single_device=args.device,
         filesystem_only=args.filesystem,
         with_filesystem=args.with_filesystem,
+        method=args.method,
     )
 
     return asyncio.run(deployer.run())

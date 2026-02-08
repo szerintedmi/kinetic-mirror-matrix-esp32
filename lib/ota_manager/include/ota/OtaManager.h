@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <functional>
 
+class AsyncWebServer;
+
 namespace ota {
 
 /// Callback for OTA progress updates (progress 0-100, total bytes)
@@ -56,7 +58,13 @@ private:
   uint32_t last_progress_ms_{0};
   ProgressCallback progress_cb_;
   StateCallback state_cb_;
+
+  friend void registerHttpOtaRoute(AsyncWebServer& server, const char* password, OtaManager& mgr);
 };
+
+/// Register HTTP OTA endpoint (POST /api/ota) on existing AsyncWebServer.
+/// Call from setup after both Net().begin() and Ota().begin().
+void registerHttpOtaRoute(AsyncWebServer& server, const char* password, OtaManager& mgr);
 
 }  // namespace ota
 

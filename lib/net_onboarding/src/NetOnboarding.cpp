@@ -18,6 +18,10 @@
 #include <LittleFS.h>
 
 #include "version.h"
+
+// HTTP OTA route registration (defined in ota_manager library)
+#include "ota/OtaManager.h"
+#include "secrets.h"
 #endif
 
 namespace net_onboarding {
@@ -385,6 +389,12 @@ static void ensurePortalServer_(NetOnboarding& net) {
   favicon_handler.setCacheControl("public, max-age=86400");
   g_portal_server_started = true;
   g_portal_server.begin();
+}
+
+void registerHttpOtaOnPortal(ota::OtaManager& mgr) {
+  if (g_portal_server_started) {
+    ota::registerHttpOtaRoute(g_portal_server, OTA_PASSWORD, mgr);
+  }
 }
 
 #else

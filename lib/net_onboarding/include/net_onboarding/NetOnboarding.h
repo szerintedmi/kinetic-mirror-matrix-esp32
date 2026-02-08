@@ -158,3 +158,14 @@ public:
 };
 
 }  // namespace net_onboarding
+
+// HTTP OTA route registration on the portal web server.
+// Call from main setup() after Net().begin() and Ota().begin().
+#if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))
+namespace ota {
+class OtaManager;
+}
+namespace net_onboarding {
+void registerHttpOtaOnPortal(ota::OtaManager& mgr);
+}
+#endif

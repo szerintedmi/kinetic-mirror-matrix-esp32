@@ -10,4 +10,6 @@ ips = [
 
 [ota]
 # OTA password - must match OTA_PASSWORD in secrets.h
-password = "kinetic-mirror-ota"
+password = "OTA_PASSWORD in secrets.h"
+# OTA upload method: "http" (default) or "espota" (legacy reverse-connection)
+method = "http"

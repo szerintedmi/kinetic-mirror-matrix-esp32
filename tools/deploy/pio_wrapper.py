@@ -1,4 +1,4 @@
-"""Wrapper for PlatformIO build and espota.py upload commands."""
+"""Wrapper for PlatformIO build, espota.py upload, and HTTP OTA upload commands."""
 
 from __future__ import annotations
 
@@ -291,6 +291,89 @@ class PioWrapper:
                 msg += f": {detail}"
             msg += f"\nLog: {log_file}"
             raise RuntimeError(msg)
+
+        yield 100
+
+    async def upload_http(
+        self, ip: str, log_file: Path, firmware_path: Path
+    ) -> AsyncIterator[int]:
+        """Upload firmware via HTTP POST to /api/ota endpoint.
+
+        Args:
+            ip: Device IP address
+            log_file: Path to write upload output
+            firmware_path: Path to firmware.bin file
+
+        Yields:
+            Progress percentage (0-100)
+        """
+        async for percent in self._upload_http_impl(ip, log_file, firmware_path, "firmware"):
+            yield percent
+
+    async def upload_filesystem_http(
+        self, ip: str, log_file: Path, fs_path: Path
+    ) -> AsyncIterator[int]:
+        """Upload filesystem via HTTP POST to /api/ota?type=filesystem endpoint.
+
+        Args:
+            ip: Device IP address
+            log_file: Path to write upload output
+            fs_path: Path to littlefs.bin file
+
+        Yields:
+            Progress percentage (0-100)
+        """
+        async for percent in self._upload_http_impl(ip, log_file, fs_path, "filesystem"):
+            yield percent
+
+    async def _upload_http_impl(
+        self, ip: str, log_file: Path, image_path: Path, upload_type: str
+    ) -> AsyncIterator[int]:
+        """Shared HTTP upload implementation for firmware and filesystem.
+
+        Yields:
+            Progress percentage (0-100)
+        """
+        import aiohttp
+
+        url = f"http://{ip}/api/ota?type={upload_type}"
+        headers = {
+            "X-OTA-Password": self.ota_password,
+            "Content-Type": "application/octet-stream",
+        }
+
+        firmware_data = image_path.read_bytes()
+        file_size = len(firmware_data)
+
+        with open(log_file, "w") as log:
+            log.write(f"# HTTP POST {url}\n")
+            log.write(f"# Started: {datetime.now().isoformat()}\n")
+            log.write(f"# File: {image_path} ({file_size} bytes)\n\n")
+            log.flush()
+
+            try:
+                timeout = aiohttp.ClientTimeout(total=120, sock_connect=10)
+                async with aiohttp.ClientSession(timeout=timeout) as session:
+                    async with session.post(url, headers=headers, data=firmware_data) as resp:
+                        body = await resp.text()
+                        log.write(f"HTTP {resp.status}\n{body}\n")
+                        log.flush()
+
+                        if resp.status != 200:
+                            error_msg = body
+                            try:
+                                data = json.loads(body)
+                                error_msg = data.get("message", body)
+                            except (json.JSONDecodeError, KeyError):
+                                pass
+                            raise RuntimeError(
+                                f"Upload failed (HTTP {resp.status}): {error_msg}\nLog: {log_file}"
+                            )
+
+            except aiohttp.ClientError as e:
+                log.write(f"\nConnection error: {e}\n")
+                log.flush()
+                raise RuntimeError(f"Upload failed: {e}\nLog: {log_file}") from e
 
         yield 100
 
