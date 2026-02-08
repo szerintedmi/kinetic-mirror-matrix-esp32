@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import dataclass
+
+import aiohttp
 
 
 @dataclass
@@ -41,26 +42,17 @@ async def verify_device(
     await asyncio.sleep(3.0)
 
     try:
-        # Use curl subprocess (zero new dependencies)
-        proc = await asyncio.create_subprocess_exec(
-            "curl",
-            "-s",
-            "--max-time",
-            str(timeout),
-            f"http://{ip}/api/status",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
+        client_timeout = aiohttp.ClientTimeout(total=timeout, sock_connect=timeout)
+        async with aiohttp.ClientSession(timeout=client_timeout) as session:
+            async with session.get(f"http://{ip}/api/status") as resp:
+                if resp.status != 200:
+                    return VerificationResult(
+                        verified=False,
+                        error=f"HTTP request failed: status {resp.status}",
+                    )
 
-        stdout, stderr = await proc.communicate()
+                data = await resp.json()
 
-        if proc.returncode != 0:
-            return VerificationResult(
-                verified=False,
-                error=f"HTTP request failed: {stderr.decode().strip() or 'connection error'}",
-            )
-
-        data = json.loads(stdout.decode())
         fw_version = data.get("firmwareVersion", "")
         fw_date = data.get("firmwareDate", "")
 
@@ -86,10 +78,10 @@ async def verify_device(
             firmware_date=fw_date,
         )
 
-    except json.JSONDecodeError as e:
+    except aiohttp.ClientError as e:
         return VerificationResult(
             verified=False,
-            error=f"Invalid JSON response: {e}",
+            error=f"HTTP request failed: {e}",
         )
     except Exception as e:
         return VerificationResult(
