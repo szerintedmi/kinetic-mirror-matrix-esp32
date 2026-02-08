@@ -49,6 +49,8 @@ def load_mqtt_defaults() -> Dict[str, str]:
     if not header_path.exists():
         return defaults
     text = header_path.read_text(errors="ignore")
+    # Collapse backslash-newline continuations so multiline #defines match
+    text = re.sub(r"\\\s*\n\s*", " ", text)
     patterns = {
         "host": re.compile(r"#define\s+MQTT_BROKER_HOST\s+\"([^\"]+)\""),
         "port": re.compile(r"#define\s+MQTT_BROKER_PORT\s+(\d+)"),

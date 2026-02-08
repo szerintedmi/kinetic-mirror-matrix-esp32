@@ -9,17 +9,23 @@ Follow these steps to stand up a local Mosquitto broker for the MQTT telemetry s
 
 ## 2. Create a Minimal Configuration
 
-Save the following as `$(brew --prefix mosquitto)/etc/mosquitto/mosquitto.conf` (replace the file if it already exists). Adjust the persistence path if your Homebrew prefix differs.
+Save the following as `/opt/homebrew/etc/mosquitto/mosquitto.conf` (replace the file if it already exists). This is the path `brew services` loads by default and it survives Homebrew upgrades.
 
 ```conf
 # ===============================
 # Minimal Mosquitto Config (Local)
 # ===============================
 
-# Listen on the default MQTT port
+# Listen on the default MQTT port (IPv4 only)
 listener 1883 0.0.0.0
+socket_domain ipv4
 
-password_file /opt/homebrew/opt/mosquitto/etc/mosquitto/passwd
+# WebSocket MQTT (for the controller UI)
+listener 9001 0.0.0.0
+protocol websockets
+socket_domain ipv4
+
+password_file /opt/homebrew/etc/mosquitto/passwd
 allow_anonymous false
 
 # Logging
@@ -39,15 +45,31 @@ connection_messages true
 
 ## 3. Create Broker Credentials
 
-- From the Mosquitto etc directory: `cd $(brew --prefix mosquitto)/etc/mosquitto`
-- Create the password database: ``mosquitto_passwd -c ./passwd <mqtt-user>``
-- Re-run without `-c` to add additional users later. The repo defaults assume the user `mirror`.
+Create a password file so the broker can authenticate clients:
+
+```bash
+# Create the file and add the first user (prompts for password)
+mosquitto_passwd -c /opt/homebrew/etc/mosquitto/passwd mirror
+
+# Add another user later (omit -c so you don't overwrite the file)
+mosquitto_passwd /opt/homebrew/etc/mosquitto/passwd <another-user>
+
+# Delete a user
+mosquitto_passwd -D /opt/homebrew/etc/mosquitto/passwd <user-to-remove>
+```
+
+> **Warning:** The `-c` flag overwrites the entire file. Only use it once for initial setup.
+>
+> On Intel macOS, replace `/opt/homebrew` with `/usr/local`.
 
 ## 4. Start (or Restart) the Broker
 
-- Start the service: `brew services start mosquitto`
+- Start as a background service: `brew services start mosquitto`
 - After config edits, restart: `brew services restart mosquitto`
-- To tail logs: `brew services info mosquitto` (shows log path) or launch foreground with `mosquitto -c ... -v`
+- To see logs in real time, run in the foreground instead:
+  ```bash
+  mosquitto -c /opt/homebrew/etc/mosquitto/mosquitto.conf -v
+  ```
 
 ## 5. Update Firmware Secrets
 
