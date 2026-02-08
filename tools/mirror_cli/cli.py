@@ -34,6 +34,37 @@ def _join_home_with_placeholders(
     return f"HOME:{','.join(parts)}\n"
 
 
+def _join_move_with_placeholders(
+    id_token: str,
+    abs_steps: int,
+    overshoot: Optional[int],
+    dither_amplitude: Optional[int],
+    dither_cycles: Optional[int],
+) -> str:
+    """Build MOVE payload supporting optional settle fields.
+
+    Grammar: MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>][,<overshoot>][,<dither_amp>][,<dither_cycles>]
+    Speed/accel slots (indices 2-3) are always empty (use global SET).
+    """
+    # fields[0]=speed, [1]=accel, [2]=overshoot, [3]=dither_amp, [4]=dither_cycles
+    fields: List[Optional[str]] = [None, None, None, None, None]
+    if overshoot is not None:
+        fields[2] = str(overshoot)
+    if dither_amplitude is not None:
+        fields[3] = str(dither_amplitude)
+    if dither_cycles is not None:
+        fields[4] = str(dither_cycles)
+    hi = -1
+    for i in range(len(fields) - 1, -1, -1):
+        if fields[i] is not None:
+            hi = i
+            break
+    parts = [id_token, str(abs_steps)]
+    if hi >= 0:
+        parts.extend([fields[i] if fields[i] is not None else "" for i in range(0, hi + 1)])
+    return f"MOVE:{','.join(parts)}\n"
+
+
 def build_command(ns: argparse.Namespace) -> str:
     """Build a command string from parsed arguments."""
     cmd = ns.command
@@ -50,9 +81,13 @@ def build_command(ns: argparse.Namespace) -> str:
     if cmd == "sleep":
         return f"SLEEP:{ns.id}\n"
     if cmd == "move" or cmd == "m":
-        # Simplified grammar: no per-move speed/accel
-        parts = [str(ns.id), str(ns.abs_steps)]
-        return f"MOVE:{','.join(parts)}\n"
+        return _join_move_with_placeholders(
+            str(ns.id),
+            ns.abs_steps,
+            getattr(ns, "overshoot", None),
+            getattr(ns, "dither_amplitude", None),
+            getattr(ns, "dither_cycles", None),
+        )
     if cmd == "home" or cmd == "h":
         # Simplified grammar: no per-home speed/accel
         return _join_home_with_placeholders(str(ns.id), ns.overshoot, ns.backoff, ns.full_range)
@@ -101,9 +136,25 @@ def make_parser() -> argparse.ArgumentParser:
     s = _add_common(sp.add_parser("move", help="MOVE absolute position (uses global SPEED/ACCEL)"))
     s.add_argument("id", help="Motor id 0-7 or ALL")
     s.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
+    s.add_argument("--overshoot", type=int, help="Override settle overshoot steps (0=disable)")
+    s.add_argument(
+        "--dither-amplitude", type=int, dest="dither_amplitude", help="Override dither amplitude"
+    )
+    s.add_argument(
+        "--dither-cycles", type=int, dest="dither_cycles", help="Override dither cycle count"
+    )
     s_alias = _add_common(sp.add_parser("m", help="Alias for move"))
     s_alias.add_argument("id", help="Motor id 0-7 or ALL")
     s_alias.add_argument("abs_steps", type=int, help="Absolute target steps (-1200..1200)")
+    s_alias.add_argument(
+        "--overshoot", type=int, help="Override settle overshoot steps (0=disable)"
+    )
+    s_alias.add_argument(
+        "--dither-amplitude", type=int, dest="dither_amplitude", help="Override dither amplitude"
+    )
+    s_alias.add_argument(
+        "--dither-cycles", type=int, dest="dither_cycles", help="Override dither cycle count"
+    )
 
     s = _add_common(
         sp.add_parser("home", help="HOME with optional params (overshoot/backoff/full_range)")

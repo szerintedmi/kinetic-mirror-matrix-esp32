@@ -36,6 +36,10 @@ public:
   int defaultAccelSps2() const { return default_accel_sps2_; }
   int defaultDecelSps2() const { return default_decel_sps2_; }
   uint8_t microstepMultiplier() const { return microstep_multiplier_; }
+  int defaultMoveOvershoot() const { return default_move_overshoot_; }
+  int defaultDitherAmplitude() const { return default_dither_amplitude_; }
+  int defaultDitherCycles() const { return default_dither_cycles_; }
+  int defaultDitherMinAmplitude() const { return default_dither_min_amplitude_; }
 
 private:
   std::unique_ptr<MotorController> controller_;
@@ -46,6 +50,10 @@ private:
   uint8_t microstep_multiplier_ = 32;  // 1, 2, 4, 8, 16, or 32 (default: 1/32)
   bool in_batch_ = false;
   bool batch_initially_idle_ = false;
+  int default_move_overshoot_;
+  int default_dither_amplitude_;
+  int default_dither_cycles_;
+  int default_dither_min_amplitude_;
 
   motor::command::CommandParser parser_;
   std::unique_ptr<motor::command::CommandRouter> router_;

@@ -65,6 +65,7 @@ void test_timing_estimate_scales_with_microstep() {
   MotorCommandProcessor proto;
   proto.processLine("SET SPEED=1000", 0);
   proto.processLine("SET ACCEL=4000", 0);
+  proto.processLine("SET MOVE_OVERSHOOT=0", 0);
 
   // Move in FULL mode
   auto r1 = proto.processLine("MOVE:0,1000", 0);
@@ -87,6 +88,7 @@ void test_timing_estimate_scales_with_microstep() {
 
 void test_position_rescaled_on_mode_change() {
   MotorCommandProcessor proto;
+  proto.processLine("SET MOVE_OVERSHOOT=0", 0);
   // Move to position 1000 in FULL mode
   proto.processLine("MOVE:0,1000", 0);
   proto.processLine("", 10000);  // Complete move

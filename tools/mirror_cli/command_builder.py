@@ -96,7 +96,15 @@ def _parse_set_assignments(tokens: Sequence[str]) -> Dict[str, object]:
     name = key.strip().upper()
     value = value.strip()
     # Convert numeric values to int for MQTT JSON serialization
-    if name in ("SPEED", "ACCEL", "DECEL"):
+    if name in (
+        "SPEED",
+        "ACCEL",
+        "DECEL",
+        "MOVE_OVERSHOOT",
+        "DITHER_AMPLITUDE",
+        "DITHER_CYCLES",
+        "DITHER_MIN_AMPLITUDE",
+    ):
         if not _INTEGER_RE.fullmatch(value):
             raise CommandParseError(f"{name} must be integer")
         return {name: int(value)}
@@ -130,7 +138,13 @@ def parse_serial_command(command: str) -> CommandRequest:
         remainder = rest[len(sub_token) :]
         if remainder.startswith(","):
             remainder = remainder[1:]
-        if action in {"NET:STATUS", "NET:RESET", "NET:LIST", "NET:GET_CONFIG", "NET:CLEAR_SECONDARY"}:
+        if action in {
+            "NET:STATUS",
+            "NET:RESET",
+            "NET:LIST",
+            "NET:GET_CONFIG",
+            "NET:CLEAR_SECONDARY",
+        }:
             if remainder.strip():
                 raise CommandParseError(f"{action} does not accept arguments")
             return CommandRequest(action=action, params={}, raw=raw)
@@ -266,10 +280,16 @@ def parse_serial_command(command: str) -> CommandRequest:
                 "target_ids": target,
                 "position_steps": position,
             }
-            if len(args) >= 3 and args[2] != "":
-                params["speed"] = _parse_int(args[2], "speed")
-            if len(args) >= 4 and args[3] != "":
-                params["accel"] = _parse_int(args[3], "accel")
+            optional_fields = [
+                ("speed", 2),
+                ("accel", 3),
+                ("overshoot_steps", 4),
+                ("dither_amplitude", 5),
+                ("dither_cycles", 6),
+            ]
+            for key, idx in optional_fields:
+                if idx < len(args) and args[idx] != "":
+                    params[key] = _parse_int(args[idx], key)
             return CommandRequest(action="MOVE", params=params, raw=raw)
         if action in {"HOME", "H"}:
             args = _parse_csv_arguments(arg_string)

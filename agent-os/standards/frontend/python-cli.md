@@ -30,6 +30,25 @@ Cascade: explicit selection → `--node` arg → single device → freshest tele
 - CSV parser handles quotes and escape sequences
 - Colon syntax preferred; space syntax supported for legacy
 
+## Adding or Changing Commands/Settings (Checklist)
+
+When adding new GET/SET keys, command parameters, or modifying existing ones, **all of the following** must be updated. Missing any one layer causes silent failures in specific transports.
+
+### Code layers
+
+1. **Firmware command handler** (`CommandHandlers.cpp`) — parses the serial command string
+2. **MQTT command translator** (`MqttCommandServer.cpp`) — `buildSetCommand()`, `buildGetCommand()`, or the relevant `build*Command()` method must whitelist and validate the new fields. MQTT commands pass through `MqttCommandServer::buildCommandLine()` which translates JSON→serial; if a field isn't whitelisted here, MQTT silently rejects with "unsupported field/resource" while serial works fine.
+3. **Python command builder** (`command_builder.py`) — parses TUI input into MQTT JSON params
+4. **Serial HELP text** (`HelpText.cpp`) — update the command grammar shown by `HELP`
+5. **TUI help overlay** (`textual_ui.py`) — the help panel shown in the interactive TUI
+
+### Documentation
+
+6. **`docs/mqtt-command-schema.md`** — MQTT command/response schema (params tables, GET resources, SET params, serial mapping appendix)
+7. **`docs/mqtt-payload-examples.md`** — real-world payload examples (add examples for new commands/params, update GET ALL response)
+8. **`docs/mqtt-config-schema.md`** — config topic schema (if the setting appears in the broadcasted config JSON)
+9. **`MqttConfigPublisher.cpp`** — if the new setting should be published on the config topic (builds JSON manually, append before `motor_count`)
+
 ## MQTT Worker Internals
 
 - Pending commands triple-indexed: by cmd_id, by local handle, by FIFO order

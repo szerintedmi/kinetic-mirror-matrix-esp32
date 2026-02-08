@@ -56,8 +56,9 @@ void test_preflight_e11_move_enabled_err() {
 
 void test_preflight_warn_when_disabled_then_ok() {
   MotorCommandProcessor p;
-  // Disable limits
+  // Disable limits and overshoot (overshoot would add to thermal estimate)
   TEST_ASSERT_TRUE(p.processLine("SET THERMAL_LIMITING=OFF", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("SET MOVE_OVERSHOOT=0", 0).rfind("CTRL:DONE", 0) == 0);
   // This would exceed max -> expect WARN then OK
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1", 0).rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=1000", 0).rfind("CTRL:DONE", 0) == 0);
@@ -127,6 +128,7 @@ void test_last_op_timing_move() {
   MotorCommandProcessor p;
   TEST_ASSERT_TRUE(p.processLine("SET SPEED=1000", 0).rfind("CTRL:DONE", 0) == 0);
   TEST_ASSERT_TRUE(p.processLine("SET ACCEL=1000", 0).rfind("CTRL:DONE", 0) == 0);
+  TEST_ASSERT_TRUE(p.processLine("SET MOVE_OVERSHOOT=0", 0).rfind("CTRL:DONE", 0) == 0);
   std::string r = p.processLine("MOVE:0,50", 0);
   TEST_ASSERT_TRUE(r.rfind("CTRL:ACK msg_id=", 0) == 0);
   TEST_ASSERT_TRUE(r.find(" est_ms=") != std::string::npos);

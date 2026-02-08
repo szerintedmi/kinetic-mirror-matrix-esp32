@@ -5,6 +5,16 @@
 // Forward declare MicrostepMode to avoid full header include
 enum class MicrostepMode : uint8_t;
 
+enum class MovePhase : uint8_t {
+  NONE,
+  PRIMARY,
+  OVERSHOOT,
+  APPROACH,
+  DITHER_POS,
+  DITHER_NEG,
+  DITHER_RETURN
+};
+
 struct MotorState {
   uint8_t id;
   long position;  // absolute steps
@@ -24,6 +34,17 @@ struct MotorState {
   uint32_t last_op_est_ms;      // estimated duration for last MOVE/HOME in ms
   uint8_t last_op_type;         // 0=none, 1=move, 2=home
   bool last_op_ongoing;         // true while MOVE/HOME is in progress
+  // Multi-phase move settle state (overshoot + dither)
+  MovePhase move_phase;
+  long settle_center;
+  int settle_overshoot;
+  int settle_dither_amplitude;
+  int settle_dither_cycles;
+  int settle_dither_min_amplitude;
+  int settle_remaining_cycles;
+  int settle_current_amplitude;
+  int settle_speed;
+  int settle_accel;
 };
 
 class MotorController {
@@ -44,6 +65,11 @@ public:
                         long full_range,
                         uint32_t now_ms) = 0;
   virtual void tick(uint32_t now_ms) = 0;
+
+  // Pre-populate settle params for next moveAbsMask() call
+  virtual void setSettleParams(uint32_t mask, int overshoot,
+                               int dither_amplitude, int dither_cycles,
+                               int dither_min_amplitude) = 0;
 
   // Global thermal runtime limiting flag control
   virtual void setThermalLimitsEnabled(bool enabled) = 0;

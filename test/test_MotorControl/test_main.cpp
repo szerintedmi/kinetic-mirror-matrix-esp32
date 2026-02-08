@@ -89,6 +89,32 @@ void test_dir_guard_constants_reasonable();
 void test_compute_flip_window_mid_gap();
 void test_compute_flip_window_aligns_from_edge();
 
+// MoveSettle (GET/SET + command parsing)
+void test_get_set_move_overshoot();
+void test_get_set_dither_amplitude();
+void test_get_set_dither_cycles();
+void test_get_set_dither_min_amplitude();
+void test_set_settle_rejects_negative();
+void test_get_all_includes_settle_params();
+void test_move_accepts_overshoot_param();
+void test_move_accepts_settle_params();
+void test_move_accepts_negative_overshoot();
+void test_move_rejects_extra_trailing_params();
+void test_move_with_overshoot_completes_at_target();
+void test_move_with_overshoot_increases_estimate();
+void test_move_overshoot_adds_time_even_when_zero_delta();
+void test_move_with_dither_increases_estimate();
+void test_move_overshoot_inline_param_overrides_default();
+void test_dither_amplitude_clamped_near_limits();
+void test_move_overshoot_clamped_at_boundary();
+void test_help_includes_settle_params();
+// Hardware settle
+void test_hw_settle_overshoot_phase_sequence();
+void test_hw_settle_dither_phase_sequence();
+void test_hw_settle_overshoot_and_dither_combined();
+void test_hw_settle_overshoot_applied_when_zero_delta();
+void test_hw_settle_no_settle_when_params_zero();
+
 // Hardware
 void test_bitpack_dir_sleep_basic();
 void test_backend_latch_before_start();
@@ -388,6 +414,55 @@ int main(int, char**) {
   RUN_TEST(test_get_all_includes_microstep);
   setUp();
   RUN_TEST(test_status_reports_user_space_position);
+
+  // Move settle (overshoot + dither)
+  setUp();
+  RUN_TEST(test_get_set_move_overshoot);
+  setUp();
+  RUN_TEST(test_get_set_dither_amplitude);
+  setUp();
+  RUN_TEST(test_get_set_dither_cycles);
+  setUp();
+  RUN_TEST(test_get_set_dither_min_amplitude);
+  setUp();
+  RUN_TEST(test_set_settle_rejects_negative);
+  setUp();
+  RUN_TEST(test_get_all_includes_settle_params);
+  setUp();
+  RUN_TEST(test_move_accepts_overshoot_param);
+  setUp();
+  RUN_TEST(test_move_accepts_settle_params);
+  setUp();
+  RUN_TEST(test_move_accepts_negative_overshoot);
+  setUp();
+  RUN_TEST(test_move_rejects_extra_trailing_params);
+  setUp();
+  RUN_TEST(test_move_with_overshoot_completes_at_target);
+  setUp();
+  RUN_TEST(test_move_with_overshoot_increases_estimate);
+  setUp();
+  RUN_TEST(test_move_overshoot_adds_time_even_when_zero_delta);
+  setUp();
+  RUN_TEST(test_move_with_dither_increases_estimate);
+  setUp();
+  RUN_TEST(test_move_overshoot_inline_param_overrides_default);
+  setUp();
+  RUN_TEST(test_help_includes_settle_params);
+  setUp();
+  RUN_TEST(test_dither_amplitude_clamped_near_limits);
+  setUp();
+  RUN_TEST(test_move_overshoot_clamped_at_boundary);
+  // Hardware settle state machine
+  setUp();
+  RUN_TEST(test_hw_settle_overshoot_phase_sequence);
+  setUp();
+  RUN_TEST(test_hw_settle_dither_phase_sequence);
+  setUp();
+  RUN_TEST(test_hw_settle_overshoot_and_dither_combined);
+  setUp();
+  RUN_TEST(test_hw_settle_overshoot_applied_when_zero_delta);
+  setUp();
+  RUN_TEST(test_hw_settle_no_settle_when_params_zero);
 
   return UNITY_END();
 }

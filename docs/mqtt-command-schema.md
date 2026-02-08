@@ -79,17 +79,23 @@ Move motor(s) to an absolute position.
     "target_ids": 0,
     "position_steps": 1200,
     "speed": 4000,
-    "accel": 16000
+    "accel": 16000,
+    "overshoot_steps": 300,
+    "dither_amplitude": 50,
+    "dither_cycles": 3
   }
 }
 ```
 
-| Parameter        | Type         | Required | Default      | Description                      |
-| ---------------- | ------------ | -------- | ------------ | -------------------------------- |
-| `target_ids`     | int \| "ALL" | No       | 0            | Motor ID or "ALL" for all motors |
-| `position_steps` | int          | Yes      | -            | Target position in steps         |
-| `speed`          | int          | No       | Global SPEED | Steps per second                 |
-| `accel`          | int          | No       | Global ACCEL | Acceleration in steps/s²         |
+| Parameter          | Type         | Required | Default              | Description                                    |
+| ------------------ | ------------ | -------- | -------------------- | ---------------------------------------------- |
+| `target_ids`       | int \| "ALL" | No       | 0                    | Motor ID or "ALL" for all motors               |
+| `position_steps`   | int          | Yes      | -                    | Target position in steps                       |
+| `speed`            | int          | No       | Global SPEED         | Steps per second                               |
+| `accel`            | int          | No       | Global ACCEL         | Acceleration in steps/s²                       |
+| `overshoot_steps`  | int          | No       | Global MOVE_OVERSHOOT| Anti-backlash overshoot (sign=approach dir, 0=off) |
+| `dither_amplitude` | int          | No       | Global DITHER_AMPLITUDE | Dither oscillation amplitude (0=disable)    |
+| `dither_cycles`    | int          | No       | Global DITHER_CYCLES | Number of dither oscillation cycles            |
 
 **ACK Response:**
 
@@ -244,15 +250,19 @@ Retrieve configuration values.
 }
 ```
 
-| Resource           | Description                     |
-| ------------------ | ------------------------------- |
-| `ALL`              | All configuration values        |
-| `SPEED`            | Default speed (steps/s)         |
-| `ACCEL`            | Default acceleration (steps/s²) |
-| `DECEL`            | Default deceleration (steps/s²) |
-| `THERMAL_LIMITING` | Thermal limiting state (ON/OFF) |
-| `MICROSTEP`        | Microstepping mode              |
-| `LAST_OP_TIMING`   | Last operation timing info      |
+| Resource              | Description                          |
+| --------------------- | ------------------------------------ |
+| `ALL`                 | All configuration values             |
+| `SPEED`               | Default speed (steps/s)              |
+| `ACCEL`               | Default acceleration (steps/s²)      |
+| `DECEL`               | Default deceleration (steps/s²)      |
+| `THERMAL_LIMITING`    | Thermal limiting state (ON/OFF)      |
+| `MICROSTEP`           | Microstepping mode                   |
+| `MOVE_OVERSHOOT`      | Default overshoot distance (steps)   |
+| `DITHER_AMPLITUDE`    | Default dither amplitude (steps)     |
+| `DITHER_CYCLES`       | Default dither cycle count           |
+| `DITHER_MIN_AMPLITUDE`| Minimum dither amplitude threshold   |
+| `LAST_OP_TIMING`      | Last operation timing info           |
 
 **Completion (ALL):**
 
@@ -267,6 +277,10 @@ Retrieve configuration values.
     "DECEL": 16000,
     "MICROSTEP": "1/32",
     "THERMAL_LIMITING": "ON",
+    "MOVE_OVERSHOOT": 80,
+    "DITHER_AMPLITUDE": 0,
+    "DITHER_CYCLES": 3,
+    "DITHER_MIN_AMPLITUDE": 20,
     "max_budget_s": 90,
     "free_heap_bytes": 51264,
     "firmware_version": "41a147e",
@@ -288,14 +302,18 @@ Update configuration values. Only one field per request.
 }
 ```
 
-| Parameter          | Type   | Valid Values                                 | Description                      |
-| ------------------ | ------ | -------------------------------------------- | -------------------------------- |
-| `SPEED`            | int    | > 0                                          | Default speed in steps/s         |
-| `ACCEL`            | int    | > 0                                          | Default acceleration in steps/s² |
-| `DECEL`            | int    | >= 0                                         | Default deceleration in steps/s² |
-| `THERMAL_LIMITING` | string | "ON", "OFF"                                  | Enable/disable thermal limiting  |
-| `MICROSTEP`        | string | "FULL", "HALF", "1/4", "1/8", "1/16", "1/32" | Microstepping mode               |
-| `THERMAL_BUDGET:<id>` | int | any integer                                  | Debug: set motor budget (tenths of seconds) |
+| Parameter               | Type   | Valid Values                                 | Description                                  |
+| ----------------------- | ------ | -------------------------------------------- | -------------------------------------------- |
+| `SPEED`                 | int    | > 0                                          | Default speed in steps/s                     |
+| `ACCEL`                 | int    | > 0                                          | Default acceleration in steps/s²             |
+| `DECEL`                 | int    | >= 0                                         | Default deceleration in steps/s²             |
+| `THERMAL_LIMITING`      | string | "ON", "OFF"                                  | Enable/disable thermal limiting              |
+| `MICROSTEP`             | string | "FULL", "HALF", "1/4", "1/8", "1/16", "1/32"| Microstepping mode                           |
+| `MOVE_OVERSHOOT`        | int    | any integer                                  | Default overshoot (sign=approach dir, 0=off) |
+| `DITHER_AMPLITUDE`      | int    | >= 0                                         | Default dither amplitude (0=disable)         |
+| `DITHER_CYCLES`         | int    | >= 0                                         | Default number of dither cycles              |
+| `DITHER_MIN_AMPLITUDE`  | int    | >= 0                                         | Minimum dither amplitude threshold           |
+| `THERMAL_BUDGET:<id>`   | int    | any integer                                  | Debug: set motor budget (tenths of seconds)  |
 
 **Note:** SET MICROSTEP requires all motors to be stopped and asleep. Returns `E04 BUSY` otherwise.
 
@@ -630,7 +648,7 @@ Get list of available commands.
   "result": {
     "lines": [
       "HELP",
-      "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]",
+      "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>][,<overshoot>][,<dither_amp>][,<dither_cycles>]",
       "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]",
       "..."
     ]
@@ -678,6 +696,7 @@ Examples:
 
 - `MOVE:0,1200` - Move motor 0 to position 1200
 - `MOVE:0,1200,2000,8000` - Move with speed=2000, accel=8000
+- `MOVE:0,1200,,,200,50,3` - Move with overshoot=200, dither_amp=50, dither_cycles=3
 - `HOME:ALL,600,150` - Home all motors with overshoot=600, backoff=150
 - `HOME:0,600,150,2000,8000,1500` - Home with all parameters
 - `SET SPEED=5000` - Set default speed
@@ -697,7 +716,7 @@ CTRL:WARN msg_id=<id> <code> <fields...>
 
 | Serial                                              | MQTT Action        | Notes                                  |
 | --------------------------------------------------- | ------------------ | -------------------------------------- |
-| `MOVE:<id>,<pos>[,<speed>,<accel>]`                 | MOVE               | Position and optional overrides        |
+| `MOVE:<id>,<pos>[,spd][,acc][,overshoot][,dith_amp][,dith_cyc]` | MOVE | Position and optional overrides |
 | `HOME:<id>[,<over>,<back>,<speed>,<accel>,<range>]` | HOME               | All params optional except target      |
 | `WAKE:<id>`                                         | WAKE               |                                        |
 | `SLEEP:<id>`                                        | SLEEP              |                                        |

@@ -800,21 +800,33 @@ bool MqttCommandServer::buildMoveCommand(ArduinoJson::JsonVariantConst params,
 
   out = "MOVE:" + target_token + "," + std::to_string(position);
 
-  long speed = 0;
-  if (!obj["speed"].isNull()) {
-    if (!parseIntegerField(obj["speed"], "speed", false, speed, error)) {
+  std::array<std::string, 5> optionals;
+  std::array<bool, 5> present{};
+  const std::array<const char*, 5> keys = {
+      "speed", "accel", "overshoot_steps", "dither_amplitude", "dither_cycles"};
+
+  for (size_t idx = 0; idx < keys.size(); ++idx) {
+    auto field = obj[keys[idx]];
+    long value = 0;
+    if (!parseIntegerField(field, keys[idx], false, value, error)) {
       return false;
     }
-    out.append(",");
-    out.append(std::to_string(speed));
+    if (!field.isNull()) {
+      optionals[idx] = std::to_string(value);
+      present[idx] = true;
+    }
+  }
 
-    long accel = 0;
-    if (!obj["accel"].isNull()) {
-      if (!parseIntegerField(obj["accel"], "accel", false, accel, error)) {
-        return false;
-      }
-      out.append(",");
-      out.append(std::to_string(accel));
+  int max_idx = -1;
+  for (int i = 0; i < static_cast<int>(present.size()); ++i) {
+    if (present[i]) {
+      max_idx = i;
+    }
+  }
+  for (int i = 0; i <= max_idx; ++i) {
+    out.append(",");
+    if (present[i]) {
+      out.append(optionals[i]);
     }
   }
 
@@ -977,7 +989,9 @@ bool MqttCommandServer::buildGetCommand(ArduinoJson::JsonVariantConst params,
   }
 
   if (resource == "ALL" || resource == "SPEED" || resource == "ACCEL" || resource == "DECEL" ||
-      resource == "THERMAL_LIMITING" || resource == "MICROSTEP") {
+      resource == "THERMAL_LIMITING" || resource == "MICROSTEP" || resource == "MOVE_OVERSHOOT" ||
+      resource == "DITHER_AMPLITUDE" || resource == "DITHER_CYCLES" ||
+      resource == "DITHER_MIN_AMPLITUDE") {
     out = "GET " + resource;
     return true;
   }
@@ -1180,6 +1194,29 @@ bool MqttCommandServer::buildSetCommand(ArduinoJson::JsonVariantConst params,
       }
       long val = kv.value().as<long>();
       if ((name == "DECEL" && val < 0) || (name != "DECEL" && val <= 0)) {
+        error = name + " out of range";
+        return false;
+      }
+      key = name;
+      value = std::to_string(val);
+      recognized = true;
+    } else if (name == "MOVE_OVERSHOOT") {
+      if (!(kv.value().is<long>() || kv.value().is<int>())) {
+        error = name + " must be integer";
+        return false;
+      }
+      long val = kv.value().as<long>();
+      key = name;
+      value = std::to_string(val);
+      recognized = true;
+    } else if (name == "DITHER_AMPLITUDE" ||
+               name == "DITHER_CYCLES" || name == "DITHER_MIN_AMPLITUDE") {
+      if (!(kv.value().is<long>() || kv.value().is<int>())) {
+        error = name + " must be integer";
+        return false;
+      }
+      long val = kv.value().as<long>();
+      if (val < 0) {
         error = name + " out of range";
         return false;
       }

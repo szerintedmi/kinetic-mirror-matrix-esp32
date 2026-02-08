@@ -72,7 +72,8 @@ void test_home_and_steps_since_home() {
   TEST_ASSERT_TRUE(L0.find("homed=1") != std::string::npos);
   TEST_ASSERT_TRUE(L0.find("steps_since_home=0") != std::string::npos);
 
-  // Use default/global speed; ensure command accepted without per-move params
+  // Use default/global speed; disable overshoot to test steps tracking only
+  p.processLine("SET MOVE_OVERSHOOT=0", th);
   auto r2 = p.processLine("MOVE:0,10", th);
   TEST_ASSERT_TRUE(r2.rfind("CTRL:ACK", 0) == 0);
   p.tick(th + 200);

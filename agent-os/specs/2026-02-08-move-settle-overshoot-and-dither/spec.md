@@ -17,14 +17,14 @@ Add two complementary settling mechanisms to the MOVE command — directional ov
 
 #### 1. Move Overshoot (Anti-Backlash)
 
-- After a MOVE, instead of stopping at the target, the motor first overshoots past the target in the direction of travel, then returns to the exact target.
-- Sequence for a move from `current` to `target` with `overshoot > 0`:
-  1. Move to `target + sign(target - current) * overshoot`
-  2. Move to `target`
-- Boundary handling: compute overshoot target as `target + sign(delta) * overshoot`. If this exceeds `[MIN_POS_STEPS, MAX_POS_STEPS]`, reverse the overshoot direction: `target - sign(delta) * overshoot`. This sacrifices the consistent approach direction at boundaries but preserves the mechanical settling benefit. If the reversed target is also out of bounds (theoretically possible if target is near the center of a range smaller than overshoot), clamp to the limit; skip overshoot if the clamped position equals the target.
+- After a MOVE, instead of stopping at the target, the motor first moves to an overshoot position, then approaches the target from a fixed direction controlled by the sign of the overshoot value.
+- Sequence for a move from `current` to `target` with `overshoot != 0`:
+  1. Move directly to `target - overshoot` (the overshoot position)
+  2. Move to `target` (approach from the fixed direction)
+- The sign of `overshoot` controls the approach direction: positive overshoot means the final approach is in the positive direction (overshoot position is below target). Negative overshoot means the final approach is in the negative direction.
+- This is a 2-move sequence (directly to overshoot position, then to target), not 3-move. The motor does not stop at the target first.
 - If `overshoot = 0`, skip the overshoot phase entirely (legacy behavior).
-- If `target == current`, skip overshoot (no direction to overshoot in).
-- Firmware config setting `MOVE_OVERSHOOT`, default `300`, overridable per-command.
+- Firmware config setting `MOVE_OVERSHOOT`, default `300`, overridable per-command. Negative values are allowed.
 
 #### 2. Dither (Vibration Settling)
 
@@ -55,7 +55,7 @@ Add two complementary settling mechanisms to the MOVE command — directional ov
 For a MOVE with both overshoot and dither enabled, the full sequence is:
 
 ```
-1. OVERSHOOT:  Move to target + sign(delta) * overshoot (reversed if out of bounds)
+1. OVERSHOOT:  Move directly to target - overshoot (2-move: no stop at target first)
 2. APPROACH:   Move to target
 3. DITHER:     For each cycle i:
                  Move to target + amp_i
@@ -85,7 +85,7 @@ New settings accessible via `GET` and `SET`:
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `MOVE_OVERSHOOT` | int >= 0 | `300` | Overshoot distance in full steps (0 = disabled) |
+| `MOVE_OVERSHOOT` | int | `300` | Overshoot distance in full steps (sign = approach direction, 0 = disabled) |
 | `DITHER_AMPLITUDE` | int >= 0 | `0` | Initial dither amplitude in full steps (0 = disabled) |
 | `DITHER_CYCLES` | int >= 0 | `3` | Number of dither oscillation cycles |
 | `DITHER_MIN_AMPLITUDE` | int >= 0 | `20` | Minimum amplitude threshold; cycles with amplitude below this are skipped |
@@ -139,7 +139,7 @@ All settings are session-only (not persisted to NVS), require motors to be idle 
 ## Technical Approach
 
 - **State machine**: Add a `MovePhase` enum to `MotorState`: `{NONE, PRIMARY, OVERSHOOT, APPROACH, DITHER_POS, DITHER_NEG, DITHER_RETURN}`. Add fields: `settle_center` (target position), `settle_overshoot`, `settle_dither_amplitude`, `settle_dither_cycles`, `settle_dither_min_amplitude`, `settle_remaining_cycles`, `settle_current_amplitude`.
-- **moveAbsMask() changes**: When overshoot or dither are active, set the initial phase to `OVERSHOOT` (if overshoot > 0) or `PRIMARY` and populate the settle fields. Start the first physical move.
+- **moveAbsMask() changes**: When overshoot or dither are active, set the initial phase to `OVERSHOOT` (if overshoot != 0) or `PRIMARY` (dither only) and populate the settle fields. When overshoot is active, the first physical move goes directly to `target - overshoot` (not to the target). No `settle_dir` field is needed — the sign of `settle_overshoot` encodes the approach direction.
 - **tick() extensions**: When a motor in a settle phase stops moving (FAS reports idle), transition to the next phase and issue the next `startMoveAbs()`. When the final phase completes, clear the phase to `NONE` and mark `moving = false`.
 - **Completion tracker**: `moving` stays `true` until the final phase completes, so the tracker naturally fires at the right time.
 - **Command parsing**: Extend `handleMove()` to parse positions 5-7 from the comma-split args, with empty = default from context.
@@ -160,9 +160,9 @@ All settings are session-only (not persisted to NVS), require motors to be idle 
 ## Success Criteria
 
 ### Firmware
-- `SET MOVE_OVERSHOOT=300` followed by `MOVE:0,800` executes: move past 800 by 300 in direction of travel, then return to exactly 800.
-- Overshoot near boundary: `MOVE:0,1100` with `MOVE_OVERSHOOT=300` would overshoot to 1400 (out of bounds), so reverses to 800, then approaches 1100 from below.
-- Overshoot within bounds: `MOVE:0,800` with `MOVE_OVERSHOOT=300` overshoots to 1100, then returns to 800.
+- `SET MOVE_OVERSHOOT=300` followed by `MOVE:0,800` executes: move to 800-300=500 (overshoot position), then approach 800 from below (positive direction).
+- `SET MOVE_OVERSHOOT=-300` followed by `MOVE:0,800` executes: move to 800-(-300)=1100, then approach 800 from above (negative direction).
+- Overshoot within bounds: `MOVE:0,800` with `MOVE_OVERSHOOT=300` moves to 500, then returns to 800.
 - `SET DITHER_AMPLITUDE=100` and `SET DITHER_CYCLES=3` followed by `MOVE:0,800` executes: move to 800, then oscillate +100/-100, +67/-67, +33/-33 around 800, then return to 800.
 - Combined overshoot + dither executes the full 4-phase sequence in order.
 - `MOVE:0,800,,,0,0` disables both overshoot and dither regardless of firmware defaults.

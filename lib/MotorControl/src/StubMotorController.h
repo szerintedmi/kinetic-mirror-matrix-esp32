@@ -24,6 +24,9 @@ public:
                 long full_range,
                 uint32_t now_ms) override;
   void tick(uint32_t now_ms) override;
+  void setSettleParams(uint32_t mask, int overshoot,
+                       int dither_amplitude, int dither_cycles,
+                       int dither_min_amplitude) override;
   void setThermalLimitsEnabled(bool enabled) override {
     thermal_limits_enabled_ = enabled;
   }

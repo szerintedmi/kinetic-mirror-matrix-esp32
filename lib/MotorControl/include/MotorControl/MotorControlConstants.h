@@ -15,6 +15,12 @@ constexpr int DEFAULT_ACCEL_SPS2 = 16000;  // steps per second^2
 constexpr long DEFAULT_OVERSHOOT = 800;    // HOME overshoot (steps)
 constexpr long DEFAULT_BACKOFF = 125;      // HOME backoff (steps)
 
+// MOVE settle defaults (overshoot + dither)
+constexpr int DEFAULT_MOVE_OVERSHOOT = 80;        // anti-backlash overshoot (steps, 0 = disabled)
+constexpr int DEFAULT_DITHER_AMPLITUDE = 0;       // initial dither amplitude (steps, 0 = disabled)
+constexpr int DEFAULT_DITHER_CYCLES = 3;          // number of dither oscillation cycles
+constexpr int DEFAULT_DITHER_MIN_AMPLITUDE = 20;  // minimum amplitude threshold
+
 // Runtime budget model (session-only, diagnostic only)
 // - Budget decreases while driver is awake; refills while asleep
 constexpr int32_t MAX_RUNNING_TIME_S = 90;     // maximum budget when fully "cool" in seconds

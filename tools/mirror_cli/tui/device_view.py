@@ -232,7 +232,7 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
             rows: List[Tuple[str, List[str]]] = []
             for idx, mac in enumerate(self._devices_ordered, start=1):
                 details = self._device_details.get(mac, {})
-                is_selected = (mac == self._selected)
+                is_selected = mac == self._selected
 
                 # Format radio button (single-select indicator)
                 radio = "●" if is_selected else "○"

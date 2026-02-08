@@ -18,7 +18,15 @@ This document provides real-world examples of MQTT payloads exchanged with the f
   "microstep_mult": 1,
   "speed": 4000,
   "accel": 16000,
-  "decel": 16000
+  "decel": 16000,
+  "move_overshoot": 80,
+  "dither_amplitude": 0,
+  "dither_cycles": 3,
+  "dither_min_amplitude": 20,
+  "motor_count": 8,
+  "uptime_ms": 123456789,
+  "firmware_version": "9953783",
+  "firmware_date": "2025-12-02T19:59:32+0000"
 }
 ```
 
@@ -285,6 +293,35 @@ Basic move command:
 }
 ```
 
+### MOVE with settle parameters (overshoot + dither)
+
+`devices/8857212316bc/cmd`
+
+```json
+{
+  "action": "MOVE",
+  "params": {
+    "target_ids": 0,
+    "position_steps": 800,
+    "overshoot_steps": 200,
+    "dither_amplitude": 50,
+    "dither_cycles": 3
+  },
+  "cmd_id": "f1a2b3c4-d5e6-7890-abcd-ef1234567890"
+}
+```
+
+`devices/8857212316bc/cmd/resp`
+
+```json
+{
+  "cmd_id": "f1a2b3c4-d5e6-7890-abcd-ef1234567890",
+  "action": "MOVE",
+  "status": "ack",
+  "result": { "est_ms": 820 }
+}
+```
+
 ## Errors
 
 ### 1. Busy
@@ -442,6 +479,10 @@ When `THERMAL_LIMITING == "OFF"` and the command execution will exceed thermal l
     "DECEL": 16000,
     "SPEED": 4000,
     "THERMAL_LIMITING": "ON",
+    "MOVE_OVERSHOOT": 80,
+    "DITHER_AMPLITUDE": 0,
+    "DITHER_CYCLES": 3,
+    "DITHER_MIN_AMPLITUDE": 20,
     "max_budget_s": 90,
     "free_heap_bytes": 51264
   }
@@ -508,7 +549,15 @@ After this command, the config topic is republished:
   "microstep_mult": 16,
   "speed": 300,
   "accel": 16000,
-  "decel": 16000
+  "decel": 16000,
+  "move_overshoot": 80,
+  "dither_amplitude": 0,
+  "dither_cycles": 3,
+  "dither_min_amplitude": 20,
+  "motor_count": 8,
+  "uptime_ms": 234567890,
+  "firmware_version": "9953783",
+  "firmware_date": "2025-12-02T19:59:32+0000"
 }
 ```
 

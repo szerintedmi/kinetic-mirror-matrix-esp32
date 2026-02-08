@@ -431,10 +431,16 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
   long hw_target = target * static_cast<long>(ms_mult);
   int speed = context.defaultSpeed();
   int accel = context.defaultAccel();
+  int overshoot = context.defaultMoveOvershoot();
+  int dither_amplitude = context.defaultDitherAmplitude();
+  int dither_cycles = context.defaultDitherCycles();
+  int dither_min_amplitude = context.defaultDitherMinAmplitude();
 #if (USE_SHARED_STEP)
-  if ((parts.size() >= 3 && !Trim(parts[2]).empty()) ||
-      (parts.size() >= 4 && !Trim(parts[3]).empty())) {
-    return emitError("E03", "BAD_PARAM");
+  // Shared-step mode rejects all optional params (speed/accel/settle)
+  for (size_t i = 2; i < parts.size(); ++i) {
+    if (!Trim(parts[i]).empty()) {
+      return emitError("E03", "BAD_PARAM");
+    }
   }
 #else
   if (parts.size() >= 3 && !Trim(parts[2]).empty()) {
@@ -447,8 +453,29 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
       return emitError("E03", "BAD_PARAM");
     }
   }
-  if (parts.size() > 4) {
-    for (size_t i = 4; i < parts.size(); ++i) {
+  if (parts.size() >= 5 && !Trim(parts[4]).empty()) {
+    long v;
+    if (!ParseInt(Trim(parts[4]), v)) {
+      return emitError("E03", "BAD_PARAM");
+    }
+    overshoot = static_cast<int>(v);
+  }
+  if (parts.size() >= 6 && !Trim(parts[5]).empty()) {
+    long v;
+    if (!ParseInt(Trim(parts[5]), v) || v < 0) {
+      return emitError("E03", "BAD_PARAM");
+    }
+    dither_amplitude = static_cast<int>(v);
+  }
+  if (parts.size() >= 7 && !Trim(parts[6]).empty()) {
+    long v;
+    if (!ParseInt(Trim(parts[6]), v) || v < 0) {
+      return emitError("E03", "BAD_PARAM");
+    }
+    dither_cycles = static_cast<int>(v);
+  }
+  if (parts.size() > 7) {
+    for (size_t i = 7; i < parts.size(); ++i) {
       if (!Trim(parts[i]).empty()) {
         return emitError("E03", "BAD_PARAM");
       }
@@ -464,9 +491,34 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
     }
   }
 #endif
+  // Clamp dither amplitude symmetrically to stay within position limits
+  if (dither_amplitude > 0) {
+    int max_amp = std::min(
+        static_cast<int>(kMaxPos - target),
+        static_cast<int>(target - kMinPos));
+    if (max_amp < 0) max_amp = 0;
+    if (dither_amplitude > max_amp)
+      dither_amplitude = max_amp;
+  }
+  // Clamp overshoot so overshoot position stays within limits
+  if (overshoot != 0) {
+    long overshoot_pos = target - overshoot;
+    if (overshoot_pos < kMinPos)
+      overshoot_pos = kMinPos;
+    else if (overshoot_pos > kMaxPos)
+      overshoot_pos = kMaxPos;
+    if (overshoot_pos == target)
+      overshoot = 0;
+    else
+      overshoot = static_cast<int>(target - overshoot_pos);
+  }
   // Scale speed and accel for microstep mode (same physical velocity/acceleration)
   int hw_speed = speed * static_cast<int>(ms_mult);
   int hw_accel = accel * static_cast<int>(ms_mult);
+  // Scale settle params to hardware steps
+  int hw_overshoot = overshoot * static_cast<int>(ms_mult);
+  int hw_dither_amp = dither_amplitude * static_cast<int>(ms_mult);
+  int hw_dither_min = dither_min_amplitude * static_cast<int>(ms_mult);
   context.controller().tick(now_ms);
   uint32_t tmp = mask;
   uint32_t max_req_ms = 0;
@@ -476,12 +528,40 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
     const MotorState& s = context.controller().state(id);
     // s.position is in hardware steps; use hw_target for distance calculation
     long dist = std::labs(hw_target - s.position);
+    long delta = hw_target - s.position;
     uint32_t req_ms = 0;
 #if (USE_SHARED_STEP)
     req_ms = MotionKinematics::estimateMoveTimeMsSharedStep(
         dist, hw_speed, hw_accel, context.defaultDecel() * static_cast<int>(ms_mult));
 #else
     req_ms = MotionKinematics::estimateMoveTimeMs(dist, hw_speed, hw_accel);
+    // Add settle phase estimates (overshoot + dither)
+    if (hw_overshoot != 0) {
+      // Actual path: current → (hw_target - hw_overshoot) → hw_target
+      long overshoot_pos = hw_target - hw_overshoot;
+      long leg1 = std::labs(overshoot_pos - s.position);
+      long leg2 = std::labs(hw_overshoot);
+      req_ms = MotionKinematics::estimateMoveTimeMs(leg1, hw_speed, hw_accel);
+      req_ms += MotionKinematics::estimateMoveTimeMs(leg2, hw_speed, hw_accel);
+    }
+    if (hw_dither_amp > 0 && dither_cycles > 0) {
+      int last_amp = 0;
+      int prev_amp = 0;
+      for (int ci = 1; ci <= dither_cycles; ++ci) {
+        int amp_i = hw_dither_amp * (dither_cycles - ci + 1) / dither_cycles;
+        if (amp_i < hw_dither_min)
+          break;
+        last_amp = amp_i;
+        // POS: from -prev_amp to +amp_i (first cycle starts from center so prev_amp=0)
+        req_ms += MotionKinematics::estimateMoveTimeMs(prev_amp + amp_i, hw_speed, hw_accel);
+        // NEG: from +amp_i to -amp_i
+        req_ms += MotionKinematics::estimateMoveTimeMs(2 * amp_i, hw_speed, hw_accel);
+        prev_amp = amp_i;
+      }
+      if (last_amp > 0) {
+        req_ms += MotionKinematics::estimateMoveTimeMs(last_amp, hw_speed, hw_accel);
+      }
+    }
 #endif
     if (req_ms > max_req_ms)
       max_req_ms = req_ms;
@@ -496,6 +576,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
              {"max_budget_s",
               std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))}});
       } else {
+        context.controller().setSettleParams(mask, hw_overshoot, hw_dither_amp, dither_cycles, hw_dither_min);
         if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
@@ -546,6 +627,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
                           {"budget_s", std::to_string(avail_s)},
                           {"ttfc_s", std::to_string(ttfc_s)}});
       } else {
+        context.controller().setSettleParams(mask, hw_overshoot, hw_dither_amp, dither_cycles, hw_dither_min);
         if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
           return emitError("E04", "BUSY");
         }
@@ -566,6 +648,7 @@ CommandResult MotorCommandHandler::handleMove(const std::string& args,
       }
     }
   }
+  context.controller().setSettleParams(mask, hw_overshoot, hw_dither_amp, dither_cycles, hw_dither_min);
   if (!context.controller().moveAbsMask(mask, hw_target, hw_speed, hw_accel, now_ms)) {
     return emitError("E04", "BUSY");
   }
@@ -920,6 +1003,10 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
         {"THERMAL_LIMITING", context.thermalLimitsEnabled() ? "ON" : "OFF"},
         {"max_budget_s",
          std::to_string(static_cast<int>(MotorControlConstants::MAX_RUNNING_TIME_S))},
+        {"MOVE_OVERSHOOT", std::to_string(context.defaultMoveOvershoot())},
+        {"DITHER_AMPLITUDE", std::to_string(context.defaultDitherAmplitude())},
+        {"DITHER_CYCLES", std::to_string(context.defaultDitherCycles())},
+        {"DITHER_MIN_AMPLITUDE", std::to_string(context.defaultDitherMinAmplitude())},
     };
     if (free_heap >= 0) {
       fields.push_back({"free_heap_bytes", std::to_string(free_heap)});
@@ -960,6 +1047,23 @@ CommandResult QueryCommandHandler::handleGet(const std::string& args,
         msg_id,
         {{"MICROSTEP", MultiplierToMicrostepString(context.microstepMultiplier())},
          {"multiplier", std::to_string(context.microstepMultiplier())}});
+  }
+  if (key == "MOVE_OVERSHOOT") {
+    return MakeDoneResult(
+        kAction, msg_id, {{"MOVE_OVERSHOOT", std::to_string(context.defaultMoveOvershoot())}});
+  }
+  if (key == "DITHER_AMPLITUDE") {
+    return MakeDoneResult(
+        kAction, msg_id, {{"DITHER_AMPLITUDE", std::to_string(context.defaultDitherAmplitude())}});
+  }
+  if (key == "DITHER_CYCLES") {
+    return MakeDoneResult(
+        kAction, msg_id, {{"DITHER_CYCLES", std::to_string(context.defaultDitherCycles())}});
+  }
+  if (key == "DITHER_MIN_AMPLITUDE") {
+    return MakeDoneResult(
+        kAction, msg_id,
+        {{"DITHER_MIN_AMPLITUDE", std::to_string(context.defaultDitherMinAmplitude())}});
   }
   if (key.rfind("LAST_OP_TIMING", 0) == 0) {
     std::string rest;
@@ -1097,6 +1201,47 @@ CommandResult QueryCommandHandler::handleSet(const std::string& args,
     context.defaultDecel() = static_cast<int>(v);
     context.controller().setDeceleration(context.defaultDecel());
     return MakeDoneResult(kAction, msg_id);
+  }
+  if (key == "MOVE_OVERSHOOT") {
+    long v;
+    if (!ParseInt(val, v)) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.defaultMoveOvershoot() = static_cast<int>(v);
+    return MakeDoneResult(kAction, msg_id,
+                          {{"MOVE_OVERSHOOT", std::to_string(context.defaultMoveOvershoot())}});
+  }
+  if (key == "DITHER_AMPLITUDE") {
+    long v;
+    if (!ParseInt(val, v) || v < 0) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.defaultDitherAmplitude() = static_cast<int>(v);
+    return MakeDoneResult(kAction, msg_id,
+                          {{"DITHER_AMPLITUDE", std::to_string(context.defaultDitherAmplitude())}});
+  }
+  if (key == "DITHER_CYCLES") {
+    long v;
+    if (!ParseInt(val, v) || v < 0) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.defaultDitherCycles() = static_cast<int>(v);
+    return MakeDoneResult(kAction, msg_id,
+                          {{"DITHER_CYCLES", std::to_string(context.defaultDitherCycles())}});
+  }
+  if (key == "DITHER_MIN_AMPLITUDE") {
+    long v;
+    if (!ParseInt(val, v) || v < 0) {
+      auto err_line = transport::command::MakeErrorLine(msg_id, "E03", "BAD_PARAM", {});
+      return MakeResultWithLine(kAction, err_line);
+    }
+    context.defaultDitherMinAmplitude() = static_cast<int>(v);
+    return MakeDoneResult(
+        kAction, msg_id,
+        {{"DITHER_MIN_AMPLITUDE", std::to_string(context.defaultDitherMinAmplitude())}});
   }
   // SET THERMAL_BUDGET:<id>=<tenths> - debug command to set motor budget
   // Example: SET THERMAL_BUDGET:0=-60 sets motor 0 budget to -6 seconds (triggers overrun)

@@ -17,7 +17,11 @@ public:
                           int& default_decel_sps2,
                           uint8_t& microstep_multiplier,
                           bool& in_batch,
-                          bool& batch_initially_idle);
+                          bool& batch_initially_idle,
+                          int& default_move_overshoot,
+                          int& default_dither_amplitude,
+                          int& default_dither_cycles,
+                          int& default_dither_min_amplitude);
 
   MotorController& controller();
   const MotorController& controller() const;
@@ -28,6 +32,10 @@ public:
   int& defaultSpeed();
   int& defaultAccel();
   int& defaultDecel();
+  int& defaultMoveOvershoot();
+  int& defaultDitherAmplitude();
+  int& defaultDitherCycles();
+  int& defaultDitherMinAmplitude();
   uint8_t microstepMultiplier() const;
   uint8_t& microstepMultiplierRef();
 
@@ -51,6 +59,10 @@ private:
   uint8_t& microstep_multiplier_;
   bool& in_batch_;
   bool& batch_initially_idle_;
+  int& default_move_overshoot_;
+  int& default_dither_amplitude_;
+  int& default_dither_cycles_;
+  int& default_dither_min_amplitude_;
 };
 
 }  // namespace command

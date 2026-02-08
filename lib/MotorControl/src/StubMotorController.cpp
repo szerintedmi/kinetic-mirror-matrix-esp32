@@ -23,11 +23,14 @@ StubMotorController::StubMotorController(uint8_t count) : count_(count) {
                             0,
                             MotorControlConstants::BUDGET_TENTHS_MAX,
                             0,
+                            0,  // budget_accum_ms
                             0,
                             0,
                             0,
                             0,
-                            false};
+                            false,
+                            MovePhase::NONE,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0};
     plans_[i] = MovePlan{false, false, 0, 0, 0};
   }
 }
@@ -65,6 +68,19 @@ bool StubMotorController::sleepMask(uint32_t mask) {
   return true;
 }
 
+void StubMotorController::setSettleParams(uint32_t mask, int overshoot,
+                                          int dither_amplitude, int dither_cycles,
+                                          int dither_min_amplitude) {
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      motors_[i].settle_overshoot = overshoot;
+      motors_[i].settle_dither_amplitude = dither_amplitude;
+      motors_[i].settle_dither_cycles = dither_cycles;
+      motors_[i].settle_dither_min_amplitude = dither_min_amplitude;
+    }
+  }
+}
+
 bool StubMotorController::moveAbsMask(
     uint32_t mask, long target, int speed, int accel, uint32_t now_ms) {
   if (isAnyMovingForMask(mask))
@@ -77,11 +93,40 @@ bool StubMotorController::moveAbsMask(
       motors_[i].moving = true;
       long delta = labs(target - motors_[i].position);
       uint32_t dur_ms = MotionKinematics::estimateMoveTimeMs(delta, speed, accel);
+      // Add settle phase durations (overshoot + dither)
+      uint32_t settle_dur = 0;
+      if (motors_[i].settle_overshoot != 0) {
+        // Actual path: current → (target - overshoot) → target
+        long overshoot_pos = target - motors_[i].settle_overshoot;
+        long leg1 = labs(overshoot_pos - motors_[i].position);
+        long leg2 = labs(motors_[i].settle_overshoot);
+        dur_ms = MotionKinematics::estimateMoveTimeMs(leg1, speed, accel);
+        settle_dur += MotionKinematics::estimateMoveTimeMs(leg2, speed, accel);
+      }
+      if (motors_[i].settle_dither_amplitude > 0 && motors_[i].settle_dither_cycles > 0) {
+        int total_cycles = motors_[i].settle_dither_cycles;
+        int last_amp = 0;
+        int prev_amp = 0;
+        for (int ci = 1; ci <= total_cycles; ++ci) {
+          int amp_i = motors_[i].settle_dither_amplitude * (total_cycles - ci + 1) / total_cycles;
+          if (amp_i < motors_[i].settle_dither_min_amplitude)
+            break;
+          last_amp = amp_i;
+          // POS: from -prev_amp to +amp_i (first cycle starts from center)
+          settle_dur += MotionKinematics::estimateMoveTimeMs(prev_amp + amp_i, speed, accel);
+          // NEG: from +amp_i to -amp_i
+          settle_dur += MotionKinematics::estimateMoveTimeMs(2 * amp_i, speed, accel);
+          prev_amp = amp_i;
+        }
+        if (last_amp > 0) {
+          settle_dur += MotionKinematics::estimateMoveTimeMs(last_amp, speed, accel);
+        }
+      }
       plans_[i].active = true;
       plans_[i].is_home = false;
       plans_[i].target = target;
       plans_[i].start_pos = motors_[i].position;
-      plans_[i].end_ms = now_ms + dur_ms;
+      plans_[i].end_ms = now_ms + dur_ms + settle_dur;
       motors_[i].last_op_type = 1;
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = dur_ms;
@@ -166,9 +211,11 @@ void StubMotorController::tick(uint32_t now_ms) {
       if (motors_[i].budget_tenths < overrun_tenths) {
         // Force sleep and cancel any active plan
         motors_[i].awake = false;
-        if (plans_[i].active || motors_[i].moving) {
+        if (plans_[i].active || motors_[i].moving ||
+            motors_[i].move_phase != MovePhase::NONE) {
           motors_[i].moving = false;
           plans_[i].active = false;
+          motors_[i].move_phase = MovePhase::NONE;
           if (motors_[i].last_op_ongoing) {
             motors_[i].last_op_ongoing = false;
             if (motors_[i].last_op_started_ms != 0 && now_ms >= motors_[i].last_op_started_ms) {

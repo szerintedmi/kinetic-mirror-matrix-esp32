@@ -299,3 +299,198 @@ void test_backend_thermal_overrun_calls_forceStop_before_disable() {
   TEST_ASSERT_TRUE_MESSAGE(force_stop_pos < disable_outputs_pos,
                            "forceStop should be called BEFORE disableOutputs");
 }
+
+// ---- Settle state machine tests (overshoot + dither) ----
+
+// Helper: simulate motor completion (stop at target, update position)
+static void completeMotor(FasAdapterStub& fas, uint8_t id) {
+  // The FasAdapterStub tracks targets internally; just mark as not moving
+  fas.setMoving(id, false);
+}
+
+void test_hw_settle_overshoot_phase_sequence() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 2);
+  ctrl.setThermalLimitsEnabled(false);
+  clear_events();
+
+  // Set overshoot=100, no dither
+  uint32_t mask = 1u << 0;
+  ctrl.setSettleParams(mask, 100, 0, 0, 0);
+  bool ok = ctrl.moveAbsMask(mask, 500, 1000, 10000, 0);
+  TEST_ASSERT_TRUE(ok);
+
+  // After moveAbsMask, motor 0 should be in OVERSHOOT phase (goes directly to overshoot pos)
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::OVERSHOOT), static_cast<int>(ctrl.state(0).move_phase));
+  // Initial move goes to target - overshoot = 500 - 100 = 400
+  auto& starts = fas.starts();
+  TEST_ASSERT_TRUE(starts.size() >= 1);
+  TEST_ASSERT_EQUAL(400, starts.back().target);
+
+  // Simulate overshoot move complete
+  completeMotor(fas, 0);
+  ctrl.tick(100);
+  // Should be in APPROACH (returning to center=500)
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::APPROACH), static_cast<int>(ctrl.state(0).move_phase));
+  long approach_target = starts.back().target;
+  TEST_ASSERT_EQUAL(500, approach_target);
+
+  // Simulate approach complete
+  completeMotor(fas, 0);
+  ctrl.tick(200);
+  // No dither configured, should be NONE
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::NONE), static_cast<int>(ctrl.state(0).move_phase));
+}
+
+void test_hw_settle_dither_phase_sequence() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 2);
+  ctrl.setThermalLimitsEnabled(false);
+  clear_events();
+
+  // No overshoot, dither_amplitude=60, 2 cycles, min_amplitude=20
+  uint32_t mask = 1u << 0;
+  ctrl.setSettleParams(mask, 0, 60, 2, 20);
+  bool ok = ctrl.moveAbsMask(mask, 500, 1000, 10000, 0);
+  TEST_ASSERT_TRUE(ok);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::PRIMARY), static_cast<int>(ctrl.state(0).move_phase));
+
+  // Complete primary
+  completeMotor(fas, 0);
+  ctrl.tick(100);
+  // No overshoot, should go directly to DITHER_POS
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_POS), static_cast<int>(ctrl.state(0).move_phase));
+  // First dither cycle: amp = 60 * 2/2 = 60, target = 500 + 60 = 560
+  long dither_pos = fas.starts().back().target;
+  TEST_ASSERT_EQUAL(560, dither_pos);
+
+  // Complete dither_pos
+  completeMotor(fas, 0);
+  ctrl.tick(200);
+  // Should be DITHER_NEG: target = 500 - 60 = 440
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_NEG), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(440, fas.starts().back().target);
+
+  // Complete dither_neg, cycle 2: amp = 60 * 1/2 = 30, still >= 20
+  completeMotor(fas, 0);
+  ctrl.tick(300);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_POS), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(530, fas.starts().back().target);  // 500 + 30
+
+  // Complete dither_pos cycle 2
+  completeMotor(fas, 0);
+  ctrl.tick(400);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_NEG), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(470, fas.starts().back().target);  // 500 - 30
+
+  // Complete dither_neg cycle 2; no more cycles, should return to center
+  completeMotor(fas, 0);
+  ctrl.tick(500);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_RETURN), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(500, fas.starts().back().target);
+
+  // Complete return
+  completeMotor(fas, 0);
+  ctrl.tick(600);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::NONE), static_cast<int>(ctrl.state(0).move_phase));
+}
+
+void test_hw_settle_overshoot_and_dither_combined() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 2);
+  ctrl.setThermalLimitsEnabled(false);
+  clear_events();
+
+  // Overshoot=50, dither_amplitude=40, 1 cycle, min_amplitude=10
+  uint32_t mask = 1u << 0;
+  ctrl.setSettleParams(mask, 50, 40, 1, 10);
+  ctrl.moveAbsMask(mask, 200, 1000, 10000, 0);
+
+  // Starts in OVERSHOOT phase, initial move to target - overshoot = 200 - 50 = 150
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::OVERSHOOT), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(150, fas.starts().back().target);
+
+  // OVERSHOOT → APPROACH
+  completeMotor(fas, 0);
+  ctrl.tick(100);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::APPROACH), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(200, fas.starts().back().target);
+
+  // APPROACH → DITHER_POS (1 cycle, amp = 40*1/1 = 40)
+  completeMotor(fas, 0);
+  ctrl.tick(200);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_POS), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(240, fas.starts().back().target);  // 200 + 40
+
+  // DITHER_POS → DITHER_NEG
+  completeMotor(fas, 0);
+  ctrl.tick(300);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_NEG), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(160, fas.starts().back().target);  // 200 - 40
+
+  // DITHER_NEG → DITHER_RETURN (no more cycles)
+  completeMotor(fas, 0);
+  ctrl.tick(400);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_RETURN), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(200, fas.starts().back().target);
+
+  // DITHER_RETURN → NONE
+  completeMotor(fas, 0);
+  ctrl.tick(500);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::NONE), static_cast<int>(ctrl.state(0).move_phase));
+}
+
+void test_hw_settle_overshoot_applied_when_zero_delta() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 2);
+  ctrl.setThermalLimitsEnabled(false);
+  clear_events();
+
+  // Motor at position 0, move to 0 (zero delta)
+  // With overshoot=100, dither=30 (1 cycle)
+  // Overshoot still applies: goes to 0 - 100 = -100, then approaches 0
+  uint32_t mask = 1u << 0;
+  ctrl.setSettleParams(mask, 100, 30, 1, 10);
+  ctrl.moveAbsMask(mask, 0, 1000, 10000, 0);
+
+  // Should start in OVERSHOOT phase, initial move to -100
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::OVERSHOOT), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(-100, fas.starts().back().target);
+
+  // OVERSHOOT complete → APPROACH to center=0
+  completeMotor(fas, 0);
+  ctrl.tick(100);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::APPROACH), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(0, fas.starts().back().target);
+
+  // APPROACH complete → DITHER_POS
+  completeMotor(fas, 0);
+  ctrl.tick(200);
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::DITHER_POS), static_cast<int>(ctrl.state(0).move_phase));
+  TEST_ASSERT_EQUAL(30, fas.starts().back().target);  // 0 + 30
+}
+
+void test_hw_settle_no_settle_when_params_zero() {
+  LoggingShift595 shift;
+  FasAdapterStub fas;
+  HardwareMotorController ctrl(shift, fas, 2);
+  ctrl.setThermalLimitsEnabled(false);
+
+  // No settle params (all zero)
+  uint32_t mask = 1u << 0;
+  ctrl.setSettleParams(mask, 0, 0, 0, 0);
+  ctrl.moveAbsMask(mask, 500, 1000, 10000, 0);
+
+  // Should be NONE immediately (no settle)
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::NONE), static_cast<int>(ctrl.state(0).move_phase));
+
+  // Complete move
+  completeMotor(fas, 0);
+  ctrl.tick(100);
+  // Still NONE
+  TEST_ASSERT_EQUAL(static_cast<int>(MovePhase::NONE), static_cast<int>(ctrl.state(0).move_phase));
+}

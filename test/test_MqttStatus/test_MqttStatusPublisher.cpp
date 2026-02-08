@@ -60,6 +60,7 @@ public:
     }
   }
   void setDeceleration(int) override {}
+  void setSettleParams(uint32_t, int, int, int, int) override {}
 
   std::vector<MotorState>& data() {
     return motors_;

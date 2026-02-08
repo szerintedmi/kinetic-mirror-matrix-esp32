@@ -101,6 +101,36 @@ class TestMoveCommand(unittest.TestCase):
         self.assertNotIn("speed", req.params)
         self.assertEqual(req.params["accel"], 5000)
 
+    def test_move_with_overshoot(self):
+        req = parse_serial_command("MOVE:0,500,,,200")
+        self.assertEqual(req.params["overshoot_steps"], 200)
+        self.assertNotIn("speed", req.params)
+        self.assertNotIn("accel", req.params)
+
+    def test_move_with_all_settle_params(self):
+        req = parse_serial_command("MOVE:0,500,,,300,50,4")
+        self.assertEqual(req.params["overshoot_steps"], 300)
+        self.assertEqual(req.params["dither_amplitude"], 50)
+        self.assertEqual(req.params["dither_cycles"], 4)
+
+    def test_move_with_speed_accel_and_settle(self):
+        req = parse_serial_command("MOVE:0,500,4000,16000,200,50,3")
+        self.assertEqual(req.params["speed"], 4000)
+        self.assertEqual(req.params["accel"], 16000)
+        self.assertEqual(req.params["overshoot_steps"], 200)
+        self.assertEqual(req.params["dither_amplitude"], 50)
+        self.assertEqual(req.params["dither_cycles"], 3)
+
+    def test_move_skip_overshoot_set_dither(self):
+        req = parse_serial_command("MOVE:0,500,,,,50,3")
+        self.assertNotIn("overshoot_steps", req.params)
+        self.assertEqual(req.params["dither_amplitude"], 50)
+        self.assertEqual(req.params["dither_cycles"], 3)
+
+    def test_move_overshoot_zero(self):
+        req = parse_serial_command("MOVE:0,500,,,0")
+        self.assertEqual(req.params["overshoot_steps"], 0)
+
     def test_move_missing_position_raises(self):
         with self.assertRaises(CommandParseError) as ctx:
             parse_serial_command("MOVE:0")
@@ -305,7 +335,28 @@ class TestSetCommand(unittest.TestCase):
         req = parse_serial_command("SET MICROSTEP=1/32")
         self.assertEqual(req.params["MICROSTEP"], "1/32")
 
-    def test_set_thermal_budget(self):
+    def test_set_move_overshoot(self):
+        req = parse_serial_command("SET MOVE_OVERSHOOT=300")
+        self.assertEqual(req.params["MOVE_OVERSHOOT"], 300)
+        self.assertIsInstance(req.params["MOVE_OVERSHOOT"], int)
+
+    def test_set_dither_amplitude(self):
+        req = parse_serial_command("SET DITHER_AMPLITUDE=50")
+        self.assertEqual(req.params["DITHER_AMPLITUDE"], 50)
+
+    def test_set_dither_cycles(self):
+        req = parse_serial_command("SET DITHER_CYCLES=5")
+        self.assertEqual(req.params["DITHER_CYCLES"], 5)
+
+    def test_set_dither_min_amplitude(self):
+        req = parse_serial_command("SET DITHER_MIN_AMPLITUDE=10")
+        self.assertEqual(req.params["DITHER_MIN_AMPLITUDE"], 10)
+
+    def test_set_settle_non_integer_raises(self):
+        with self.assertRaises(CommandParseError):
+            parse_serial_command("SET MOVE_OVERSHOOT=abc")
+
+    def test_thermal_budget(self):
         # THERMAL_BUDGET:<id> is a debug command that takes integer
         req = parse_serial_command("SET THERMAL_BUDGET:0=-60")
         self.assertEqual(req.params["THERMAL_BUDGET:0"], -60)

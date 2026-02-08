@@ -34,6 +34,17 @@ def main():
         ["home", "1", "--overshoot", "900", "--full-range", "2400"], "HOME:1,900,,2400\n"
     )
     failures += run_case(["h", "7", "--overshoot", "50", "--backoff", "25"], "HOME:7,50,25\n")
+    # MOVE with settle params
+    failures += run_case(["move", "0", "500", "--overshoot", "200"], "MOVE:0,500,,,200\n")
+    failures += run_case(
+        ["move", "0", "500", "--dither-amplitude", "50", "--dither-cycles", "4"],
+        "MOVE:0,500,,,,50,4\n",
+    )
+    failures += run_case(
+        ["move", "ALL", "100", "--overshoot", "300", "--dither-amplitude", "80"],
+        "MOVE:ALL,100,,,300,80\n",
+    )
+    failures += run_case(["m", "1", "200", "--overshoot", "0"], "MOVE:1,200,,,0\n")
     failures += run_case(["last-op"], "GET LAST_OP_TIMING\n")
     failures += run_case(["last-op", "1"], "GET LAST_OP_TIMING:1\n")
     if failures:

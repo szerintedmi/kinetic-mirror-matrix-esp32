@@ -14,11 +14,19 @@ CommandExecutionContext::CommandExecutionContext(MotorController& controller,
                                                  int& default_decel_sps2,
                                                  uint8_t& microstep_multiplier,
                                                  bool& in_batch,
-                                                 bool& batch_initially_idle)
+                                                 bool& batch_initially_idle,
+                                                 int& default_move_overshoot,
+                                                 int& default_dither_amplitude,
+                                                 int& default_dither_cycles,
+                                                 int& default_dither_min_amplitude)
     : controller_(controller), thermal_limits_enabled_(thermal_limits_enabled),
       default_speed_sps_(default_speed_sps), default_accel_sps2_(default_accel_sps2),
       default_decel_sps2_(default_decel_sps2), microstep_multiplier_(microstep_multiplier),
-      in_batch_(in_batch), batch_initially_idle_(batch_initially_idle) {}
+      in_batch_(in_batch), batch_initially_idle_(batch_initially_idle),
+      default_move_overshoot_(default_move_overshoot),
+      default_dither_amplitude_(default_dither_amplitude),
+      default_dither_cycles_(default_dither_cycles),
+      default_dither_min_amplitude_(default_dither_min_amplitude) {}
 
 MotorController& CommandExecutionContext::controller() {
   return controller_;
@@ -44,6 +52,18 @@ int& CommandExecutionContext::defaultAccel() {
 }
 int& CommandExecutionContext::defaultDecel() {
   return default_decel_sps2_;
+}
+int& CommandExecutionContext::defaultMoveOvershoot() {
+  return default_move_overshoot_;
+}
+int& CommandExecutionContext::defaultDitherAmplitude() {
+  return default_dither_amplitude_;
+}
+int& CommandExecutionContext::defaultDitherCycles() {
+  return default_dither_cycles_;
+}
+int& CommandExecutionContext::defaultDitherMinAmplitude() {
+  return default_dither_min_amplitude_;
 }
 
 uint8_t CommandExecutionContext::microstepMultiplier() const {

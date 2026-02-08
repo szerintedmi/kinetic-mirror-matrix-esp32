@@ -13,6 +13,10 @@ Firmware publishes device configuration on `devices/<node_id>/config` where `<no
   "speed": 4000,
   "accel": 16000,
   "decel": 16000,
+  "move_overshoot": 80,
+  "dither_amplitude": 0,
+  "dither_cycles": 3,
+  "dither_min_amplitude": 20,
   "motor_count": 8,
   "uptime_ms": 123456789,
   "firmware_version": "9953783",
@@ -30,8 +34,12 @@ Firmware publishes device configuration on `devices/<node_id>/config` where `<no
 | `microstep_mult`   | number | Microstepping multiplier (1, 2, 4, 8, 16, or 32). |
 | `speed`            | number | Default speed in steps per second. |
 | `accel`            | number | Default acceleration in steps per second squared. |
-| `decel`            | number | Default deceleration in steps per second squared. |
-| `motor_count`      | number | Number of motors connected to the device. |
+| `decel`              | number | Default deceleration in steps per second squared. |
+| `move_overshoot`     | number | Default overshoot in steps (sign = approach direction, 0 = disabled). |
+| `dither_amplitude`   | number | Default dither oscillation amplitude in steps (0 = disabled). |
+| `dither_cycles`      | number | Default number of dither oscillation cycles. |
+| `dither_min_amplitude` | number | Minimum dither amplitude threshold; cycles stop when amplitude decays below this. |
+| `motor_count`        | number | Number of motors connected to the device. |
 | `uptime_ms`        | number | Milliseconds since device boot (`millis()`). |
 | `firmware_version` | string | Git commit hash at build time (optional, requires `GIT_COMMIT_HASH` macro). |
 | `firmware_date`    | string | Git commit date in ISO 8601 format (optional, requires `GIT_COMMIT_DATE` macro). |
@@ -41,7 +49,7 @@ Firmware publishes device configuration on `devices/<node_id>/config` where `<no
 The config topic is published:
 
 1. **On MQTT connect** - with `retain=true` so the broker stores the current config
-2. **On config change** - after any `SET` command modifies speed, accel, decel, thermal_limiting, or microstep
+2. **On config change** - after any `SET` command modifies speed, accel, decel, thermal_limiting, microstep, move_overshoot, dither_amplitude, dither_cycles, or dither_min_amplitude
 
 Hash-based deduplication ensures duplicate payloads are not published.
 

@@ -294,9 +294,7 @@ class PioWrapper:
 
         yield 100
 
-    async def upload_http(
-        self, ip: str, log_file: Path, firmware_path: Path
-    ) -> AsyncIterator[int]:
+    async def upload_http(self, ip: str, log_file: Path, firmware_path: Path) -> AsyncIterator[int]:
         """Upload firmware via HTTP POST to /api/ota endpoint.
 
         Args:
@@ -400,9 +398,7 @@ class PioWrapper:
             task.result()
 
             if "error" in upload_result:
-                raise RuntimeError(
-                    f"Upload failed: {upload_result['error']}\nLog: {log_file}"
-                )
+                raise RuntimeError(f"Upload failed: {upload_result['error']}\nLog: {log_file}")
 
             status = upload_result["status"]
             body = upload_result["body"]
@@ -413,9 +409,7 @@ class PioWrapper:
                     error_msg = data.get("message", str(body))
                 except (json.JSONDecodeError, KeyError):
                     pass
-                raise RuntimeError(
-                    f"Upload failed (HTTP {status}): {error_msg}\nLog: {log_file}"
-                )
+                raise RuntimeError(f"Upload failed (HTTP {status}): {error_msg}\nLog: {log_file}")
         finally:
             log_handle.close()
 

@@ -38,7 +38,9 @@ HardwareMotorController::HardwareMotorController(IShift595& shift,
                             0,
                             0,
                             0,
-                            false};
+                            false,
+                            MovePhase::NONE,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0};
     homing_[i] = HomingPlan{false, 0, 0, 0, 0, 0, 0};
   }
   // Initialize hardware/adapters
@@ -87,7 +89,9 @@ HardwareMotorController::HardwareMotorController() {
                             0,
                             0,
                             0,
-                            false};
+                            false,
+                            MovePhase::NONE,
+                            0, 0, 0, 0, 0, 0, 0, 0, 0};
     homing_[i] = HomingPlan{false, 0, 0, 0, 0, 0, 0};
   }
   shift_->begin();
@@ -189,6 +193,19 @@ bool HardwareMotorController::sleepMask(uint32_t mask) {
   return true;
 }
 
+void HardwareMotorController::setSettleParams(uint32_t mask, int overshoot,
+                                               int dither_amplitude, int dither_cycles,
+                                               int dither_min_amplitude) {
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (mask & maskForId(i)) {
+      motors_[i].settle_overshoot = overshoot;
+      motors_[i].settle_dither_amplitude = dither_amplitude;
+      motors_[i].settle_dither_cycles = dither_cycles;
+      motors_[i].settle_dither_min_amplitude = dither_min_amplitude;
+    }
+  }
+}
+
 bool HardwareMotorController::moveAbsMask(
     uint32_t mask, long target, int speed, int accel, uint32_t now_ms) {
   // Busy if any selected motor is already running
@@ -229,17 +246,37 @@ bool HardwareMotorController::moveAbsMask(
       motors_[i].last_op_started_ms = now_ms;
       motors_[i].last_op_est_ms = est;
       motors_[i].last_op_ongoing = true;
+      // Initialize settle state from pre-populated params (set by setSettleParams)
+      if (motors_[i].settle_overshoot != 0 || motors_[i].settle_dither_amplitude > 0) {
+        motors_[i].settle_center = target;
+        motors_[i].settle_speed = speed;
+        motors_[i].settle_accel = accel;
+        motors_[i].settle_remaining_cycles = motors_[i].settle_dither_cycles;
+        motors_[i].settle_current_amplitude = motors_[i].settle_dither_amplitude;
+        if (motors_[i].settle_overshoot != 0) {
+          motors_[i].move_phase = MovePhase::OVERSHOOT;
+        } else {
+          motors_[i].move_phase = MovePhase::PRIMARY;
+        }
+      } else {
+        motors_[i].move_phase = MovePhase::NONE;
+      }
     }
   }
 
 #if !defined(ARDUINO)
   latch_();
 #endif
-  // Start steppers
+  // Start steppers — per-motor target may differ when overshoot is active
   bool ok = true;
   for (uint8_t i = 0; i < count_; ++i) {
     if (mask & maskForId(i)) {
-      if (!fas_->startMoveAbs(i, target, speed, accel))
+      long initial_target = target;
+      if (motors_[i].move_phase == MovePhase::OVERSHOOT) {
+        // Go directly to overshoot position: target - overshoot
+        initial_target = target - motors_[i].settle_overshoot;
+      }
+      if (!fas_->startMoveAbs(i, initial_target, speed, accel))
         ok = false;
     }
   }
@@ -368,7 +405,8 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     }
     motors_[i].position = pos;
 #if defined(ARDUINO)
-    bool should_be_awake = running || ((forced_awake_mask_ & (1u << i)) != 0);
+    bool should_be_awake = running || ((forced_awake_mask_ & (1u << i)) != 0) ||
+                           (motors_[i].move_phase != MovePhase::NONE);
     if (motors_[i].awake && !should_be_awake) {
       fas_->disableOutputs(i);
       fas_->setAutoEnable(i, true);
@@ -376,7 +414,8 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     motors_[i].awake = should_be_awake;
 #else
     // Auto-sleep at idle in native mode to validate latch behavior
-    if (!running && (forced_awake_mask_ & (1u << i)) == 0) {
+    if (!running && (forced_awake_mask_ & (1u << i)) == 0 &&
+        motors_[i].move_phase == MovePhase::NONE) {
       if (sleep_bits_ & (1u << i)) {
         sleep_bits_ &= (uint8_t)~(1u << i);
         latch_();
@@ -405,10 +444,12 @@ void HardwareMotorController::tick(uint32_t now_ms) {
         }
 #endif
         motors_[i].awake = false;
-        // Stop homing plan if active; mark operation complete
-        if (homing_[i].active || motors_[i].moving) {
+        // Stop homing/settle plans if active; mark operation complete
+        if (homing_[i].active || motors_[i].moving ||
+            motors_[i].move_phase != MovePhase::NONE) {
           homing_[i].active = false;
           motors_[i].moving = false;
+          motors_[i].move_phase = MovePhase::NONE;
           if (motors_[i].last_op_ongoing) {
             motors_[i].last_op_ongoing = false;
             if (motors_[i].last_op_started_ms != 0 && now_ms >= motors_[i].last_op_started_ms) {
@@ -420,8 +461,9 @@ void HardwareMotorController::tick(uint32_t now_ms) {
     }
 
     // Homing sequence state machine handled via group barriers below
-    // Record completion time for last op when no longer moving and no active homing
-    if (motors_[i].last_op_ongoing && !motors_[i].moving && !homing_[i].active) {
+    // Record completion time for last op when no longer moving, no active homing, and settle done
+    if (motors_[i].last_op_ongoing && !motors_[i].moving && !homing_[i].active &&
+        motors_[i].move_phase == MovePhase::NONE) {
       motors_[i].last_op_ongoing = false;
       if (motors_[i].last_op_started_ms != 0) {
         motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
@@ -476,6 +518,100 @@ void HardwareMotorController::tick(uint32_t now_ms) {
           motors_[i].last_op_last_ms = now_ms - motors_[i].last_op_started_ms;
         }
       }
+    }
+  }
+  // Settle sequence state machine (overshoot + dither for MOVE commands)
+  for (uint8_t i = 0; i < count_; ++i) {
+    if (motors_[i].move_phase == MovePhase::NONE)
+      continue;
+    if (fas_->isMoving(i))
+      continue;  // Current phase leg still running
+
+    switch (motors_[i].move_phase) {
+    case MovePhase::PRIMARY: {
+      // Primary move complete (dither-only path, no overshoot)
+      if (motors_[i].settle_dither_amplitude > 0 &&
+          motors_[i].settle_remaining_cycles > 0) {
+        int total = motors_[i].settle_dither_cycles;
+        int remaining = motors_[i].settle_remaining_cycles;
+        int amp = motors_[i].settle_dither_amplitude * remaining / total;
+        if (amp >= motors_[i].settle_dither_min_amplitude) {
+          motors_[i].settle_current_amplitude = amp;
+          motors_[i].settle_remaining_cycles--;
+          long pos_target = motors_[i].settle_center + amp;
+          startMoveSingle_(i, pos_target, motors_[i].settle_speed, motors_[i].settle_accel);
+          motors_[i].move_phase = MovePhase::DITHER_POS;
+        } else {
+          motors_[i].move_phase = MovePhase::NONE;
+        }
+      } else {
+        motors_[i].move_phase = MovePhase::NONE;
+      }
+      break;
+    }
+    case MovePhase::OVERSHOOT: {
+      // Overshoot complete; return to center (approach)
+      startMoveSingle_(i, motors_[i].settle_center, motors_[i].settle_speed,
+                        motors_[i].settle_accel);
+      motors_[i].move_phase = MovePhase::APPROACH;
+      break;
+    }
+    case MovePhase::APPROACH: {
+      // Approach complete; start dither if configured
+      if (motors_[i].settle_dither_amplitude > 0 &&
+          motors_[i].settle_remaining_cycles > 0) {
+        int total = motors_[i].settle_dither_cycles;
+        int remaining = motors_[i].settle_remaining_cycles;
+        int amp = motors_[i].settle_dither_amplitude * remaining / total;
+        if (amp >= motors_[i].settle_dither_min_amplitude) {
+          motors_[i].settle_current_amplitude = amp;
+          motors_[i].settle_remaining_cycles--;
+          long pos_target = motors_[i].settle_center + amp;
+          startMoveSingle_(i, pos_target, motors_[i].settle_speed, motors_[i].settle_accel);
+          motors_[i].move_phase = MovePhase::DITHER_POS;
+        } else {
+          motors_[i].move_phase = MovePhase::NONE;
+        }
+      } else {
+        motors_[i].move_phase = MovePhase::NONE;
+      }
+      break;
+    }
+    case MovePhase::DITHER_POS: {
+      // Positive dither complete; swing to negative side
+      long neg_target = motors_[i].settle_center - motors_[i].settle_current_amplitude;
+      startMoveSingle_(i, neg_target, motors_[i].settle_speed, motors_[i].settle_accel);
+      motors_[i].move_phase = MovePhase::DITHER_NEG;
+      break;
+    }
+    case MovePhase::DITHER_NEG: {
+      // Negative dither complete; check for next cycle or return to center
+      if (motors_[i].settle_remaining_cycles > 0) {
+        int total = motors_[i].settle_dither_cycles;
+        int remaining = motors_[i].settle_remaining_cycles;
+        int amp = motors_[i].settle_dither_amplitude * remaining / total;
+        if (amp >= motors_[i].settle_dither_min_amplitude) {
+          motors_[i].settle_current_amplitude = amp;
+          motors_[i].settle_remaining_cycles--;
+          long pos_target = motors_[i].settle_center + amp;
+          startMoveSingle_(i, pos_target, motors_[i].settle_speed, motors_[i].settle_accel);
+          motors_[i].move_phase = MovePhase::DITHER_POS;
+          break;
+        }
+      }
+      // All cycles done or amplitude below threshold; return to center
+      startMoveSingle_(i, motors_[i].settle_center, motors_[i].settle_speed,
+                        motors_[i].settle_accel);
+      motors_[i].move_phase = MovePhase::DITHER_RETURN;
+      break;
+    }
+    case MovePhase::DITHER_RETURN: {
+      // Final return to center complete; settle sequence done
+      motors_[i].move_phase = MovePhase::NONE;
+      break;
+    }
+    default:
+      break;
     }
   }
   // Native: start/stop latches handled above; Arduino: adapter handles gating

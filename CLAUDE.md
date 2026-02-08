@@ -120,6 +120,8 @@ Topics: `devices/<mac>/cmd`, `devices/<mac>/cmd/resp`, `devices/<mac>/status`, `
 
 Two-phase response: ACK → done/error. Responses are JSON with `cmd_id` correlation.
 
+**Important:** Adding/changing commands or settings requires updates across multiple layers (firmware handler, MQTT translator, Python CLI, HELP text, TUI help, MQTT docs). See the full checklist in `agent-os/standards/frontend/python-cli.md` § "Adding or Changing Commands/Settings".
+
 Standards: `agent-os/standards/backend/mqtt-protocol.md`, `agent-os/standards/backend/transport-abstraction.md`
 
 ### Python CLI

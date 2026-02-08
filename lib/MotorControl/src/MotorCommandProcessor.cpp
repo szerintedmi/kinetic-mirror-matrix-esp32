@@ -32,6 +32,10 @@ MotorCommandProcessor::MotorCommandProcessor()
   default_speed_sps_ = MotorControlConstants::DEFAULT_SPEED_SPS;
   default_accel_sps2_ = MotorControlConstants::DEFAULT_ACCEL_SPS2;
   default_decel_sps2_ = 0;
+  default_move_overshoot_ = MotorControlConstants::DEFAULT_MOVE_OVERSHOOT;
+  default_dither_amplitude_ = MotorControlConstants::DEFAULT_DITHER_AMPLITUDE;
+  default_dither_cycles_ = MotorControlConstants::DEFAULT_DITHER_CYCLES;
+  default_dither_min_amplitude_ = MotorControlConstants::DEFAULT_DITHER_MIN_AMPLITUDE;
   controller_->setDeceleration(default_decel_sps2_);
 
   std::vector<std::unique_ptr<CommandHandler>> handlers;
@@ -74,7 +78,11 @@ CommandExecutionContext MotorCommandProcessor::makeContext() {
                                  default_decel_sps2_,
                                  microstep_multiplier_,
                                  in_batch_,
-                                 batch_initially_idle_);
+                                 batch_initially_idle_,
+                                 default_move_overshoot_,
+                                 default_dither_amplitude_,
+                                 default_dither_cycles_,
+                                 default_dither_min_amplitude_);
 }
 
 CommandResult MotorCommandProcessor::dispatchSingle(const ParsedCommand& command,

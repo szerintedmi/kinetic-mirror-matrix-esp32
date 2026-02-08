@@ -117,6 +117,14 @@ bool MqttConfigPublisher::buildSnapshot() {
   AppendSignedDigits(scratch_, processor_.defaultAccelSps2());
   scratch_.append(",\"decel\":");
   AppendSignedDigits(scratch_, processor_.defaultDecelSps2());
+  scratch_.append(",\"move_overshoot\":");
+  AppendSignedDigits(scratch_, processor_.defaultMoveOvershoot());
+  scratch_.append(",\"dither_amplitude\":");
+  AppendSignedDigits(scratch_, processor_.defaultDitherAmplitude());
+  scratch_.append(",\"dither_cycles\":");
+  AppendSignedDigits(scratch_, processor_.defaultDitherCycles());
+  scratch_.append(",\"dither_min_amplitude\":");
+  AppendSignedDigits(scratch_, processor_.defaultDitherMinAmplitude());
   scratch_.append(",\"motor_count\":");
   AppendUnsignedDigits(scratch_, processor_.controller().motorCount());
 #ifdef GIT_COMMIT_HASH

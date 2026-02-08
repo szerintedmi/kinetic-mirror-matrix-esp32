@@ -11,8 +11,13 @@ const std::string& HelpText() {
   static const std::string text = [] {
     std::ostringstream os;
     os << "HELP\n";
+#if !(USE_SHARED_STEP)
+    os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>][,<overshoot>][,<dither_amp>][,<dither_cycles>]\n";
+    os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
+#else
     os << "MOVE:<id|ALL>,<abs_steps>\n";
     os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]\n";
+#endif
     os << "NET:RESET (clear all networks, enter AP mode)\n";
     os << "NET:STATUS\n";
     os << "NET:GET_CONFIG (show configured primary/secondary SSIDs)\n";
@@ -24,10 +29,6 @@ const std::string& HelpText() {
     os << "MQTT:GET_CONFIG\n";
     os << "MQTT:SET_CONFIG host=<host> port=<port> user=<user> pass=\\\"<pass>\\\"\n";
     os << "MQTT:SET_CONFIG RESET\n";
-#if !(USE_SHARED_STEP)
-    os << "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>]\n";
-    os << "HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]\n";
-#endif
     os << "STATUS\n";
     os << "GET\n";
     os << "GET ALL\n";
@@ -41,6 +42,14 @@ const std::string& HelpText() {
     os << "SET SPEED=<steps_per_second>\n";
     os << "SET ACCEL=<steps_per_second^2>\n";
     os << "SET DECEL=<steps_per_second^2>\n";
+    os << "GET MOVE_OVERSHOOT\n";
+    os << "GET DITHER_AMPLITUDE\n";
+    os << "GET DITHER_CYCLES\n";
+    os << "GET DITHER_MIN_AMPLITUDE\n";
+    os << "SET MOVE_OVERSHOOT=<steps> (sign=approach dir, 0=off, default=80)\n";
+    os << "SET DITHER_AMPLITUDE=<steps> (0=disabled)\n";
+    os << "SET DITHER_CYCLES=<count>\n";
+    os << "SET DITHER_MIN_AMPLITUDE=<steps>\n";
     os << "GET MICROSTEP\n";
     os << "SET MICROSTEP=FULL|HALF|1/4|1/8|1/16|1/32 (all motors must be asleep)\n";
     os << "WAKE:<id|ALL>\n";

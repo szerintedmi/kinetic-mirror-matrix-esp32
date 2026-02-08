@@ -50,9 +50,13 @@ void test_help_format() {
   std::string help = proto.processLine("HELP", 0);
   TEST_ASSERT_TRUE(help.find("HELP") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("STATUS") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("MOVE:<id|ALL>,<abs_steps>") != std::string::npos);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") !=
-                   std::string::npos);
+  TEST_ASSERT_TRUE(
+      help.find(
+          "MOVE:<id|ALL>,<abs_steps>[,<speed>][,<accel>][,<overshoot>][,<dither_amp>][,<dither_cycles>]") !=
+      std::string::npos);
+  TEST_ASSERT_TRUE(
+      help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]") !=
+      std::string::npos);
   TEST_ASSERT_TRUE(help.find("WAKE:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("SLEEP:<id|ALL>") != std::string::npos);
   TEST_ASSERT_TRUE(help.find("E0") == std::string::npos);
@@ -321,6 +325,7 @@ void test_home_all_concurrency_and_post_state() {
 
 void test_help_includes_home_line_again() {
   auto help = proto.processLine("HELP", 0);
-  TEST_ASSERT_TRUE(help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<full_range>]") !=
-                   std::string::npos);
+  TEST_ASSERT_TRUE(
+      help.find("HOME:<id|ALL>[,<overshoot>][,<backoff>][,<speed>][,<accel>][,<full_range>]") !=
+      std::string::npos);
 }
