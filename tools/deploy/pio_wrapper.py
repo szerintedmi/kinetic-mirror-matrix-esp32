@@ -211,7 +211,12 @@ class PioWrapper:
 
         await proc.wait()
         if proc.returncode != 0:
-            raise RuntimeError(f"Upload failed (exit {proc.returncode})")
+            detail = self._extract_error(buffer)
+            msg = f"Upload failed (exit {proc.returncode})"
+            if detail:
+                msg += f": {detail}"
+            msg += f"\nLog: {log_file}"
+            raise RuntimeError(msg)
 
         yield 100
 
@@ -280,9 +285,25 @@ class PioWrapper:
 
         await proc.wait()
         if proc.returncode != 0:
-            raise RuntimeError(f"Filesystem upload failed (exit {proc.returncode})")
+            detail = self._extract_error(buffer)
+            msg = f"Filesystem upload failed (exit {proc.returncode})"
+            if detail:
+                msg += f": {detail}"
+            msg += f"\nLog: {log_file}"
+            raise RuntimeError(msg)
 
         yield 100
+
+    @staticmethod
+    def _extract_error(buffer: str) -> str:
+        """Extract last meaningful error line from espota.py output buffer."""
+        for line in reversed(buffer.splitlines()):
+            line = line.strip()
+            # Skip empty lines and progress bar output
+            if not line or ("] " in line and "%" in line):
+                continue
+            return line
+        return ""
 
     async def _capture_output(
         self, proc: Process, log_file: Path | None, cmd: list[str] | None = None
