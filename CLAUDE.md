@@ -86,6 +86,8 @@ MotorController interface (HardwareMotorController or StubMotorController)
             Controls DIR/SLEEP lines via 2×74HC595 shift registers over VSPI
 ```
 
+MQTT command path: `MqttCommandHandler (lib/transport/)` → same `MotorCommandProcessor` → responses via `ResponseDispatcher`
+
 ### Key Directories
 
 - `lib/MotorControl/` - Core motor control library (platform-independent logic)
@@ -96,6 +98,8 @@ MotorController interface (HardwareMotorController or StubMotorController)
 - `lib/transport/` - MQTT command/response envelope handling
 - `tools/mirror_cli/` - Python host CLI with interactive TUI
 - `tools/deploy/` - Multi-device OTA deployment tooling
+- `agent-os/standards/` - Documented codebase standards (manually injected into agent context when needed)
+- `agent-os/specs/` - Feature specs and shaping docs (might be outdated, only use it when explcitly instructed)
 
 ### Build Configurations
 
@@ -109,6 +113,14 @@ Commands: `HELP`, `STATUS`, `MOVE:<id>,<steps>[,speed,accel]`, `HOME:<id>[,overs
 Responses: `CTRL:ACK`, `CTRL:ERR E<code>`, `CTRL:WARN`, `CTRL:READY`
 
 Full spec: `agent-os/specs/2025-10-15-serial-command-protocol-v1/spec.md`
+
+### MQTT Transport
+
+Topics: `devices/<mac>/cmd`, `devices/<mac>/cmd/resp`, `devices/<mac>/status`, `devices/<mac>/config`
+
+Two-phase response: ACK → done/error. Responses are JSON with `cmd_id` correlation.
+
+Standards: `agent-os/standards/backend/mqtt-protocol.md`, `agent-os/standards/backend/transport-abstraction.md`
 
 ### Python CLI
 
@@ -133,10 +145,6 @@ python -m mirror_cli home --port /dev/ttyUSB0 0 --overshoot 800
 - **Storage**: LittleFS for presets and gzipped web assets
 - **Host tools**: Python 3.13+ CLI (`pyserial`, `paho-mqtt`, `textual`), managed via Poetry
 
-## Hardware Pin Configuration
+## Agent Tool Preferences
 
-Pin assignments in `include/boards/Esp32Dev.hpp`:
-
-- STEP pins: GPIO 32, 25, 27, 13, 21, 19, 17, 4 (motors 0-7)
-- Shift register: VSPI (SCK=18, MOSI=23), RCLK=5, OE=22
-- Status LED: GPIO 2 (active-low)
+- Prefer `rg` (ripgrep) over `grep` for searching file contents

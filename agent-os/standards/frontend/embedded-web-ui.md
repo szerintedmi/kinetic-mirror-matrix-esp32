@@ -1,8 +1,10 @@
-## Embedded web UI
+## Embedded Web UI
 
-- **Provide only when connectivity exists**: Ship the web server on Wi-Fi/Ethernet builds; disable it entirely on offline targets to save flash and RAM.
-- **Keep payloads tiny**: Use minimal JSON responses (`{"status":"done"}`) and cache header directives to stay under memory limits.
-- **Reuse serial actions**: Keep HTTP endpoints aligned with serial commands (`/api/config` <-> `CFG.SET`) so scripts can switch transports effortlessly.
-- **Serve static assets from flash**: Keep source files in `data_src/`, store gzipped assets in `data/`.  Assume compression script (eg. )`tools/gzip_fs.py`)  exists and configured in  `platformio.ini`
-- **Auth for demos**: For prototypes, expose at least a shared secret or token in `platformio.ini`; prevents accidental exposure on open networks.
-- **Adopt micro frameworks deliberately**: Only bring in lightweight CSS or JS helpers (Pico.css/water.css and Alpine.js/htmx/petite-vue/preact/lit etc.) when the UI reuirements outgrow static markup
+- **Provide only when connectivity exists**: Ship the web server on Wi-Fi/Ethernet builds; guard with `#if defined(ARDUINO) && (defined(ESP32) || defined(ARDUINO_ARCH_ESP32))` so offline/native targets compile without it.
+- **Current scope — onboarding only**: The web portal (`lib/net_onboarding/`) handles Wi-Fi provisioning (scan, connect, reset). It does not expose motor-control endpoints.
+- **Server**: ESPAsyncWebServer on port 80, with ArduinoJson for request/response serialization.
+- **Filesystem**: LittleFS (`board_build.filesystem = littlefs`). Mount with `LittleFS.begin(false)`.
+- **Keep payloads tiny**: Minimal JSON responses (`{"status":"done"}`). Set cache headers: 5 min for HTML/CSS/JS, 24 hr for favicon.
+- **Serve static assets from flash**: Source in `data_src/`, gzipped output in `data/`. The `tools/gzip_fs.py` pre-build script auto-compresses `.html`, `.css`, `.js`, `.ico`, etc. to `.gz`. Configured as `pre:tools/gzip_fs.py` in `platformio.ini`.
+- **No auth on SoftAP**: The onboarding portal runs only in AP mode; network isolation is sufficient. Re-evaluate if the server ever runs in STA mode on shared networks.
+- **Micro frameworks**: Pico CSS for classless styling, Alpine.js for reactivity. Only upgrade if UI requirements outgrow these.

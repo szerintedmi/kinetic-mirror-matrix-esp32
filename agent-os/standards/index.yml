@@ -1,0 +1,45 @@
+# Agent OS Standards Index
+
+backend:
+  command-pipeline:
+    description: Command parsing, batch execution, error propagation, and execution context design
+  data-persistence:
+    description: "NVS/LittleFS patterns, namespace isolation, atomic writes, flash wear, RAM caching, test abstraction"
+  error-codes:
+    description: "Error code registry: E## motor codes, NET_* network, MQTT_* protocol codes"
+  motion-control:
+    description: "Position space, microstepping, 3-phase homing, direction latch, timing estimation"
+  mqtt-protocol:
+    description: "MQTT topics, two-phase response lifecycle, QoS hierarchy, publish queue priority"
+  shared-step-rmt:
+    description: "RMT shared-step driver: ISR requeue, direction flip guards, output enable"
+  task-structure:
+    description: FreeRTOS task design, concurrency patterns, ISR discipline, shutdown behavior
+  thermal-budget:
+    description: "Per-motor thermal budget model: spend/refill rates, enforcement modes, auto-sleep"
+  transport-abstraction:
+    description: "Three-layer transport: command execution, response schema, event dispatcher"
+
+frontend:
+  embedded-web-ui:
+    description: "Wi-Fi onboarding portal: ESPAsyncWebServer, gzipped LittleFS, Pico CSS + Alpine.js, SoftAP-only auth model"
+  python-cli:
+    description: "CLI transport workers, timeout amplification, device selection, command building"
+
+global:
+  coding-style:
+    description: "C++/Python/Markdown conventions, naming, comments, logging, mermaid validation"
+  conventions:
+    description: "Project structure, version control, dependencies, code review, changelog"
+  platformio-project-setup:
+    description: "PIO env layout, library pinning, directory structure, upload routes"
+  resource-management:
+    description: "RAM/flash budgets, compile-time buffers, CPU throttling, watchdog discipline"
+
+testing:
+  build-validation:
+    description: Build all targets after tasks, fix warnings
+  hardware-validation:
+    description: "Lab smoke tests, peripheral cycling, build metadata, manual checklists"
+  unit-testing:
+    description: "Unity framework, host-first with ASan, test_OnDevice isolation, Python shim, timeout guards"
