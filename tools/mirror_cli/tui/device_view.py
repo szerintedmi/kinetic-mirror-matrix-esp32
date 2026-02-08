@@ -250,9 +250,9 @@ def create_device_view_screen(worker: object, notify_callback: Callable[[str, st
                 # Format age with color
                 age_s = float(details.get("age_s", 0) or 0)
                 age_str = _format_age(age_s)
-                if age_s > 5.0:
+                if age_s > 10.0:
                     age_fmt = _color(age_str, "red")
-                elif age_s > 2.0:
+                elif age_s > 5.0:
                     age_fmt = _color(age_str, "yellow")
                 else:
                     age_fmt = age_str

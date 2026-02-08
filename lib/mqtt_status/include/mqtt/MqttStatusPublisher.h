@@ -15,7 +15,7 @@ public:
   using PublishFn = std::function<bool(const PublishMessage&)>;
 
   struct Config {
-    uint32_t idle_interval_ms = 1000;   // 1 Hz when idle
+    uint32_t idle_interval_ms = 5000;   // 0.2 Hz when idle
     uint32_t motion_interval_ms = 200;  // 5 Hz during motion
     size_t max_motors = 8;
   };

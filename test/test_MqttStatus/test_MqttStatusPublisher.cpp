@@ -174,7 +174,10 @@ void test_status_publisher_cadence_and_changes() {
   publisher.loop(controller, 900);
   TEST_ASSERT_EQUAL_INT(4, static_cast<int>(published.size()));
 
-  publisher.loop(controller, 1300);
+  publisher.loop(controller, 5200);
+  TEST_ASSERT_EQUAL_INT(4, static_cast<int>(published.size()));
+
+  publisher.loop(controller, 5300);
   TEST_ASSERT_EQUAL_INT(5, static_cast<int>(published.size()));
 
   const std::string& latest = published.back().payload;

@@ -87,9 +87,9 @@ class TextualUI(BaseUI):
             if age_val is None or age_val == float("inf"):
                 return "age=unknown"
             color = None
-            if age_val > 2.0:
+            if age_val > 10.0:
                 color = "red"
-            elif age_val > 1.0:
+            elif age_val > 5.0:
                 color = "yellow"
             age_text = f"{age_val:.1f}s"
             return f"age={_color(age_text, color)}"
