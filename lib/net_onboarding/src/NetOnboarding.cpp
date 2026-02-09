@@ -16,6 +16,7 @@
 #include <AsyncTCP.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <WiFi.h>
 
 #include "version.h"
 
